@@ -468,7 +468,7 @@ jobs:
 
           | Variable | Example | Description |
           |----------|---------|-------------|
-          | `UNITY_VERSION` | `2022.3.20f1` | Unity editor version for all CI jobs |
+          | `UNITY_VERSION` | `6000.3.9f1` | Unity editor version for all CI jobs |
 
           ---
 
@@ -514,7 +514,7 @@ jobs:
 
           ```bash
           # Variables
-          gh variable set UNITY_VERSION --body "2022.3.20f1"
+          gh variable set UNITY_VERSION --body "6000.3.9f1"
 
           # Required secrets
           gh secret set UNITY_LICENSE < Unity_lic.ulf
