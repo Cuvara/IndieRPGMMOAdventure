@@ -24,31 +24,31 @@ for a full guide to the job graph, inputs, activation, and platform selection ru
 ```bash
 # Android
 gh workflow run unity-build.yml \
-  --repo Cuvara/NDC-Unity-Template \
+  --repo Cuvara/IndieRPGMMOAdventure \
   --ref main \
   -f platform=Android
 
 # WebGL
 gh workflow run unity-build.yml \
-  --repo Cuvara/NDC-Unity-Template \
+  --repo Cuvara/IndieRPGMMOAdventure \
   --ref main \
   -f platform=WebGL
 
 # Linux64
 gh workflow run unity-build.yml \
-  --repo Cuvara/NDC-Unity-Template \
+  --repo Cuvara/IndieRPGMMOAdventure \
   --ref main \
   -f platform=Linux64
 
 # Linux Dedicated Server
 gh workflow run unity-build.yml \
-  --repo Cuvara/NDC-Unity-Template \
+  --repo Cuvara/IndieRPGMMOAdventure \
   --ref main \
   -f platform=LinuxServer
 
 # All platforms at once
 gh workflow run unity-build.yml \
-  --repo Cuvara/NDC-Unity-Template \
+  --repo Cuvara/IndieRPGMMOAdventure \
   --ref main \
   -f platform=All
 ```
@@ -106,7 +106,7 @@ for setup instructions.
 
 Verify secrets are present:
 ```bash
-gh secret list --repo Cuvara/NDC-Unity-Template \
+gh secret list --repo Cuvara/IndieRPGMMOAdventure \
   | grep -E 'UNITY_LICENSE|UNITY_EMAIL|UNITY_PASSWORD'
 ```
 
@@ -118,11 +118,11 @@ Build artifacts are retained for 14 days.
 
 ```bash
 # List recent builds
-gh run list --repo Cuvara/NDC-Unity-Template \
+gh run list --repo Cuvara/IndieRPGMMOAdventure \
   --workflow build.yml --limit 10
 
 # Download artifacts from a specific run
-gh run download <RUN_ID> --repo Cuvara/NDC-Unity-Template
+gh run download <RUN_ID> --repo Cuvara/IndieRPGMMOAdventure
 ```
 
 ---

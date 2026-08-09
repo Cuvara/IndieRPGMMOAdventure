@@ -1,8 +1,8 @@
 {
   "$schema": "../unity-build-workflows/schemas/unity-build-config.schema.json",
-  "projectName": "NDC-Unity-Template",
+  "projectName": "IndieRPGMMOAdventure",
   "companyName": "DefaultCompany",
-  "productName": "NDC-Unity-Template",
+  "productName": "IndieRPGMMOAdventure",
   "bundleVersion": "1.0.0",
   "buildNumberStrategy": "github_run_number",
 
@@ -50,7 +50,7 @@
 
   "windows": {
     "architecture": "x86_64",
-    "outputName": "NDC-Unity-Template",
+    "outputName": "IndieRPGMMOAdventure",
     "compressOutput": true
   },
 
@@ -66,7 +66,7 @@
   },
 
   "metadata": {
-    "repository": "https://github.com/Cuvara/NDC-Unity-Template",
+    "repository": "https://github.com/Cuvara/IndieRPGMMOAdventure",
     "team": "mobile"
   },
 
