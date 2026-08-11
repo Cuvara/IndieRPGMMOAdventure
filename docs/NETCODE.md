@@ -238,7 +238,7 @@ The simulation logic the client shares with the server arrives as a UPM package,
 pinned to a **tag, never a branch**:
 
 ```json
-"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.2"
+"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.3"
 ```
 
 `sgl-v0.1.0` resolved but produced **no assembly**. Unity treats a git package as
@@ -250,11 +250,10 @@ without its own `.meta` is never registered and its sources are silently ignored
 not for a green compile** — the netcode compiled green throughout the period the
 package was producing nothing.
 
-Two files in the package still have no `.meta` (`package.json` and
-`Shared.GameLogic.csproj`) and Unity logs a console error for each on import.
-Harmless — neither is an asset Unity needs — but it is two lines of red at every
-refresh, and the `.csproj` is a server build file with no business in the package
-at all.
+`sgl-v0.1.3` gave `package.json` and `Shared.GameLogic.csproj` their own `.meta`
+files, so the package now imports with **zero** console errors. Unity logs one for
+every meta-less asset in an immutable package regardless of whether it would
+import the file, so "Unity ignores it anyway" is not a reason to leave one out.
 
 `NDC.Scripts.Net.asmdef` references `Shared.GameLogic`. The dependency is
 one-way: the shared asmdef sets `noEngineReferences`, so it cannot see
@@ -374,15 +373,63 @@ the scene it constructs one itself and logs that it did.
 
 ### What running it actually proved
 
-Against a gateway already listening on `127.0.0.1:8000` on 2026-08-11: the TCP
-connect, the length-prefixed framing, the JSON encoding, and the auth
-request/response round-trip all work, and the gateway's rejection surfaced
-legibly. It got as far as `invalid token` — that gateway is running with a
-different `JWT_SECRET` than `backend/deploy/.env`'s `dev-secret-change-me`. The
-minted token itself was verified correct out-of-band: valid HS256 signature for
-that secret, correct header, correct claim set, unexpired. **So `enter_world`
-onward — assignment, the join token, input and snapshots — has not yet been
-observed end to end.**
+Observed end to end against the local Docker stack on 2026-08-11, gateway on
+`127.0.0.1:8100`:
+
+```
+[bootstrap] step 1/5 — minting a development JWT for 'dev-player'
+[bootstrap] step 2/5 — connecting to gateway 127.0.0.1:8100, map 'map_01'
+[bootstrap]   → auth: sending the JWT to the gateway
+[Net] authenticated with the gateway as 'dev-player'
+[bootstrap] step 3/5 — enter_world 'map_01': asking the gateway which game server to dial
+[Net] map 'map_01' assigned to 127.0.0.1:9200 over Tcp
+[bootstrap]   → dialing the game server directly and spending the join token
+[Net] joined 127.0.0.1:9200 as 'dev-player'
+[bootstrap]   → join accepted
+[bootstrap] step 4/5 — in world as 'dev-player'
+[bootstrap] step 5/5 — streaming input at 15 Hz (dt 0.0667s)
+[bootstrap] snapshot #15  tick 15391 delta    sent 15  ack 15  rtt 0ms — 1 entities (1 keyframes, 14 deltas), me=(5.81, 1.14)
+[bootstrap] snapshot #60  tick 15436 delta    sent 62  ack 62  rtt 0ms — 1 entities (3 keyframes, 57 deltas), me=(9.84, 14.10)
+[bootstrap] snapshot #150 tick 15526 keyframe sent 154 ack 154 rtt 8ms — 1 entities (6 keyframes, 144 deltas), me=(-7.68, 6.06)
+```
+
+Every hop works: auth, assignment, the direct dial, the join token, input up,
+keyframes and deltas down, `ack_tick` tracking the input tick exactly, and the
+position walking the synthetic circle.
+
+Two client bugs had to be fixed to get here, both found by running it.
+
+**1. A host-less `server_addr` was rejected.** The stack advertises
+`GAMESERVER_PUBLIC_ADDR=":9200"` and the gateway returns it verbatim;
+`NetworkEndpoint.Parse` required a host and threw
+`server address ':9200' is not host:port`, one step after `enter_world`. The
+compose file states the contract — a bare `":9200"` is normalised **by the
+client** to `127.0.0.1:9200` — and Go's `net.Dial` does this natively, which is
+why no Go-side test ever covered it. Now normalised, with tests. Deliberately to
+loopback and not to "the gateway's host": a host-less address reaching a real
+device is a server misconfiguration, and quietly connecting to something
+plausible would hide it.
+
+**2. Input and heartbeat stalled after exactly one frame when unfocused.** The
+symptom was `sent 1 ack 1 rtt 0ms` forever while snapshots kept arriving, which
+reads like a broken send path. It was not: `Application.runInBackground` is off
+project-wide, so an unfocused player loop stops ticking — `frameCount` stayed at
+**1** across six seconds of wall clock while `Time.realtimeSinceStartup`
+advanced normally. Snapshots kept coming because socket reads are on background
+threads, so the session looks healthy from the outside while no input and no pong
+leaves the client, and the server drops it 30 s later for no visible reason. The
+bootstrap now sets `Application.runInBackground = true`.
+
+That second one is worth generalising: **any diagnostic that only prints the
+server's `ack_tick` cannot distinguish "our input is not landing" from "we are not
+sending".** The snapshot log prints `sent N ack M` side by side for exactly that
+reason.
+
+**Whether the shipping player should set `runInBackground` is not decided here.**
+It is off in `ProjectSettings`, which is a fine default for a single-player game
+and the wrong one for a server-authoritative client with a 30 s pong timeout.
+That belongs to whoever owns the player settings; the bootstrap only sets it on
+itself.
 
 ## Known doc/source disagreements
 

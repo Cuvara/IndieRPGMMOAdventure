@@ -54,6 +54,20 @@ namespace Scripts.Net.Bootstrap
 
         private void Start()
         {
+            // A server-authoritative client must keep running while unfocused. Both
+            // the input loop and the heartbeat are driven from the Unity player loop,
+            // and the player loop does not tick in an unfocused Editor or player
+            // unless this is set — frameCount simply stops advancing. The socket read
+            // threads keep delivering snapshots throughout, so the session looks
+            // healthy from the outside while no input and no pong is being sent, and
+            // the server drops the connection 30 s later with no visible cause.
+            //
+            // Project-wide "Run In Background" is off (ProjectSettings), which is a
+            // reasonable default for a single-player game and the wrong one for this.
+            // Set here rather than flipped project-wide, because that decision belongs
+            // to whoever owns the shipping player settings.
+            Application.runInBackground = true;
+
             if (config == null)
             {
                 config = ScriptableObject.CreateInstance<NetworkBootstrapConfig>();
@@ -234,8 +248,12 @@ namespace Scripts.Net.Bootstrap
                 self = $", me=({me.X:F2}, {me.Y:F2}) hp {me.Hp}/{me.MaxHp}";
             }
 
+            // Report the newest input tick we have SENT next to the newest the server
+            // has ACKED. The gap is the diagnostic: equal-ish means reconciliation has
+            // an anchor, while a frozen ack against a climbing send count means our
+            // input is not landing, which is invisible if only the ack is logged.
             Debug.Log($"[bootstrap] snapshot #{_snapshotsSeen} tick {snapshot.Tick} " +
-                      $"{(snapshot.Full ? "keyframe" : "delta")} ack {snapshot.AckTick} " +
+                      $"{(snapshot.Full ? "keyframe" : "delta")} sent {_inputTick} ack {snapshot.AckTick} " +
                       $"rtt {_client.Session?.RoundTripMs ?? 0}ms — world has {world.Count} entities " +
                       $"({world.Keyframes} keyframes, {world.Deltas} deltas){self}");
         }

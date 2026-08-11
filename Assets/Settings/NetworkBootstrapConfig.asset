@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: NetworkBootstrapConfig
   m_EditorClassIdentifier: NDC.Scripts.Net::Scripts.Net.Bootstrap.NetworkBootstrapConfig
   gatewayHost: 127.0.0.1
-  gatewayPort: 8000
+  gatewayPort: 8100
   userId: dev-player
   jwtSecret: dev-secret-change-me
   jwtLifetimeSeconds: 3600

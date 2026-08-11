@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client predicts whenever someone pushes to the server repo, with nothing in
   this repo to attribute the change to.
 
-  Now at **`sgl-v0.1.2`**, and verified in the Editor: `Shared.GameLogic.dll`
+  Now at **`sgl-v0.1.3`**, and verified in the Editor: `Shared.GameLogic.dll`
   appears in `Library/ScriptAssemblies`, and `Packages/packages-lock.json` is
   updated.
 
@@ -34,6 +34,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The package's asmdef sets `noEngineReferences`, so the shared assembly cannot
   reference `UnityEngine` at all. Netcode references it, never the reverse.
+
+- **The full core flow now runs end to end against the local stack**, observed in
+  the Editor: gateway auth → `enter_world` → direct dial of the assigned game
+  server → join → input up → keyframes and deltas down, with `ack_tick` tracking
+  the sent input tick exactly (`sent 154 ack 154`) and rtt 8 ms. Documented with
+  the verbatim console output in `docs/NETCODE.md`.
+
+  Two client bugs were found by running it, both fixed here:
+
+  - **`NetworkEndpoint.Parse` rejected a host-less `server_addr`.** The stack
+    advertises `GAMESERVER_PUBLIC_ADDR=":9200"` and the gateway returns it
+    verbatim, which stopped the bootstrap one step after `enter_world` with
+    `server address ':9200' is not host:port`. `backend/deploy/docker-compose.yml`
+    documents that the **client** normalises a bare `":9200"` to
+    `127.0.0.1:9200`, and Go's `net.Dial` does it natively — which is why no
+    Go-side test covered it. Now normalised to loopback, with 16 new tests.
+    Loopback rather than the gateway's host on purpose: a host-less address
+    reaching a real device is a server misconfiguration, and connecting to
+    something merely plausible would hide it.
+
+  - **Input and heartbeat stalled after one frame while the app was unfocused.**
+    `Application.runInBackground` is off project-wide, so the player loop stops
+    ticking when unfocused — `frameCount` stayed at 1 across six seconds while
+    `Time.realtimeSinceStartup` advanced. Snapshots kept arriving on the socket
+    threads, so the session looked healthy while nothing was being sent and the
+    server would have dropped it at the 30 s pong timeout. The bootstrap now sets
+    `Application.runInBackground = true`; whether the shipping player should is
+    left to whoever owns the player settings.
+
+  The snapshot log now prints `sent N ack M` side by side, because a line showing
+  only the server's ack cannot distinguish "our input is not landing" from "we are
+  not sending" — which is exactly what made the second bug look like the first.
 
 - **`NDC.Scripts.Net` now references `Shared.GameLogic`, and merges snapshots with
   it.** `World/WorldState` rebuilds authoritative world state by delegating to
