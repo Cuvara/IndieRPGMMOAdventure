@@ -232,6 +232,47 @@ prevent.
 | Reconnect / resume | none. A closed session is reported, not retried; the server holds the entity 30 s (60 s in a dungeon) |
 | World merge, prediction, reconciliation | out of scope by design |
 
+## Consuming `Shared.GameLogic` (not wired up yet)
+
+The simulation logic the client shares with the server arrives as a UPM package.
+When the tag exists, add **exactly** this line to `Packages/manifest.json` — it is
+normative in ADR-10 and `backend/TEAM.md`, and the project already resolves
+`com.company.build-pipeline` through the same `git?path=#ref` form:
+
+```json
+"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.0"
+```
+
+The repo is public, so there is no credential step. **Pin the tag, never a
+branch**: a branch ref would silently change what client prediction computes
+whenever someone pushes to the server repo, with nothing in this repo to
+attribute the change to.
+
+**Do not add it before the tag exists** — an unresolvable git dependency fails the
+whole package resolve, not just that entry, and leaves the project unopenable.
+
+Once it resolves, add `"Shared.GameLogic"` to the `references` of whichever
+assembly consumes it. The dependency direction is one-way: this netcode assembly
+may reference the shared one, never the reverse — the shared asmdef ships
+`"noEngineReferences": true` and so cannot see `UnityEngine` at all.
+
+Pre-flight, done here without an Editor (against
+`feat/gameserver/shared-logic-unity-compat`, where the package files live —
+they are not on `develop` yet):
+
+| Check | Result |
+|---|---|
+| `package.json` name matches the manifest key | `com.rpgmmo.shared-gamelogic` ✔ |
+| Package path in the URL exists and holds the asmdef | ✔ |
+| `unity: "6000.3"` against Editor 6000.3.9f1 | ✔ |
+| Sources compile under Unity's profile (netstandard2.1, C# 9, no engine refs) | ✔ 0 errors |
+| Tag `sgl-v0.1.0` | ✘ does not exist yet — the line will not resolve today |
+
+Two things to expect on first import, neither a blocker: the sources emit **9
+`CS8632` warnings** (`string?` annotations outside a `#nullable enable` context),
+and the package ships no `.meta` files, so Unity generates them in its package
+cache — harmless for a code-only package, but the GUIDs will differ per machine.
+
 ## Known doc/source disagreements
 
 Found while implementing, against `develop` of the backend repo. None of them are

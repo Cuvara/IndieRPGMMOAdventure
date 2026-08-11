@@ -43,6 +43,14 @@ and the whole assembly compiles clean with `dotnet` against the Unity 6000.3.9f1
 engine DLLs plus UniTask and VContainer sources at C# 9 / netstandard2.1 —
 neither of which validates asmdef resolution, IL2CPP or platform defines.
 
+### Documented
+
+- The normative `Shared.GameLogic` UPM line (pinned tag, `git?path=#ref` form) is
+  recorded in `docs/NETCODE.md` together with its pre-flight results. It is
+  **deliberately not in `Packages/manifest.json`**: the tag does not exist yet, and
+  an unresolvable git dependency fails the whole package resolve rather than just
+  that entry.
+
 ### Known limitations
 
 - Protobuf is not implemented: the codec is behind an interface and only the
