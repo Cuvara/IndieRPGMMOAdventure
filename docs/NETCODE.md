@@ -238,7 +238,7 @@ The simulation logic the client shares with the server arrives as a UPM package,
 pinned to a **tag, never a branch**:
 
 ```json
-"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.1"
+"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.2"
 ```
 
 `sgl-v0.1.0` resolved but produced **no assembly**. Unity treats a git package as
@@ -309,9 +309,14 @@ bind open generic types and returns a null array instead of failing.
 
 Run them from the Test Runner (EditMode, assembly `NDC.Tests.EditMode`).
 
-### The client and the server do not agree bit-for-bit yet
+### The client and the server agree bit-for-bit (since `sgl-v0.1.2`)
 
-**3 of 96 EditMode tests fail**, and they are a real divergence, not a test bug:
+**95 of 95 EditMode tests pass.** (The Test Runner reports `TotalTests: 96`; 95
+are real tests and the extra one is a container node, which is why the pre-fix
+run read 92 passed + 3 failed against the same 96.)
+
+They did not at first. On the gate's first real run, `sgl-v0.1.1` produced three
+failures:
 
 | Test | Server fixture | Unity |
 |---|---|---|
@@ -319,24 +324,30 @@ Run them from the Test Runner (EditMode, assembly `NDC.Tests.EditMode`).
 | `sqrt_negative_components.sqrMagnitude` | `0x4203EB84` | `0x4203EB85` |
 | `clamped_asymmetric.x` | `0x3EA1E89C` | `0x3EA1E89B` |
 
-All three trace to one expression, `x * x + y * y` — `Vec2.SqrMagnitude` and the
-identical `magSq` in `MovementSystem.ResolveDirection`. Unity's Editor Mono JIT
-evaluates it with **double-precision intermediates and one final rounding**;
-.NET 10 on the server evaluates it strictly in float32. Reproducing both
-evaluation orders by hand reproduces both results exactly, on all three cases,
-which is what rules out a fixture or reader bug. `clamped_asymmetric` is the same
-one-ULP `magSq` propagating through `MathF.Sqrt` and the divide into a position.
+All three traced to one expression, `x * x + y * y` — `Vec2.SqrMagnitude` and the
+identical `magSq` in `MovementSystem.ResolveDirection`. C# permits a float
+expression to be evaluated at higher precision (ECMA-334 §11.3.7) and the two
+runtimes take different options: .NET 10's RyuJIT evaluates strictly in float32,
+Unity's Editor Mono JIT keeps double-precision intermediates and rounds once at
+the end. Both conform; they disagreed by one ULP. `clamped_asymmetric` was that
+same ULP propagating through `MathF.Sqrt` and the divide into a position.
 
-C# permits this — a `float` expression may be evaluated at higher precision — so
-neither runtime is wrong, and no amount of care on the client side fixes it. The
-fix belongs in `Shared.GameLogic`: forcing the intermediates back to `float`
-(`(float)(X * X) + (float)(Y * Y)`, an explicit cast being the one construct the
-language spec says must round) makes both runtimes produce the strict result.
+Fixed in `Shared.GameLogic` at `sgl-v0.1.2` by casting every intermediate back to
+`float` — an explicit cast is the one construct the spec requires to round.
+`MovementSystem.Integrate` got the same treatment for a related hazard the vectors
+had not yet reached: `position + direction * step` is a multiply-add, and a JIT may
+contract it into a single FMA that rounds once instead of twice, a third possible
+answer. The server's results were unchanged by the fix, so Unity moved onto the
+server's numbers rather than the reverse — the right direction, since the server
+is authoritative.
 
-Until then, client prediction drifts from the server by about one ULP of position
-per tick. Small, but compounding, and it is precisely what ADR-10 built this gate
-to catch. **The tests are left red on purpose** — turning the gate green by
-loosening the comparison would delete the finding.
+Do not "simplify" those expressions back. The casts are load-bearing, and ADR-10
+rule 5 was amended to cover intermediate rounding and FMA contraction explicitly
+because choosing IEEE-exact *operations* turned out to be necessary but not
+sufficient.
+
+Still unverified: this was measured under **Editor Mono**. Whether IL2CPP/ARM64
+agrees is untested, and IL2CPP is what ships to devices.
 
 ## Press Play: `Assets/Scenes/NetcodeBootstrap.unity`
 

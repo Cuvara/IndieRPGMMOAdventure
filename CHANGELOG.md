@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client predicts whenever someone pushes to the server repo, with nothing in
   this repo to attribute the change to.
 
-  Now at **`sgl-v0.1.1`**, and verified in the Editor: `Shared.GameLogic.dll`
+  Now at **`sgl-v0.1.2`**, and verified in the Editor: `Shared.GameLogic.dll`
   appears in `Library/ScriptAssemblies`, and `Packages/packages-lock.json` is
   updated.
 
@@ -54,17 +54,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **bit-for-bit**; the server's xUnit suite replays the same files. Read with the
   built-in `JsonUtility`, so the gate needs no extra package.
 
-  **3 of 96 tests fail, and the failures are real.** All three trace to one
-  expression — `x * x + y * y`, in `Vec2.SqrMagnitude` and in
-  `MovementSystem.ResolveDirection`'s `magSq`. Unity's Editor Mono JIT evaluates
-  it with double-precision intermediates and one final rounding; .NET 10 on the
-  server evaluates it strictly in float32, and the results differ by one ULP.
-  Reproducing both evaluation orders by hand reproduces both results exactly on
-  all three cases, which rules out a fixture or reader bug. C# permits either, so
-  the fix belongs in `Shared.GameLogic` (explicit `(float)` casts force the
-  intermediate rounding), not in the client. **Left red on purpose** — a tolerance
-  comparison would pass and delete the finding, which is the one thing this gate
-  exists to prevent.
+  **95 of 95 tests pass at `sgl-v0.1.2`.** (The Test Runner reports
+  `TotalTests: 96`; the extra entry is a container node, not a test.)
+
+  On its first real run, against `sgl-v0.1.1`, the gate found a genuine
+  divergence and failed three vectors — `sqrt_irrational_small.sqrMagnitude`,
+  `sqrt_negative_components.sqrMagnitude` and `clamped_asymmetric.x`. All three
+  traced to one expression, `x * x + y * y`, in `Vec2.SqrMagnitude` and in
+  `MovementSystem.ResolveDirection`'s `magSq`: C# permits a float expression to be
+  evaluated at higher precision (ECMA-334 §11.3.7), .NET 10's RyuJIT evaluates
+  strictly in float32, Unity's Editor Mono JIT keeps double-precision
+  intermediates, and the two answers were one ULP apart. Fixed in
+  `Shared.GameLogic` at `sgl-v0.1.2` with explicit per-operation `(float)` casts,
+  plus the same treatment for FMA contraction in `MovementSystem.Integrate`.
+  Server results were unchanged, so Unity moved onto the server's numbers — the
+  right direction, the server being authoritative.
+
+  The tests were left red until the library was fixed rather than reconciled with
+  a tolerance, which would have passed and deleted the finding.
 
 - **`Assets/Scenes/NetcodeBootstrap.unity`** — press Play and the whole core flow
   runs against a local backend, logging each step: mint a dev JWT, gateway auth,
