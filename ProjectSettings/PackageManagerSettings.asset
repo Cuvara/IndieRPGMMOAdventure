@@ -42,6 +42,7 @@ MonoBehaviour:
     - com.adjust
     - com.frostbun
     - com.github-glitchenzo
+    - com.heroiclabs
     - com.ivanmurzak
     - extensions.unity
     m_IsDefault: 0

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`IAuthProvider` interface** (`Cuvara.Netcode.Auth`) — contract for JWT
+  provisioning, defined in the netcode package. `NetworkClient` accepts an
+  optional `IAuthProvider` via DI and exposes a new
+  `ConnectAsync(mapId, ct)` overload that resolves the JWT internally.
+  `DevAuthProvider` wraps `DevJwt` for local development.
+
+- **Nakama Unity SDK integration** (`com.heroiclabs.nakama-unity` v3.9.0) —
+  new `Scripts.Nakama` module (`Assets/Scripts/Nakama/`, assembly
+  `NDC.Scripts.Nakama`) with VContainer DI registration.
+  - `NakamaSessionService` — wrapper around the Nakama SDK `IClient`,
+    registered as a singleton. Provides device auth (primary, auto-creates
+    account), email auth (secondary), session token persistence in PlayerPrefs,
+    and transparent token refresh via the SDK's refresh token flow.
+  - `NakamaAuthProvider` — implements `IAuthProvider`, restores persisted
+    session or authenticates via device ID, then returns the JWT. Registered
+    as the `IAuthProvider` singleton so `NetworkClient.ConnectAsync(mapId, ct)`
+    works out of the box when Nakama is wired up.
+  - `NakamaSettings` — connection configuration (scheme, host, port, server
+    key), defaulting to the local Nakama dev server (`http://127.0.0.1:7350`,
+    `defaultkey`).
+  - `NakamaRegistration.RegisterNakama()` — VContainer extension method, called
+    from `GameLifetimeScope` alongside `RegisterNetworking()`.
+
 ### Changed
 
 - **Netcode module extracted to standalone UPM package** `com.cuvara.netcode` —

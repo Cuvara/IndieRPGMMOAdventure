@@ -4,7 +4,9 @@
     "references": [
         "VContainer",
         "Scripts",
-        "NDC.Scripts"
+        "NDC.Scripts",
+        "Cuvara.Netcode.Runtime",
+        "NDC.Scripts.Nakama"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
