@@ -83,3 +83,10 @@ crashlytics-build.properties
 *.alf
 Unity_lic.*
 UnityEntitlementLicense.xml
+
+# Tools/ holds hand-written dotnet projects, not Unity-generated ones: keep the
+# project files (the *.csproj rule above is aimed at Unity's regenerated ones)
+# and ignore only their build output.
+!/Tools/**/*.csproj
+/Tools/**/bin/
+/Tools/**/obj/
