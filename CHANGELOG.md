@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client predicts whenever someone pushes to the server repo, with nothing in
   this repo to attribute the change to.
 
-  Now at **`sgl-v0.1.3`**, and verified in the Editor: `Shared.GameLogic.dll`
+  Now at **`sgl-v0.1.4`**, and verified in the Editor: `Shared.GameLogic.dll`
   appears in `Library/ScriptAssemblies`, and `Packages/packages-lock.json` is
   updated.
 
@@ -34,6 +34,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The package's asmdef sets `noEngineReferences`, so the shared assembly cannot
   reference `UnityEngine` at all. Netcode references it, never the reverse.
+
+- **`fma_multiply_add_discriminator` passes under Unity, and the multiply-add fix
+  is confirmed load-bearing.** Running the pre-`sgl-v0.1.2` expression shape
+  (`_posX + _dirX * step`) directly under the Editor's Mono JIT yields
+  `0x401B473F` where the split-multiply form yields the correct `0x401B4740`, so
+  without the fix Unity would compute a different position from the server on
+  these inputs.
+
+  The mechanism, however, is **not FMA contraction** — it is the same
+  double-precision widening behind the original `SqrMagnitude` divergence. Both
+  hypotheses predict identical bits on this vector, so it cannot separate them;
+  `sqrt_negative_components` can, and there FMA predicts `0x4203EB84` while
+  double intermediates predict `0x4203EB85`, which is what Unity produced. FMA
+  contraction is still unobserved in Mono. The fix denies both, so nothing needs
+  changing — but the vector's name oversells what it detects.
+
+  Also worth knowing: adding a fixture case does **not** show up until the domain
+  reloads. The first run after the bump reported 111 passing with the new case
+  never collected, because NUnit builds `TestCaseSource` at collection time and
+  the Test Runner reused the cached list. A green run whose test *count* did not
+  move is not evidence.
 
 - **The full core flow now runs end to end against the local stack**, observed in
   the Editor: gateway auth → `enter_world` → direct dial of the assigned game

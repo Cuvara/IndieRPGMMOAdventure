@@ -238,7 +238,7 @@ The simulation logic the client shares with the server arrives as a UPM package,
 pinned to a **tag, never a branch**:
 
 ```json
-"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.3"
+"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.4"
 ```
 
 `sgl-v0.1.0` resolved but produced **no assembly**. Unity treats a git package as
@@ -339,6 +339,41 @@ contract it into a single FMA that rounds once instead of twice, a third possibl
 answer. The server's results were unchanged by the fix, so Unity moved onto the
 server's numbers rather than the reverse — the right direction, since the server
 is authoritative.
+
+### Does Unity's Mono JIT contract multiply-add into FMA? No — it widens instead
+
+`sgl-v0.1.4` added `fma_multiply_add_discriminator`, a movement vector built to
+fail if `position + direction * step` is evaluated as anything other than strict
+float32. **It passes** (`0x401B4740`), and running the *unfixed* expression shape
+directly under the Editor's Mono JIT settles what would happen without the fix:
+
+| Expression, same inputs | Result |
+|---|---|
+| `_posX + _dirX * step` (the pre-`v0.1.2` shape) | `0x401B473F` |
+| `dx = (float)(_dirX * step); (float)(_posX + dx)` (what `Integrate` does now) | `0x401B4740` |
+| `(double)_posX + (double)_dirX * (double)step` | `0x401B473F` |
+
+So the split-multiply fix is **load-bearing, not precautionary**: without it Unity
+computes a different position from the server on those inputs, and the vector
+would fail.
+
+**But the mechanism is not FMA contraction — it is the same double-precision
+widening that caused the original `SqrMagnitude` bug.** The two hypotheses
+predict identical bits on this vector, so it cannot tell them apart. The case that
+can is `sqrt_negative_components` from the original finding, where they diverge:
+
+| | `x * x + y * y` for `(-3.3, -4.7)` |
+|---|---|
+| strict float32 | `0x4203EB84` |
+| FMA-contracted | `0x4203EB84` |
+| double intermediates | `0x4203EB85` |
+| **Unity observed** | **`0x4203EB85`** |
+
+Only the double-intermediate hypothesis predicts what Unity produced. **FMA
+contraction remains unobserved in Unity's Mono JIT.** That does not weaken the
+fix — splitting the multiply denies both widening and contraction, and IL2CPP or
+a future runtime may well contract where Mono does not. It does mean the vector's
+name oversells it: it discriminates *strict from wide*, not *fused from wide*.
 
 Do not "simplify" those expressions back. The casts are load-bearing, and ADR-10
 rule 5 was amended to cover intermediate rounding and FMA contraction explicitly
