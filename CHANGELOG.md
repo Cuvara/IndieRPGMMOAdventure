@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Netcode module extracted to standalone UPM package** `com.cuvara.netcode` —
+  `Assets/Scripts/Net/` → `Packages/com.cuvara.netcode/Runtime/`, with its own
+  `package.json`, `CHANGELOG.md`, `README.md`, tests, and documentation.
+  Namespace renamed from `Scripts.Net` → `Cuvara.Netcode`. Assembly renamed from
+  `NDC.Scripts.Net` → `Cuvara.Netcode.Runtime`. Demo scene and config moved to
+  `Samples~/DemoBootstrap/` (import via Package Manager). Tests moved to
+  `Cuvara.Netcode.Tests.Editor`. The package is embedded and auto-resolved by
+  Unity; no `manifest.json` entry needed.
+
 ### Added
 
 - **`Shared.GameLogic` is now a project dependency** —
