@@ -53,6 +53,8 @@ displaced by another login.
 | `Client/` | `GatewayClient`, `GameSessionClient`, `NetworkClient`, settings | UniTask |
 | `Diagnostics/` | `INetLog` and its Unity implementation | `UnityNetLog` only |
 | `DI/` | `IContainerBuilder.RegisterNetworking()` | VContainer |
+| `World/` | `WorldState` — adapter onto `Shared.GameLogic`'s `SnapshotMerger` | yes |
+| `Bootstrap/` | `NetworkBootstrap`, its config asset, the dev JWT minter | MonoBehaviour + ScriptableObject |
 
 "Engine-free" is load-bearing, not tidiness: `Tools/WireConformance` compiles
 those folders with `dotnet` and asserts the wire format outside Unity. Run it
@@ -62,14 +64,11 @@ after any change to the codec or to handle resolution:
 cd Tools/WireConformance && dotnet run     # prints ALL CHECKS PASSED, exit 0
 ```
 
-> **This assembly has never been compiled by the Unity Editor.** It was written
-> without one available. Two offline checks stand in for that, and neither is a
-> substitute: `Tools/WireConformance` type-checks and exercises the engine-free
-> half, and the whole assembly was additionally compiled clean (0 errors,
-> 0 warnings) with `dotnet` at `LangVersion 9` / `netstandard2.1` against the real
-> Unity 6000.3.9f1 engine DLLs plus UniTask and VContainer sources. Assembly
-> definition resolution, IL2CPP and platform defines are still unverified — expect
-> to fix something on the first Editor import.
+> **Compiled by the Unity Editor as of 2026-08-11** (6000.3.9f1, Editor Mono).
+> `NDC.Scripts.Net.dll`, `Shared.GameLogic.dll` and `NDC.Tests.EditMode.dll` all
+> build clean. IL2CPP and the non-Editor platforms are still unverified — and see
+> "The client and the server do not agree bit-for-bit yet" below, which is a Mono
+> floating-point finding that IL2CPP may or may not share.
 
 ## Registration
 
@@ -230,48 +229,149 @@ prevent.
 | WebGL | `System.Net.Sockets` is unavailable there; needs a WebSocket `ITransport`, which the gateway does not speak today either |
 | Map transfer (13/14) | `transfer_map` is not sent; an inbound `transfer_map_resp` decodes to a null payload and is logged |
 | Reconnect / resume | none. A closed session is reported, not retried; the server holds the entity 30 s (60 s in a dungeon) |
-| World merge, prediction, reconciliation | out of scope by design |
+| Prediction, reconciliation | out of scope by design — `AckTick` is surfaced for whoever builds it |
+| Protobuf-side world merge | `WorldState` merges, but only what the JSON codec decodes |
 
-## Consuming `Shared.GameLogic` (not wired up yet)
+## `Shared.GameLogic` — wired up
 
-The simulation logic the client shares with the server arrives as a UPM package.
-When the tag exists, add **exactly** this line to `Packages/manifest.json` — it is
-normative in ADR-10 and `backend/TEAM.md`, and the project already resolves
-`com.company.build-pipeline` through the same `git?path=#ref` form:
+The simulation logic the client shares with the server arrives as a UPM package,
+pinned to a **tag, never a branch**:
 
 ```json
-"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.0"
+"com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.1"
 ```
 
-The repo is public, so there is no credential step. **Pin the tag, never a
-branch**: a branch ref would silently change what client prediction computes
-whenever someone pushes to the server repo, with nothing in this repo to
-attribute the change to.
+`sgl-v0.1.0` resolved but produced **no assembly**. Unity treats a git package as
+immutable and will not generate `.meta` files inside one, so an asmdef that ships
+without its own `.meta` is never registered and its sources are silently ignored
+— no error, no assembly, and a `references` entry naming it fails to resolve.
+`sgl-v0.1.1` ships the 19 `.meta` files and `Shared.GameLogic.dll` now appears in
+`Library/ScriptAssemblies`. **If you ever bump this package, check for the DLL,
+not for a green compile** — the netcode compiled green throughout the period the
+package was producing nothing.
 
-**Do not add it before the tag exists** — an unresolvable git dependency fails the
-whole package resolve, not just that entry, and leaves the project unopenable.
+Two files in the package still have no `.meta` (`package.json` and
+`Shared.GameLogic.csproj`) and Unity logs a console error for each on import.
+Harmless — neither is an asset Unity needs — but it is two lines of red at every
+refresh, and the `.csproj` is a server build file with no business in the package
+at all.
 
-Once it resolves, add `"Shared.GameLogic"` to the `references` of whichever
-assembly consumes it. The dependency direction is one-way: this netcode assembly
-may reference the shared one, never the reverse — the shared asmdef ships
-`"noEngineReferences": true` and so cannot see `UnityEngine` at all.
+`NDC.Scripts.Net.asmdef` references `Shared.GameLogic`. The dependency is
+one-way: the shared asmdef sets `noEngineReferences`, so it cannot see
+`UnityEngine` and could not reference back even by accident.
 
-Pre-flight, done here without an Editor (against
-`feat/gameserver/shared-logic-unity-compat`, where the package files live —
-they are not on `develop` yet):
+### What the client uses it for
 
-| Check | Result |
-|---|---|
-| `package.json` name matches the manifest key | `com.rpgmmo.shared-gamelogic` ✔ |
-| Package path in the URL exists and holds the asmdef | ✔ |
-| `unity: "6000.3"` against Editor 6000.3.9f1 | ✔ |
-| Sources compile under Unity's profile (netstandard2.1, C# 9, no engine refs) | ✔ 0 errors |
-| Tag `sgl-v0.1.0` | ✘ does not exist yet — the line will not resolve today |
+`World/WorldState` merges the snapshot stream by delegating to
+`Shared.GameLogic.Systems.SnapshotMerger` — the same type the server was diffed
+against. `WorldState` itself holds no merge rule; it is only the adapter from the
+wire-facing `ResolvedSnapshot` to the simulation type `SnapshotData`, because the
+two sit on opposite sides of the interning boundary (the shared merger keys by
+real entity id and knows nothing about handles, so `SnapshotResolver` has to run
+first — see disagreement 1 below).
 
-Two things to expect on first import, neither a blocker: the sources emit **9
-`CS8632` warnings** (`string?` annotations outside a `#nullable enable` context),
-and the package ships no `.meta` files, so Unity generates them in its package
-cache — harmless for a code-only package, but the GUIDs will differ per machine.
+`NetworkClient.World` is merged **before** `SnapshotReceived` fires, so a
+subscriber can read either the delta it was handed or the whole reconstructed
+world.
+
+```csharp
+_net.SnapshotReceived += s =>
+{
+    var world = _net.World;               // already merged
+    if (world.TryGet(_net.UserId, out var me))
+        Debug.Log($"tick {world.Tick} ack {world.AckTick} at ({me.X}, {me.Y})");
+};
+```
+
+`GameConstants` and `MovementSystem.DeltaTimeForTickRate` supply the tick rate
+and timestep, so no number in this repo can drift from the server's.
+
+Still not written client-side, deliberately: movement integration, damage,
+validation, cooldowns. All of it exists in the package already.
+
+## Golden vectors — the conformance gate
+
+`Assets/Tests/EditMode/` replays the `GoldenVectors/*.json` fixtures that ship
+inside the package through `Shared.GameLogic`, and compares every float
+**bit-for-bit** with `BitConverter.SingleToInt32Bits`. The server's
+`GameServer.Tests/Golden/GoldenVectorTests.cs` replays the same files.
+
+Compiling the same source is a claim about the build, not about the result. Only
+these vectors show that Unity's compilation of the shared logic computes the same
+numbers the server's does. A tolerance comparison would defeat the point exactly:
+`0f` and `-0f`, and `NaN` and `NaN`, compare equal under any epsilon, and a
+one-ULP drift per tick is invisible per frame and obvious after a minute.
+
+The fixtures are read with the built-in `JsonUtility` — no extra package — which
+is why the schema is one top-level object, one `cases` array, flat public fields.
+One wrapper class per fixture, not a generic one: Unity's serializer does not
+bind open generic types and returns a null array instead of failing.
+
+Run them from the Test Runner (EditMode, assembly `NDC.Tests.EditMode`).
+
+### The client and the server do not agree bit-for-bit yet
+
+**3 of 96 EditMode tests fail**, and they are a real divergence, not a test bug:
+
+| Test | Server fixture | Unity |
+|---|---|---|
+| `sqrt_irrational_small.sqrMagnitude` | `0x3DCCCCCD` | `0x3DCCCCCE` |
+| `sqrt_negative_components.sqrMagnitude` | `0x4203EB84` | `0x4203EB85` |
+| `clamped_asymmetric.x` | `0x3EA1E89C` | `0x3EA1E89B` |
+
+All three trace to one expression, `x * x + y * y` — `Vec2.SqrMagnitude` and the
+identical `magSq` in `MovementSystem.ResolveDirection`. Unity's Editor Mono JIT
+evaluates it with **double-precision intermediates and one final rounding**;
+.NET 10 on the server evaluates it strictly in float32. Reproducing both
+evaluation orders by hand reproduces both results exactly, on all three cases,
+which is what rules out a fixture or reader bug. `clamped_asymmetric` is the same
+one-ULP `magSq` propagating through `MathF.Sqrt` and the divide into a position.
+
+C# permits this — a `float` expression may be evaluated at higher precision — so
+neither runtime is wrong, and no amount of care on the client side fixes it. The
+fix belongs in `Shared.GameLogic`: forcing the intermediates back to `float`
+(`(float)(X * X) + (float)(Y * Y)`, an explicit cast being the one construct the
+language spec says must round) makes both runtimes produce the strict result.
+
+Until then, client prediction drifts from the server by about one ULP of position
+per tick. Small, but compounding, and it is precisely what ADR-10 built this gate
+to catch. **The tests are left red on purpose** — turning the gate green by
+loosening the comparison would delete the finding.
+
+## Press Play: `Assets/Scenes/NetcodeBootstrap.unity`
+
+A development harness that runs the whole core flow against a local backend and
+narrates it: mint a dev JWT, gateway auth, `enter_world`, dial the assigned game
+server, join, then input up and snapshots down. It draws nothing and implements
+no rules.
+
+Settings live in `Assets/Settings/NetworkBootstrapConfig.asset` — gateway host
+and port, user id, HS256 secret, map id, input rate. Defaults are the backend's
+own: `127.0.0.1:8000`, `dev-secret-change-me`, `map_01`, 15 Hz. **The game server
+address is deliberately not configurable**: the gateway hands it back from
+`enter_world`, and hardcoding it would bypass the assignment step the harness
+exists to exercise (ADR-3).
+
+`Bootstrap/DevJwt` mints the HS256 token, matching `backend/shared/jwt`'s claim
+set exactly (`sub`, `iat`, `exp`; `sid`/`jti` omitted). **This is a development
+shortcut and not the architecture** — in the shipped design Nakama issues the
+token over HTTPS and the client never holds a signing secret. It exists so the
+netcode can be exercised before any meta service is wired up.
+
+The component prefers a `NetworkClient` injected by VContainer; with no scope in
+the scene it constructs one itself and logs that it did.
+
+### What running it actually proved
+
+Against a gateway already listening on `127.0.0.1:8000` on 2026-08-11: the TCP
+connect, the length-prefixed framing, the JSON encoding, and the auth
+request/response round-trip all work, and the gateway's rejection surfaced
+legibly. It got as far as `invalid token` — that gateway is running with a
+different `JWT_SECRET` than `backend/deploy/.env`'s `dev-secret-change-me`. The
+minted token itself was verified correct out-of-band: valid HS256 signature for
+that secret, correct header, correct claim set, unexpired. **So `enter_world`
+onward — assignment, the join token, input and snapshots — has not yet been
+observed end to end.**
 
 ## Known doc/source disagreements
 

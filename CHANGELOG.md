@@ -20,16 +20,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client predicts whenever someone pushes to the server repo, with nothing in
   this repo to attribute the change to.
 
-  The resolution was verified the way UPM performs it — cloning the backend repo
-  at `sgl-v0.1.0` and checking the subfolder is a valid package root
-  (`package.json` reporting `0.1.0` / `unity: 6000.3`, an `.asmdef`, the sources,
-  and no `bin/` or `obj/` that Unity would try to import alongside them).
-  **Unity's own import is still unverified** — no Editor was available. Opening
-  the project is the first real check, and `Packages/packages-lock.json` is
-  therefore not updated here; Unity will write it on first resolve.
+  Now at **`sgl-v0.1.1`**, and verified in the Editor: `Shared.GameLogic.dll`
+  appears in `Library/ScriptAssemblies`, and `Packages/packages-lock.json` is
+  updated.
+
+  `sgl-v0.1.0` resolved but produced **no assembly**. Unity treats a git package
+  as immutable and will not generate `.meta` files inside one, so an asmdef
+  shipped without its own `.meta` is never registered and the package's sources
+  are silently ignored — no error and no assembly. `sgl-v0.1.1` ships the 19
+  `.meta` files. Check for the DLL when bumping this package, not for a green
+  compile: `NDC.Scripts.Net` compiled green throughout the period the package was
+  producing nothing, because it did not reference it yet.
 
   The package's asmdef sets `noEngineReferences`, so the shared assembly cannot
   reference `UnityEngine` at all. Netcode references it, never the reverse.
+
+- **`NDC.Scripts.Net` now references `Shared.GameLogic`, and merges snapshots with
+  it.** `World/WorldState` rebuilds authoritative world state by delegating to
+  `Shared.GameLogic.Systems.SnapshotMerger` — the same type the server was diffed
+  against — rather than reimplementing "keyframe replaces, delta upserts and
+  removes" client-side. `WorldState` is only the adapter between the wire-facing
+  `ResolvedSnapshot` and the simulation type `SnapshotData`; interning is resolved
+  upstream, because the shared merger keys by real entity id and knows nothing
+  about handles.
+
+  `NetworkClient.World` is merged before `SnapshotReceived` fires, and
+  `NetworkClient.StateChanged` was added so a caller can narrate the two-hop
+  handshake without reaching into either hop.
+
+- **EditMode golden-vector conformance tests** (`Assets/Tests/EditMode/`,
+  assembly `NDC.Tests.EditMode`). Replays the `GoldenVectors/*.json` fixtures that
+  ship inside the package through `Shared.GameLogic` and compares every float
+  **bit-for-bit**; the server's xUnit suite replays the same files. Read with the
+  built-in `JsonUtility`, so the gate needs no extra package.
+
+  **3 of 96 tests fail, and the failures are real.** All three trace to one
+  expression — `x * x + y * y`, in `Vec2.SqrMagnitude` and in
+  `MovementSystem.ResolveDirection`'s `magSq`. Unity's Editor Mono JIT evaluates
+  it with double-precision intermediates and one final rounding; .NET 10 on the
+  server evaluates it strictly in float32, and the results differ by one ULP.
+  Reproducing both evaluation orders by hand reproduces both results exactly on
+  all three cases, which rules out a fixture or reader bug. C# permits either, so
+  the fix belongs in `Shared.GameLogic` (explicit `(float)` casts force the
+  intermediate rounding), not in the client. **Left red on purpose** — a tolerance
+  comparison would pass and delete the finding, which is the one thing this gate
+  exists to prevent.
+
+- **`Assets/Scenes/NetcodeBootstrap.unity`** — press Play and the whole core flow
+  runs against a local backend, logging each step: mint a dev JWT, gateway auth,
+  `enter_world`, dial the assigned game server, join, then input up and snapshots
+  down. Configured by `Assets/Settings/NetworkBootstrapConfig.asset` (gateway host
+  and port, user id, HS256 secret, map id, input rate), defaulting to the
+  backend's own defaults — `127.0.0.1:8000`, `dev-secret-change-me`, `map_01`,
+  15 Hz. The game server address is deliberately not configurable: the gateway
+  hands it back from `enter_world`, and hardcoding it would bypass the assignment
+  step (ADR-3).
+
+  `Bootstrap/DevJwt` mints the token client-side, which is a **development
+  shortcut, not the architecture** — Nakama issues it in the shipped design and
+  the client never holds a signing secret.
+
+  Run against a gateway already listening on `127.0.0.1:8000`, the connect,
+  framing, JSON encoding and auth round-trip all worked; it stopped at
+  `invalid token`, that gateway running with a different `JWT_SECRET` than
+  `backend/deploy/.env` documents. The minted token was verified correct
+  out-of-band. `enter_world` onward is therefore still unobserved.
 
 - **Client networking layer** — new `NDC.Scripts.Net` assembly
   (`Assets/Scripts/Net/`), the client's first gameplay-adjacent code. Covers the

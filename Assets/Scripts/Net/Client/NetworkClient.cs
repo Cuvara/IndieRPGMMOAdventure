@@ -6,6 +6,7 @@ using Scripts.Net.Connection;
 using Scripts.Net.Diagnostics;
 using Scripts.Net.Snapshot;
 using Scripts.Net.Transport;
+using Scripts.Net.World;
 
 namespace Scripts.Net.Client
 {
@@ -60,10 +61,39 @@ namespace Scripts.Net.Client
         /// </summary>
         public event Action<DisconnectInfo> GatewayClosed;
 
-        public NetworkClientState State { get; private set; } = NetworkClientState.Disconnected;
+        /// <summary>
+        /// Raised on every state transition, in order. Exists so a caller can narrate
+        /// the two-hop handshake without reaching into either hop.
+        /// </summary>
+        public event Action<NetworkClientState> StateChanged;
+
+        private NetworkClientState _state = NetworkClientState.Disconnected;
+
+        public NetworkClientState State
+        {
+            get => _state;
+            private set
+            {
+                if (_state == value)
+                {
+                    return;
+                }
+
+                _state = value;
+                StateChanged?.Invoke(value);
+            }
+        }
 
         /// <summary>The gameplay connection, or null before a successful join.</summary>
         public GameSessionClient Session => _session;
+
+        /// <summary>
+        /// Authoritative world state, rebuilt from the snapshot stream by
+        /// <c>Shared.GameLogic.Systems.SnapshotMerger</c>. Already merged by the time
+        /// <see cref="SnapshotReceived"/> fires, so a subscriber can read either the
+        /// delta it was handed or the whole world.
+        /// </summary>
+        public WorldState World { get; } = new WorldState();
 
         public string UserId => _session?.UserId ?? _gateway?.UserId ?? string.Empty;
 
@@ -74,6 +104,10 @@ namespace Scripts.Net.Client
         public async UniTask ConnectAsync(string jwt, string mapId, CancellationToken cancellationToken)
         {
             Dispose();
+
+            // Nothing from a previous session survives a new join: entity ids are
+            // only meaningful within one game server's world.
+            World.Reset();
 
             var gateway = new GatewayClient(_settings, _transports, _codec, _log);
             _gateway = gateway;
@@ -161,7 +195,15 @@ namespace Scripts.Net.Client
             State = NetworkClientState.Disconnected;
         }
 
-        private void OnSnapshot(ResolvedSnapshot snapshot) => SnapshotReceived?.Invoke(snapshot);
+        private void OnSnapshot(ResolvedSnapshot snapshot)
+        {
+            // Merge before publishing: the shared merger is the single definition of
+            // how a keyframe/delta stream becomes world state (ADR-10), and a
+            // subscriber that reads World during the callback must see this snapshot
+            // already applied.
+            World.Apply(snapshot);
+            SnapshotReceived?.Invoke(snapshot);
+        }
 
         private void OnSessionClosed(DisconnectInfo info)
         {

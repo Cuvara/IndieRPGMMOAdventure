@@ -3,7 +3,8 @@
     "rootNamespace": "Scripts.Net",
     "references": [
         "UniTask",
-        "VContainer"
+        "VContainer",
+        "Shared.GameLogic"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
