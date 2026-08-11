@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Shared.GameLogic` is now a project dependency** —
+  `com.rpgmmo.shared-gamelogic` at `sgl-v0.1.0`, resolved from the backend repo
+  as a UPM git dependency with a `?path=` subfolder reference. This is the
+  deterministic simulation the server runs; the client compiles the same
+  **source**, which is what lets prediction and the authoritative simulation
+  agree (backend ADR-10).
+
+  Pinned to a **tag, never a branch**. A branch reference would change what the
+  client predicts whenever someone pushes to the server repo, with nothing in
+  this repo to attribute the change to.
+
+  The resolution was verified the way UPM performs it — cloning the backend repo
+  at `sgl-v0.1.0` and checking the subfolder is a valid package root
+  (`package.json` reporting `0.1.0` / `unity: 6000.3`, an `.asmdef`, the sources,
+  and no `bin/` or `obj/` that Unity would try to import alongside them).
+  **Unity's own import is still unverified** — no Editor was available. Opening
+  the project is the first real check, and `Packages/packages-lock.json` is
+  therefore not updated here; Unity will write it on first resolve.
+
+  The package's asmdef sets `noEngineReferences`, so the shared assembly cannot
+  reference `UnityEngine` at all. Netcode references it, never the reverse.
+
 - **Client networking layer** — new `NDC.Scripts.Net` assembly
   (`Assets/Scripts/Net/`), the client's first gameplay-adjacent code. Covers the
   two-hop connection (gateway for auth and map assignment, then the game server
