@@ -34,8 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   harness is only a proxy. Writes its findings to a file in the temp directory as well
   as the log, because a player build's console cannot be read from outside.
   Two properties of it are load-bearing, and both exist because two processes cannot be
-  started at the same instant — a gap of 29 s was measured, and 78 s in an earlier
-  attempt:
+  started at the same instant — gaps of 12 s and 29 s were measured client-side (30 s
+  server-side for the latter), and 78 s in an earlier attempt:
   - It **holds position until a peer is actually in view**, then starts moving. Any
     client that moves during the join gap is already displaced when the second arrives;
     at ~5 units/s a 29-second gap is ~145 units, well past the 50-unit AOI, and the pair
