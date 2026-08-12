@@ -5,6 +5,43 @@ All notable changes to the Cuvara Netcode package will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Two-client visibility harness** in the E2E Certification sample
+  (`Samples~/E2ECertification/Scripts/TwoClientVisibilityHarness.cs` +
+  `Scenes/TwoClientVisibility.unity`). Runs two independent `NetworkClient` instances
+  with two distinct Nakama identities in one play session and asserts that each one's
+  `WorldState` contains the other. Every prior certification here was single-client, so
+  the client had never actually resolved a remote entity — a world of one proves nothing
+  about the multiplayer claim.
+  The harness documents and guards three false-negative traps, each of which makes a
+  working server look broken: the 50-unit area of interest (two clients driven with
+  merely *similar* headings separate linearly and fall out of range — they are driven
+  with identical vectors and distance is logged as evidence rather than assumed);
+  per-user persisted positions (device ids are tagged per run so both users spawn
+  fresh); and `NakamaSessionService`'s single PlayerPrefs session key, which would make
+  both clients restore the *same* session and silently test one user against itself —
+  a false pass, which is worse than a false failure.
+  It also reports peak world count alongside the final one, because a run that holds two
+  entities for 20 s and then drifts apart ends at one and hides its own success.
+
+### Verified
+
+- **Mutual visibility, on Protobuf, against the live stack.** Two distinct users in
+  `map_01`: `WorldCount == 2` on both sides, each world containing the other's user id.
+  The remote entity is genuinely tracked, not merely spawned once — A's view of B
+  matched B's own reported position at all six samples across 24 s. Snapshots carried
+  two entities, so entity-id interning was exercised with more than one binding for the
+  first time.
+- **Area of interest measured at 50 units.** An earlier run separated the two clients;
+  the remote entity was last visible at 50.5 units apart and absent at 62.2, matching
+  the documented radius to within half a unit.
+- **Entity hold measured at 30 s.** After a deliberate disconnect, the removal reached
+  the other client at **30.1 s** — the documented hold, to within 0.15 s. World count
+  went 2 → 1 and the departed entity left by id.
+
 ## [0.2.0] - 2026-08-12
 
 Minor rather than patch: this adds a wire encoding, a public option, a generated-code
