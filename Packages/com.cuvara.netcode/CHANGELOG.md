@@ -27,9 +27,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It also reports peak world count alongside the final one, because a run that holds two
   entities for 20 s and then drifts apart ends at one and hides its own success.
 
+- **Two-process visibility probe** (`Samples~/E2ECertification/Scripts/SoloVisibilityProbe.cs`
+  + `Scenes/SoloVisibility.unity`). One client per process, so running it in a player
+  build alongside the Editor tests remote visibility across two OS processes with two
+  Unity runtimes and no shared memory — the authoritative shape, where the in-process
+  harness is only a proxy. Writes its findings to a file in the temp directory as well
+  as the log, because a player build's console cannot be read from outside.
+  It drives a **bounded oscillation** rather than a constant heading, and that is
+  load-bearing: two processes cannot start at the same instant, and with a constant
+  heading the start offset becomes distance. A 78-second offset put one client at x=353
+  while the other was still at x=0 — far outside the 50-unit AOI — so they never saw
+  each other despite both being correct. Oscillating keeps each client within a few
+  units of spawn indefinitely, so visibility stops depending on simultaneous launch
+  while the position still changes over time.
+
 ### Verified
 
-- **Mutual visibility, on Protobuf, against the live stack.** Two distinct users in
+- **Mutual visibility across two OS processes, on Protobuf.** A StandaloneWindows64
+  player build and the Editor, each its own Unity runtime, two distinct Nakama users in
+  `map_01`: both reported `WorldCount = 2` for the entire overlap window, each world
+  containing the other's user id, and each peer's position updating at every 5-second
+  sample. This is the authoritative result; the in-process harness agrees with it.
+  A confirmation that fell out of it: when the Editor client exited, the player kept
+  reporting the departed entity at a frozen position for the remainder of its run — the
+  30-second hold seen from the outside. A held entity is indistinguishable from a live
+  one that has stopped moving, which matters to whoever renders remote players.
+- No static mutable state exists on the client path (`Client/`, `Connection/`,
+  `Snapshot/`, `World/`, `Codec/`, `Transport/`) — every `static` is a pure method, a
+  `static readonly` immutable, or a stateless helper class. That is what rules out an
+  in-process test passing through shared memory rather than over the wire.
+- **Mutual visibility, in-process, on Protobuf.** Two distinct users in
   `map_01`: `WorldCount == 2` on both sides, each world containing the other's user id.
   The remote entity is genuinely tracked, not merely spawned once — A's view of B
   matched B's own reported position at all six samples across 24 s. Snapshots carried
