@@ -38,9 +38,14 @@ Must be added manually to your project's `Packages/manifest.json`:
 "jp.hadashikick.vcontainer": "1.16.8"
 ```
 
-## Demo
+## Samples
 
-Import the **Demo Bootstrap** sample from the Package Manager to get a dev harness scene that runs the full connection flow against a local backend.
+Both are imported from the Package Manager and both need a running backend.
+
+| Sample | What it is |
+|---|---|
+| **Demo Bootstrap** | Minimal dev harness scene: press Play and the full connection flow runs against a local backend, logging every step. Mints its own development JWT from a shared secret in the config asset. |
+| **E2E Certification** | Certification rig that drives the whole flow from the client with **no signing secret**: Nakama device auth, the `gateway_token` RPC, both handshake hops, the input/snapshot loop, resync, and a reconnect inside the server's 30 s entity hold. Exposes its results as static fields so they can be asserted on rather than read off the console. |
 
 ## Documentation
 
