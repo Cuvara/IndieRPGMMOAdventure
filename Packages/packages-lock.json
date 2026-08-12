@@ -14,7 +14,8 @@
       "depth": 0,
       "source": "embedded",
       "dependencies": {
-        "com.cysharp.unitask": "2.5.10"
+        "com.cysharp.unitask": "2.5.10",
+        "com.unity.modules.unitywebrequest": "1.0.0"
       }
     },
     "com.cysharp.messagepipe": {
