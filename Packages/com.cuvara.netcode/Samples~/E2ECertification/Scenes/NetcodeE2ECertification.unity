@@ -154,8 +154,9 @@ MonoBehaviour:
   mapId: map_01
   inputRateHz: 15
   snapshotLogInterval: 15
-  runSeconds: 14
-  resyncAfterSeconds: 7
+  runSeconds: 70
+  resyncAfterSeconds: 30
+  encoding: 2
 --- !u!4 &986592369
 Transform:
   m_ObjectHideFlags: 0

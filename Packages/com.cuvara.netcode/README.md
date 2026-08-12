@@ -5,12 +5,13 @@ Client-side networking module for the RPG MMO. Handles wire transport, codec, tw
 ## Features
 
 - **Wire transport** — TCP (KCP planned), 4-byte BE length-prefix framing
-- **Codec** — JSON wire codec with encoding sniffing (Protobuf planned)
+- **Codec** — JSON and Protobuf wire codecs, distinguished inbound by a one-byte sniff
 - **Two-hop handshake** — Gateway auth → JoinToken → Game server connect
 - **Protocol messages** — Auth, JoinToken, EnterWorld, Ping/Pong, Kick, Disconnect, Snapshot, Input, Resync
 - **Snapshot resolution** — Entity handle table, delta resolution
 - **World state** — Adapter between wire snapshots and `Shared.GameLogic` simulation types
 - **VContainer DI** — One-line registration via `NetworkingRegistration.RegisterNetworking()`
+- **Two wire encodings** — Protobuf (the backend default, with entity-id interning and the entity-type enum) and legacy JSON. JSON is the registration default so upgrades do not change behaviour; pass `WireEncoding.Protobuf` to opt in. Ships one vendored third-party binary, `Google.Protobuf` — see `Documentation~/NETCODE.md` for why it is unavoidable.
 
 ## Installation
 

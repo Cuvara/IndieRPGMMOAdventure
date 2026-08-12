@@ -4,7 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IndieRPGMMOAdventure — Unity 6 (6000.3.9f1) game project targeting Android, WebGL, Windows, and Linux. Early-stage, built on a template with DI and async patterns. Uses IL2CPP scripting backend with .NET Standard 2.1.
+IndieRPGMMOAdventure — Unity 6 (6000.3.9f1) game project targeting Android, WebGL, Windows, and Linux. Early-stage, built on a template with DI and async patterns. .NET Standard 2.1.
+
+### Scripting backend is per-target — do not assume IL2CPP everywhere
+
+Measured 2026-08-12, not inferred from a template default:
+
+| Target | Backend | Managed stripping |
+|---|---|---|
+| Android | IL2CPP | Minimal |
+| WebGL | IL2CPP | Minimal |
+| Standalone (Windows/Linux) | **Mono2x** | **Disabled** |
+
+This matters for anything with AOT or reflection constraints. A StandaloneWindows64
+build — the default and quickest one to produce — exercises **neither** IL2CPP nor the
+stripper, so it cannot validate `link.xml` preservation or AOT behaviour, and a green
+result there is misleading rather than merely incomplete. Test those on Android or
+WebGL, and note that stripping is set to Minimal, the least aggressive level, so
+raising it to High is the honest setting for a real stripping test.
 
 ## Build & CI
 

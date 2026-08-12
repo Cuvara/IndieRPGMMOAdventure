@@ -35,8 +35,19 @@ namespace Samples.NetcodeE2E
         [Header("Loop")]
         [SerializeField] private int inputRateHz = 15;
         [SerializeField] private int snapshotLogInterval = 15;
-        [SerializeField] private float runSeconds = 14f;
-        [SerializeField] private float resyncAfterSeconds = 7f;
+
+        [Tooltip("Must exceed 60s to exercise the heartbeat: the server pings every 10s " +
+                 "and drops a connection after 30s without a pong, and sending input does " +
+                 "NOT reset that timer. Any run shorter than 30s passes regardless.")]
+        [SerializeField] private float runSeconds = 70f;
+
+        [SerializeField] private float resyncAfterSeconds = 30f;
+
+        [Header("Wire")]
+        [Tooltip("Protobuf is the backend default and carries interning plus the entity " +
+                 "enum; JSON exercises neither. Both servers mirror the encoding of the " +
+                 "first frame per connection, so this needs no server change.")]
+        [SerializeField] private WireEncoding encoding = WireEncoding.Protobuf;
 
         // --- Results, read back through script-execute after the run. ---
         public static string NakamaUserId1 = "";
@@ -62,6 +73,10 @@ namespace Samples.NetcodeE2E
         public static bool CleanDisconnect;
         public static string FatalError = "";
         public static bool Finished;
+        public static string EncodingUsed = "";
+        public static float RanSeconds;
+        public static long LastRttMs;
+        public static bool SurvivedHeartbeatWindow;
         public static bool ReconnectJoined;
         public static float ReconnectGapSeconds = -1f;
         public static string ReconnectUserId = "";
@@ -70,6 +85,13 @@ namespace Samples.NetcodeE2E
         public static string ReconnectWorldDump = "";
 
         private NetworkClient _client;
+
+        /// <summary>A fresh codec per connection — the encoding is latched per socket.</summary>
+        private IWireCodec NewCodec() =>
+            encoding == WireEncoding.Protobuf
+                ? (IWireCodec)new ProtobufWireCodec()
+                : new JsonWireCodec();
+
         private CancellationTokenSource _cts;
         private long _inputTick;
 
@@ -143,9 +165,12 @@ namespace Samples.NetcodeE2E
             await CaptureAssignmentAsync(gatewayJwt, ct);
 
             // ---------- B/C: full flow with the RPC-issued token ----------
+            EncodingUsed = encoding.ToString();
+            Debug.Log($"[E2E] wire encoding = {EncodingUsed}");
+
             var netSettings = new NetworkSettings { GatewayHost = gatewayHost, GatewayPort = gatewayPort };
             _client = new NetworkClient(
-                netSettings, new DefaultTransportFactory(), new JsonWireCodec(), new UnityNetLog());
+                netSettings, new DefaultTransportFactory(), NewCodec(), new UnityNetLog());
             _client.SnapshotReceived += OnSnapshot;
             _client.SessionClosed += info => Debug.Log($"[E2E] session closed: {info}");
             _client.GatewayClosed += info => Debug.Log($"[E2E] gateway closed: {info}");
@@ -189,7 +214,7 @@ namespace Samples.NetcodeE2E
 
             _client.Dispose();
             _client = new NetworkClient(
-                netSettings, new DefaultTransportFactory(), new JsonWireCodec(), new UnityNetLog());
+                netSettings, new DefaultTransportFactory(), NewCodec(), new UnityNetLog());
             _client.SnapshotReceived += OnReconnectSnapshot;
 
             // A fresh gateway token, exactly as a real client would on resume.
@@ -240,7 +265,7 @@ namespace Samples.NetcodeE2E
         {
             var settings = new NetworkSettings { GatewayHost = gatewayHost, GatewayPort = gatewayPort };
             using (var probe = new GatewayClient(
-                settings, new DefaultTransportFactory(), new JsonWireCodec(), new UnityNetLog()))
+                settings, new DefaultTransportFactory(), NewCodec(), new UnityNetLog()))
             {
                 await probe.AuthenticateAsync(jwt, ct);
                 Debug.Log($"[E2E] B4 auth_resp ok, user_id='{probe.UserId}'");
@@ -266,7 +291,7 @@ namespace Samples.NetcodeE2E
         {
             var settings = new NetworkSettings { GatewayHost = gatewayHost, GatewayPort = gatewayPort };
             using (var probe = new GatewayClient(
-                settings, new DefaultTransportFactory(), new JsonWireCodec(), new UnityNetLog()))
+                settings, new DefaultTransportFactory(), NewCodec(), new UnityNetLog()))
             {
                 try
                 {
@@ -378,6 +403,18 @@ namespace Samples.NetcodeE2E
                     return;
                 }
             }
+
+            RanSeconds = (float)(DateTime.UtcNow - started).TotalSeconds;
+            LastRttMs = _client.Session?.RoundTripMs ?? -1L;
+
+            // The server pings every 10s and drops a connection after 30s without a
+            // pong; input traffic does not reset that timer. Still connected past 60s
+            // is the only evidence that pongs are actually being answered.
+            SurvivedHeartbeatWindow =
+                RanSeconds > 60f && _client.Session != null && _client.Session.IsConnected;
+            Debug.Log($"[E2E] heartbeat: ran {RanSeconds:F1}s, stillConnected=" +
+                      $"{_client.Session?.IsConnected} rtt={LastRttMs}ms " +
+                      $"survived60s={SurvivedHeartbeatWindow}");
 
             if (ResyncRequested)
             {

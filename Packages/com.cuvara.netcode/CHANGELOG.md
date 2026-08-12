@@ -5,6 +5,66 @@ All notable changes to the Cuvara Netcode package will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-08-12
+
+Minor rather than patch: this adds a wire encoding, a public option, a generated-code
+surface and a binary dependency. Nothing breaks — `ConnectAsync(jwt, mapId, ct)` is
+untouched and JSON stays the default — but none of that is a patch.
+
+### Added
+
+- **Protobuf wire codec** (`Runtime/Codec/ProtobufWireCodec.cs`), the backend's default
+  encoding. Selected via `RegisterNetworking(settings, WireEncoding.Protobuf)`; JSON
+  remains the default so an existing caller's behaviour does not change on upgrade.
+  Both servers mirror the encoding of the first frame per connection, so this is a
+  client-side choice needing no server change.
+  - Rejects `MsgType` 0 at **both** ends. proto3 omits a zero field 1, so a type-0
+    envelope would not begin with `0x08` — the byte the peer sniffs to tell Protobuf
+    from JSON's `{` — and the frame would be parsed as the wrong encoding entirely.
+    Decoding rejects it too: a body starting `0x12` is valid Protobuf carrying only
+    field 2 with the type defaulted to 0, so arbitrary bytes can otherwise "decode"
+    successfully.
+  - Entity kind reads the `type` enum first and falls back to `type_name`;
+    `ENTITY_TYPE_UNSPECIFIED` means "see `type_name`", not "unknown". Reading only one
+    half silently loses either every known kind or every future one.
+- **`Google.Protobuf` 3.29.3**, vendored at `Runtime/Plugins/Google.Protobuf.dll`.
+  **The package's first third-party binary.** It is unavoidable rather than chosen:
+  the code generated from `wire.proto` carries 322 references to the Protobuf runtime
+  and does not stand alone, and hand-writing the types would create a second
+  definition of a schema that already exists. Vendored inside the package rather than
+  in `Assets/` so the package stays importable on its own. The version deliberately
+  matches the backend's pin (`GameServer.csproj`) and the generator used.
+- **Generated schema types** at `Runtime/Protocol/Generated/Wire.cs`, namespace
+  `RpgMmo.Wire.V1`. Regenerate identically with:
+  `protoc --proto_path=backend/shared/proto --csharp_out=Runtime/Protocol/Generated wire.proto`
+  using **libprotoc 29.3**. Committed because Unity cannot run protoc at import;
+  `wire.proto` remains the single source, so this is one definition, not two.
+- **`Runtime/link.xml`** preserving `Google.Protobuf` and `RpgMmo.Wire.V1` from IL2CPP
+  managed-code stripping. Protobuf registers message types through static parsers and
+  reaches properties reflectively, which the stripper cannot see. The failure would be
+  runtime-only in a player while the Editor — which does not strip — stayed green.
+- 13 interning tests (`Tests/Editor/SnapshotResolverInterningTests.cs`) covering the
+  branches only a Protobuf connection can reach: unknown handle on a delta, bare
+  handle on a keyframe, an aborted snapshot leaving the table untouched, handle
+  rebinding across a keyframe including a double rebind, removals not releasing a
+  binding, and both zero sentinels.
+
+### Fixed
+
+- `WireConnection` threw `"received a Protobuf frame, which this client cannot decode
+  yet"` on any inbound Protobuf frame. Inbound is sniffed per frame rather than assumed
+  to mirror the outbound codec, so **both** codecs are now held ready: JSON because the
+  gateway writes eviction frames as JSON whatever the connection latched, and Protobuf
+  because it is now implemented.
+- `SnapshotResolver` cleared the handle table *before* resolving on a keyframe. That
+  mutated state before validating it, so a malformed keyframe wiped the table and then
+  aborted, leaving the client with no bindings and an empty world until a resync
+  completed. Resolution now runs first and the clear happens only once every entity has
+  resolved, restoring the all-or-nothing guarantee. A keyframe carrying a bare handle is
+  rejected **without consulting the table** — the previous interval's binding for that
+  number belongs to a different entity, so a successful lookup is the dangerous
+  outcome, not the safe one.
+
 ## [0.1.2] - 2026-08-12
 
 ### Added

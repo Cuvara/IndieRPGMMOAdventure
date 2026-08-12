@@ -162,24 +162,50 @@ Where the latch lives, and why there are two halves of it:
   gateway builds them off the victim connection's goroutine and may not read its
   latched encoding from there. A per-frame sniff makes that a non-event.
 
-### Protobuf is not implemented
+### Choosing the encoding
 
-Only `JsonWireCodec` exists. Both servers still accept JSON, so the client works
-end to end today, but this is the legacy path and it costs bandwidth: Protobuf
-plus the entity-type enum plus id interning is **81% smaller** on the wire.
+Both codecs exist. JSON is the **default** so an existing caller does not change
+behaviour on upgrade; Protobuf is the backend's default and is what production
+should use.
 
-To add it:
+```csharp
+builder.RegisterNetworking(settings, WireEncoding.Protobuf);
+```
 
-1. Add a Protobuf runtime for Unity (`Google.Protobuf`, via NuGetForUnity or a
-   vendored DLL) and generate C# from `backend/shared/proto/wire.proto` — do not
-   hand-write the types, and do not add a third definition of the schema.
-2. Implement `IWireCodec` over the generated `Envelope`, mapping the
-   `EntityType` enum to the same names `GameServer/Net/EntityTypes.cs` uses
-   (`player`, `mob`, `npc`, `item`, `projectile`), preferring `type` and falling
-   back to `type_name`.
-3. Register it in place of `JsonWireCodec` in `NetworkingRegistration`. Nothing
-   else changes: `WireConnection` already sniffs inbound frames, and
-   `SnapshotResolver` already implements interning.
+Nothing on the server changes: both servers mirror the encoding of the first frame
+they receive, per connection, so a JSON and a Protobuf client can share one server.
+
+|  | JSON | Protobuf |
+|---|---|---|
+| First body byte | `0x7B` (`{`) | `0x08` |
+| Entity id on a delta | always sent | interned away after first mention |
+| Entity kind | plain string | `type` enum, `type_name` fallback |
+| Measured keyframe / delta | — | 64 B / 24 B for one entity |
+
+Two behaviours ride along with Protobuf that JSON never exercises, and **both
+present as gameplay bugs rather than codec bugs**: entity-id interning and the
+entity-type enum. A green JSON certification says nothing about either. See
+"Snapshots and entity-handle interning" below.
+
+#### Regenerating the schema types
+
+`Runtime/Protocol/Generated/Wire.cs` is generated, committed, and must never be
+hand-edited. `wire.proto` in the backend repo stays the single source of truth:
+
+```bash
+protoc --proto_path=backend/shared/proto \
+       --csharp_out=Runtime/Protocol/Generated wire.proto     # libprotoc 29.3
+```
+
+Use **libprotoc 29.3** so the output is reproducible; it pairs with the vendored
+`Google.Protobuf` 3.29.3, which is the version the backend's `GameServer.csproj`
+pins. It is committed because Unity cannot run protoc at import time.
+
+`Google.Protobuf.dll` is vendored at `Runtime/Plugins/` — the package's only
+third-party binary. The generated code carries 322 references to that runtime and
+does not stand alone, so the dependency is unavoidable rather than a preference. It
+lives inside the package so the package remains importable on its own, and
+`Runtime/link.xml` preserves it from IL2CPP stripping.
 
 ## Heartbeat — implemented once
 
