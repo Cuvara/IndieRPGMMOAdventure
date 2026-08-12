@@ -52,6 +52,17 @@ strings -el "$D/Assembly-CSharp.dll" | grep -c "SOMETHING_OLD"   # the control
 The control matters more than the target: it distinguishes "my change is missing" from
 "my search is broken". Without it, a zero is unreadable.
 
+**String literals and type names live in different encodings**, and searching for the
+wrong one produces a confident false negative:
+
+| Looking for | Where it lives | Command |
+|---|---|---|
+| a string literal (`"MY_MARKER"`) | UTF-16 user-string heap | `strings -el` |
+| a type or member name (`MyNewClass`) | UTF-8 `#Strings` metadata heap | plain `strings` |
+
+Searching a type name with `strings -el` returns zero from a binary that definitely
+contains it — which reads exactly like a stale build.
+
 Two related traps when driving builds from the Unity MCP tools:
 
 - **The exe timestamp is not evidence.** An incremental build may leave the launcher
