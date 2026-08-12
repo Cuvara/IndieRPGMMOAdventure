@@ -36,6 +36,32 @@ Unity Editor opens the project directly. No CLI build tool beyond Unity's batch 
 - Build scripts: `Assets/BuildScripts/Editor/PlayerBuilder.cs`, `Assets/BuildScripts/Editor/AddressableBuilder.cs`
 - Build gates: max 500MB, fail at 25% size increase, no missing references/scripts
 
+### Verifying a player build actually contains your change
+
+`strings` on a Unity player's managed assembly **will not find your string literals**.
+.NET stores them as UTF-16, and plain `strings` scans for ASCII only — so a correct,
+freshly built binary looks stale and you go hunting for a build problem that does not
+exist. Use the UTF-16 mode, and always with a control:
+
+```bash
+D=<build>/<Product>_Data/Managed
+strings -el "$D/Assembly-CSharp.dll" | grep -c "MY_NEW_MARKER"   # the change
+strings -el "$D/Assembly-CSharp.dll" | grep -c "SOMETHING_OLD"   # the control
+```
+
+The control matters more than the target: it distinguishes "my change is missing" from
+"my search is broken". Without it, a zero is unreadable.
+
+Two related traps when driving builds from the Unity MCP tools:
+
+- **The exe timestamp is not evidence.** An incremental build may leave the launcher
+  `.exe` untouched and rewrite only `<Product>_Data/Managed/*.dll`. Check the managed
+  assembly's mtime, not the exe's.
+- **`BuildPipeline.BuildPlayer` blocks the Editor main thread**, so the MCP channel dies
+  mid-build and its retries **re-invoke the build**. Guard anything expensive with a
+  sentinel file, or you get several concurrent builds and no indication of it. Read
+  progress from `Editor.log` instead; the log stays available while MCP does not.
+
 ### Addressables
 Enabled with default profile. Build addressables step is optional in CI workflow.
 
