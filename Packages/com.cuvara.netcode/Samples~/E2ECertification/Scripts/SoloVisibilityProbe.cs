@@ -53,6 +53,7 @@ namespace Samples.NetcodeE2E
         private CancellationTokenSource _cts;
         private string _role;
         private string _reportPath;
+        private DateTime? _peerSeenAt;
 
         private void Start()
         {
@@ -124,7 +125,24 @@ namespace Samples.NetcodeE2E
                     // visibility no longer depends on launching them simultaneously,
                     // while the position still CHANGES over time so "the peer is being
                     // updated" remains observable.
-                    _client.Session?.SendInput(tick, Mathf.Sin(elapsed * 1.5f), 0f);
+                    // HOLD POSITION until a peer is actually in view, then move.
+                    // Two processes cannot join simultaneously — a 17 s gap was measured,
+                    // and 78 s in an earlier attempt. Any client that moves during that
+                    // window is already displaced when the second one joins: at ~5 u/s a
+                    // 17 s gap is ~85 units, past the 50-unit AOI, so the pair never sees
+                    // each other and it looks like a visibility failure. Waiting for the
+                    // peer removes launch timing from the experiment entirely.
+                    var peerPresent = _client.World.Count >= 2;
+                    if (peerPresent && !_peerSeenAt.HasValue)
+                    {
+                        _peerSeenAt = DateTime.UtcNow;
+                        Line($"PEER_VISIBLE at t={elapsed:F0}s — releasing hold, moving from here");
+                    }
+
+                    var moveX = _peerSeenAt.HasValue
+                        ? Mathf.Sin((float)(DateTime.UtcNow - _peerSeenAt.Value).TotalSeconds * 1.5f)
+                        : 0f;
+                    _client.Session?.SendInput(tick, moveX, 0f);
 
                     if ((DateTime.UtcNow - lastSample).TotalSeconds >= 5)
                     {
