@@ -12,11 +12,26 @@ namespace Scripts.Nakama
     /// persists session tokens in PlayerPrefs, and refreshes expired tokens.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Registered as a singleton in VContainer via
     /// <see cref="DI.NakamaRegistration.RegisterNakama"/>.
-    /// The JWT from <see cref="Session"/> is the same token the gateway
-    /// expects for realtime auth — Nakama issues it, the gateway validates
-    /// it with the shared HS256 secret.
+    /// </para>
+    /// <para>
+    /// <b>Two different tokens, do not confuse them.</b>
+    /// <see cref="Session"/>'s <c>AuthToken</c> is the <b>Nakama session</b> token: it
+    /// authenticates calls to Nakama itself (RPCs, storage, social) and nothing else.
+    /// The <b>gateway</b> token is a separate credential minted by the
+    /// <c>gateway_token</c> RPC; it carries the user id in the <c>sub</c> claim the
+    /// gateway reads, and it is the only one the gateway can resolve an identity from.
+    /// <see cref="Auth.NakamaAuthProvider"/> performs that exchange.
+    /// </para>
+    /// <para>
+    /// Presenting the session token to the gateway is not a clean failure. The deploy
+    /// may share one HS256 secret, in which case the signature verifies and the
+    /// gateway accepts the connection — but the user claim it looks for is absent, so
+    /// the session is established with an <b>empty user_id</b>. Never substitute one
+    /// for the other.
+    /// </para>
     /// </remarks>
     public sealed class NakamaSessionService : IDisposable
     {

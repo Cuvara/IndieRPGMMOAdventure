@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`NakamaAuthProvider` returned the wrong token, and failed silently**
+  (`Assets/Scripts/Nakama/Auth/NakamaAuthProvider.cs`). `GetJwtAsync` returned
+  `NakamaSessionService.Session.AuthToken` — the Nakama *session* token — where the
+  gateway expects a *gateway* token minted by the `gateway_token` RPC. The two are
+  not interchangeable, and substituting one is not a clean failure: verified against
+  a live stack, the gateway **accepts** the session token (the deploy can share a
+  single HS256 secret) but the user claim it reads is absent, so the session is
+  established with an **empty `user_id`** and the player is nobody. Any feature
+  keyed on identity — ownership, persistence, duplicate-login eviction — would have
+  silently misbehaved.
+  `GetJwtAsync` now exchanges the session for a gateway token via
+  `Client.RpcAsync(session, "gateway_token", "{}")` and throws with a message naming
+  the RPC if it fails or yields no token, rather than returning a credential that
+  half-works. No signing secret is held client-side on this path.
+  The payload is parsed **once**: the Unity SDK's `IApiRpc.Payload` already yields
+  the inner JSON, unlike Nakama's raw HTTP API where the RPC result is a
+  JSON-encoded string nested in an envelope and must be unwrapped twice. Noted in a
+  comment so the next reader does not double-parse.
+- **`GameLifetimeScope` registered the services but not the component, so the auth
+  provider was never actually reached** (`Assets/Scripts/DI/GameLifetimeScope.cs`).
+  VContainer only injects components it has been told about, so a `LifetimeScope` in the
+  scene was not sufficient: `NetworkBootstrap`'s `[Inject]` never ran, it reported "no
+  container found", built its own `NetworkClient`, and fell back to minting a
+  development JWT — silently bypassing the `NakamaAuthProvider` registered immediately
+  above it. Added `RegisterComponentInHierarchy<NetworkBootstrap>()`. Without this the
+  `IAuthProvider` wiring was inert in any real scene.
+
+- **`NakamaSessionService` documentation asserted the two tokens were the same**
+  (`Assets/Scripts/Nakama/NakamaSessionService.cs`). That claim is what licensed the
+  bug above. Rewritten to state what each credential is for and to spell out the
+  empty-`user_id` failure mode.
+
 ### Added
 
 - **`IAuthProvider` interface** (`Cuvara.Netcode.Auth`) — contract for JWT
