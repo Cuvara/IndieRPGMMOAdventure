@@ -39,10 +39,10 @@ namespace DOTSSample
             if (groundMat != null)
                 ground.GetComponent<Renderer>().material = groundMat;
 
-            // DOTS Spawner — local demo entities
-            var spawner = gameObject.GetComponent<DOTSSpawner>();
-            if (spawner == null)
-                gameObject.AddComponent<DOTSSpawner>();
+            // Combat — enemies, bullets, auto-attack
+            var combat = gameObject.GetComponent<CombatBootstrap>();
+            if (combat == null)
+                gameObject.AddComponent<CombatBootstrap>();
 
             // Network bridge — connects to gateway → game server and renders
             // replicated entities as ECS entities alongside the local demo ones.
@@ -50,7 +50,7 @@ namespace DOTSSample
             if (bridge == null)
                 gameObject.AddComponent<DOTSNetworkBridge>();
 
-            Debug.Log("[DOTSSceneSetup] Scene ready — DOTS entities + network bridge");
+            Debug.Log("[DOTSSceneSetup] Scene ready — DOTS entities + combat + network bridge");
         }
     }
 }

@@ -7,6 +7,8 @@ using Cuvara.Netcode.Codec;
 using Cuvara.Netcode.Diagnostics;
 using Cuvara.Netcode.Transport;
 using Cuvara.Netcode.View;
+using Unity.Collections;
+using Unity.Entities;
 using UnityEngine;
 
 namespace DOTSSample
@@ -39,6 +41,7 @@ namespace DOTSSample
         private DOTSEntityView _view;
         private CancellationTokenSource _cts;
         private long _inputTick;
+        private string _pendingAttackTarget = "";
 
         // --- Status for OnGUI ---
         private string _status = "Initializing...";
@@ -73,6 +76,15 @@ namespace DOTSSample
 
         // --- Per-entity label cache (rebuilt on entity set change) ---
         private readonly Dictionary<string, string> _entityLabelTextCache = new Dictionary<string, string>();
+
+        // --- Combat stats cache ---
+        private string _cachedCombatText;
+        private int _prevKills = -1;
+        private EntityQuery _combatStatsQuery;
+
+        // --- Attack event bridge (ECS → server) ---
+        private EntityQuery _attackRequestQuery;
+        private float _attackDebugTimer;
 
         // --- FPS tracking ---
         private const int FpsSampleCount = 60;
@@ -134,8 +146,57 @@ namespace DOTSSample
                 _cachedFpsStatsText = string.Format("Min: {0:F0}  Avg: {1:F0}  Max: {2:F0}", _displayMin, _displayAvg, _displayMax);
             }
 
+            // Combat stats (cached query, no alloc in steady state)
+            var dotsWorld = World.DefaultGameObjectInjectionWorld;
+            if (dotsWorld != null && dotsWorld.IsCreated)
+            {
+                if (_combatStatsQuery == default)
+                    _combatStatsQuery = dotsWorld.EntityManager.CreateEntityQuery(typeof(CombatStats));
+
+                if (_combatStatsQuery.CalculateEntityCount() > 0)
+                {
+                    var stats = _combatStatsQuery.GetSingleton<CombatStats>();
+                    if (_prevKills != stats.Kills)
+                    {
+                        _prevKills = stats.Kills;
+                        _cachedCombatText = "Kills: " + stats.Kills;
+                    }
+                }
+            }
+
             if (_client == null)
                 return;
+
+            // Poll attack requests from ECS → enqueue for next input tick
+            if (dotsWorld != null && dotsWorld.IsCreated)
+            {
+                if (_attackRequestQuery == default)
+                    _attackRequestQuery = dotsWorld.EntityManager.CreateEntityQuery(typeof(AttackRequest));
+
+                int attackCount = _attackRequestQuery.CalculateEntityCount();
+
+                _attackDebugTimer -= Time.deltaTime;
+                if (_attackDebugTimer <= 0f)
+                {
+                    _attackDebugTimer = 1f;
+                    Debug.Log($"[Debug] AttackRequest count: {attackCount}, pending: '{_pendingAttackTarget}'");
+                }
+
+                if (attackCount > 0)
+                {
+                    var entities = _attackRequestQuery.ToEntityArray(Allocator.Temp);
+                    for (int i = 0; i < entities.Length; i++)
+                    {
+                        var req = dotsWorld.EntityManager.GetComponentData<AttackRequest>(entities[i]);
+                        var targetId = req.TargetId.ToString();
+                        Debug.Log($"[Debug] AttackRequest consumed: '{targetId}'");
+                        if (!string.IsNullOrEmpty(targetId))
+                            _pendingAttackTarget = targetId;
+                        dotsWorld.EntityManager.DestroyEntity(entities[i]);
+                    }
+                    entities.Dispose();
+                }
+            }
 
             _binder.Tick(_client.World, _client.UserId);
             _entityCount = _view.Count;
@@ -202,7 +263,11 @@ namespace DOTSSample
 
                     var moveX = Mathf.Sin(Time.time * 1.5f);
                     var moveY = Mathf.Cos(Time.time * 0.8f);
-                    _client.Session?.SendInput(_inputTick, moveX, moveY);
+                    var attackTarget = _pendingAttackTarget;
+                    _pendingAttackTarget = "";
+                    if (!string.IsNullOrEmpty(attackTarget))
+                        Debug.Log($"[Attack] Sending attack on {attackTarget} (tick {_inputTick})");
+                    _client.Session?.SendInput(_inputTick, moveX, moveY, attackTarget);
 
                     await UniTask.Delay(TimeSpan.FromSeconds(dt), DelayType.Realtime,
                         PlayerLoopTiming.Update, ct);
@@ -322,6 +387,15 @@ namespace DOTSSample
                     _cachedRttText = "RTT: " + rttMs + "ms  Tick: " + tick;
                 }
                 GUI.Label(new Rect(10, y, w, h), _cachedRttText);
+            }
+
+            // --- Combat stats (below network HUD) ---
+            if (_cachedCombatText != null)
+            {
+                GUI.color = new Color(1f, 0.6f, 0.2f);
+                GUI.Label(new Rect(10, y, w, h), _cachedCombatText);
+                y += h;
+                GUI.color = Color.white;
             }
 
             // --- FPS counter (top-right) — strings rebuilt at 4 Hz in Update ---

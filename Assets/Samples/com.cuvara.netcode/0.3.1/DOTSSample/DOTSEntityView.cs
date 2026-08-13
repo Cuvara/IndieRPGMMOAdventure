@@ -18,7 +18,10 @@ namespace DOTSSample
     /// Server coordinates are (x, y) on a 2D plane. These map to Unity (X, 0.5, Z)
     /// so a top-down camera sees the world as the server lays it out.
     /// Each player gets a unique colour from a fixed palette so multiple clients are
-    /// visually distinguishable.
+    /// visually distinguishable. Entities whose ID starts with "enemy-" are rendered
+    /// as red spheres with <see cref="EnemyTag"/> and <see cref="Health"/>; all other
+    /// entities are players and receive <see cref="PlayerCombatTag"/> +
+    /// <see cref="AutoAttack"/> so the combat systems target them automatically.
     /// </remarks>
     public sealed class DOTSEntityView : IEntityView
     {
@@ -55,12 +58,16 @@ namespace DOTSSample
             new Color(1f,   0.4f, 0.8f),   // 7: pink
         };
 
+        private static readonly Color EnemyColor = new Color(0.9f, 0.15f, 0.1f);
+        private const string EnemyIdPrefix = "enemy-";
+
         private readonly Dictionary<string, Entity> _entities = new Dictionary<string, Entity>();
         private readonly Dictionary<string, int> _playerColorIndex = new Dictionary<string, int>();
         private readonly Dictionary<string, (int hp, int maxHp)> _hpCache = new Dictionary<string, (int, int)>();
+        private readonly HashSet<string> _enemyIds = new HashSet<string>();
         private readonly EntityManager _em;
-        private readonly Mesh _localMesh;
-        private readonly Mesh _remoteMesh;
+        private readonly Mesh _capsuleMesh;
+        private readonly Mesh _sphereMesh;
         private int _nextColorIndex = 1; // 0 reserved for local
 
         public bool IsValid { get; }
@@ -76,8 +83,8 @@ namespace DOTSSample
             }
 
             _em = world.EntityManager;
-            _localMesh = GetPrimitiveMesh(PrimitiveType.Capsule);
-            _remoteMesh = GetPrimitiveMesh(PrimitiveType.Capsule);
+            _capsuleMesh = GetPrimitiveMesh(PrimitiveType.Capsule);
+            _sphereMesh = GetPrimitiveMesh(PrimitiveType.Sphere);
             IsValid = true;
         }
 
@@ -88,9 +95,27 @@ namespace DOTSSample
             if (!IsValid || string.IsNullOrEmpty(id) || _entities.ContainsKey(id))
                 return;
 
+            bool isEnemy = id.StartsWith(EnemyIdPrefix);
+
+            // Determine visual
+            Color color;
+            Mesh mesh;
+            float scale;
             int colorIdx;
-            if (isLocal)
+
+            if (isEnemy)
             {
+                color = EnemyColor;
+                mesh = _sphereMesh;
+                scale = 0.8f;
+                colorIdx = 1; // red slot
+                _enemyIds.Add(id);
+            }
+            else if (isLocal)
+            {
+                color = Palette[0];
+                mesh = _capsuleMesh;
+                scale = 1.2f;
                 colorIdx = 0;
             }
             else
@@ -101,16 +126,16 @@ namespace DOTSSample
                     _nextColorIndex = (_nextColorIndex % (Palette.Length - 1)) + 1;
                     _playerColorIndex[id] = colorIdx;
                 }
+                color = Palette[colorIdx % Palette.Length];
+                mesh = _capsuleMesh;
+                scale = 1f;
             }
 
-            var color = Palette[colorIdx % Palette.Length];
             var material = CreatePlayerMaterial(color);
-            var mesh = isLocal ? _localMesh : _remoteMesh;
-            var scale = isLocal ? 1.2f : 1f;
 
             var entity = _em.CreateEntity();
             var shortId = id.Substring(0, System.Math.Min(8, id.Length));
-            _em.SetName(entity, (isLocal ? "local:" : "remote:") + shortId);
+            _em.SetName(entity, (isEnemy ? "enemy:" : isLocal ? "local:" : "remote:") + shortId);
 
             var renderMeshDescription = new RenderMeshDescription(ShadowCastingMode.On);
             var renderMeshArray = new RenderMeshArray(new[] { material }, new[] { mesh });
@@ -124,12 +149,30 @@ namespace DOTSSample
                 Scale = scale
             });
 
+            // Store full network ID (not truncated) for attack targeting
             _em.AddComponentData(entity, new NetworkEntityTag
             {
                 IsLocal = isLocal,
-                PlayerId = new FixedString64Bytes(shortId),
+                PlayerId = new FixedString64Bytes(id),
                 ColorIndex = colorIdx
             });
+
+            if (isEnemy)
+            {
+                _em.AddComponentData(entity, new EnemyTag());
+                _em.AddComponentData(entity, new Health { Current = 30, Max = 30 });
+            }
+            else
+            {
+                _em.AddComponentData(entity, new PlayerCombatTag());
+                _em.AddComponentData(entity, new AutoAttack
+                {
+                    Cooldown = 0.3f,
+                    Timer = 0f,
+                    Range = 10f,
+                    Damage = 1
+                });
+            }
 
             _entities[id] = entity;
             _hpCache[id] = (0, 0);
@@ -142,6 +185,7 @@ namespace DOTSSample
 
             _entities.Remove(id);
             _hpCache.Remove(id);
+            _enemyIds.Remove(id);
             if (_em.Exists(entity))
                 _em.DestroyEntity(entity);
         }
@@ -159,6 +203,12 @@ namespace DOTSSample
             });
 
             _hpCache[id] = (hp, maxHp);
+
+            // Sync server HP to ECS Health component for enemies
+            if (_enemyIds.Contains(id) && _em.HasComponent<Health>(entity))
+            {
+                _em.SetComponentData(entity, new Health { Current = hp, Max = maxHp });
+            }
         }
 
         /// <summary>
@@ -179,10 +229,26 @@ namespace DOTSSample
 
                 var tag = _em.GetComponentData<NetworkEntityTag>(entity);
                 var pos = _em.GetComponentData<LocalTransform>(entity).Position;
-                var color = Palette[tag.ColorIndex % Palette.Length];
-                var hp = _hpCache.TryGetValue(id, out var hpData) ? hpData : (0, 0);
+                bool isEnemy = _enemyIds.Contains(id);
+                var color = isEnemy ? EnemyColor : Palette[tag.ColorIndex % Palette.Length];
 
-                result.Add(new EntityLabel(id, tag.IsLocal, pos, color, hp.Item1, hp.Item2));
+                // Read HP from ECS Health component (includes client-side prediction)
+                // for enemies; fall back to snapshot cache for players
+                int hp, maxHp;
+                if (isEnemy && _em.HasComponent<Health>(entity))
+                {
+                    var health = _em.GetComponentData<Health>(entity);
+                    hp = health.Current;
+                    maxHp = health.Max;
+                }
+                else
+                {
+                    var cached = _hpCache.TryGetValue(id, out var hpData) ? hpData : (0, 0);
+                    hp = cached.Item1;
+                    maxHp = cached.Item2;
+                }
+
+                result.Add(new EntityLabel(id, tag.IsLocal, pos, color, hp, maxHp));
             }
         }
 
@@ -205,7 +271,6 @@ namespace DOTSSample
             var mat = new Material(baseMat);
             mat.color = color;
 
-            // Try common URP/HDRP property names
             if (mat.HasProperty("_BaseColor"))
                 mat.SetColor("_BaseColor", color);
 
