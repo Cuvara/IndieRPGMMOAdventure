@@ -11,5 +11,9 @@
       "Bash(rm -f /mnt/c/Workspaces/UnityIndie/IndieRPGMMOAdventure/.mcp.json)",
       "Bash(rm -f /mnt/c/Workspaces/UnityIndie/IndieRPGMMOAdventure/.claude/mcp.json)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "ai-game-developer"
+  ],
+  "enableAllProjectMcpServers": true
 }
