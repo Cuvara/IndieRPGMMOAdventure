@@ -37,7 +37,26 @@ namespace Cuvara.DOTS.Netcode
     /// about the cost, and splitting the archetype is the expensive half.
     /// </para>
     /// <para>
-    /// <b>Position only. There is deliberately no tick here.</b> A reconciliation anchor is a
+    /// <b>Two positions, and the raw one is not redundant.</b> <see cref="Position"/> is world
+    /// space and is what <c>LocalTransform</c> wants. <see cref="ServerPosition"/> is the
+    /// <c>(x, y)</c> the wire actually carried, stored verbatim before
+    /// <see cref="SnapshotSpaceMapping"/> touches it, and it is what a predictor wants — a predictor
+    /// rewinds in the space it simulates in, and the shared simulation clamps against map bounds
+    /// expressed in server coordinates. <c>LocalMovePredictor.Reconcile</c> takes a server-space
+    /// <c>Vec2</c> for exactly that reason.
+    /// </para>
+    /// <para>
+    /// <b>Why not invert the mapping instead.</b> <c>dot(p - Origin, Right)</c> is one line, and it
+    /// was rejected: a float round trip through a projection is <b>not bit-exact</b>. The recovered
+    /// value would differ in the last place, replay would integrate from a position the server never
+    /// held, and the result is sub-ULP drift in the one system whose entire justification is
+    /// bit-exactness — most likely diagnosed as FMA contraction, in a different package, by someone
+    /// who never saw the inverse. Eight bytes per mirror entity removes the possibility rather than
+    /// making it unlikely. It is also why <see cref="SnapshotSpaceMapping"/> still has no inverse:
+    /// adding one would put the trap back within reach.
+    /// </para>
+    /// <para>
+    /// <b>Position only — no tick on either field.</b> A reconciliation anchor is a
     /// position <i>at a tick</i>, and this adapter genuinely does not know the tick:
     /// <c>IEntityView.SetState</c> carries <c>(id, x, y, hp, maxHp)</c> and nothing else. The tick a
     /// predictor needs is <c>WorldState.AckTick</c> — "the newest input tick the server accepted for
@@ -53,5 +72,17 @@ namespace Cuvara.DOTS.Netcode
         /// the same space as <c>LocalTransform.Position</c> and needs no further conversion.
         /// </summary>
         public float3 Position;
+
+        /// <summary>
+        /// The server's own <c>(x, y)</c>, exactly as <c>IEntityView.SetState</c> delivered it —
+        /// no mapping, no round trip, no arithmetic of any kind.
+        /// </summary>
+        /// <remarks>
+        /// This is the field a predictor reconciles against, because the shared simulation it
+        /// replays runs in these coordinates. Storing it rather than recovering it from
+        /// <see cref="Position"/> is a bit-exactness decision, not a convenience one — see the
+        /// type's remarks.
+        /// </remarks>
+        public float2 ServerPosition;
     }
 }

@@ -47,6 +47,8 @@ namespace Cuvara.DOTS.Tests.Editor
         private static readonly Type[] PackageGroups =
         {
             typeof(NetcodeSystemGroup),
+            typeof(SnapshotApplyGroup),
+            typeof(PredictionSystemGroup),
             typeof(ProvisioningSystemGroup),
             typeof(GameplaySystemGroup),
             typeof(MovementSystemGroup),

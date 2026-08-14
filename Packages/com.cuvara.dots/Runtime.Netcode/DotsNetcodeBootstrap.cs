@@ -62,7 +62,16 @@ namespace Cuvara.DOTS.Netcode
             var initialization = world.GetOrCreateSystemManaged<InitializationSystemGroup>();
             var netcode = world.GetOrCreateSystemManaged<NetcodeSystemGroup>();
             initialization.AddSystemToUpdateList(netcode);
-            netcode.AddSystemToUpdateList(world.GetOrCreateSystem<NetworkViewCommandSystem>());
+
+            // Into SnapshotApplyGroup, which is where the drain declares itself. Adding it straight
+            // to NetcodeSystemGroup — as this did before the sub-groups existed — puts the system in
+            // a group its [UpdateInGroup] does not name, so the ordering relation between it and
+            // PredictionSystemGroup never resolves and prediction can run BEFORE the anchor it
+            // reconciles against is written. That failed three prediction tests with the marker
+            // simply never being claimed, which pointed at the predictor rather than at this line.
+            var snapshotApply = world.GetOrCreateSystemManaged<SnapshotApplyGroup>();
+            netcode.AddSystemToUpdateList(snapshotApply);
+            snapshotApply.AddSystemToUpdateList(world.GetOrCreateSystem<NetworkViewCommandSystem>());
 
             // Manual adds are not sorted automatically; without this the group's ordering relations
             // are declared but never applied.

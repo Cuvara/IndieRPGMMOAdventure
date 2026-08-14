@@ -1,0 +1,37 @@
+{
+    "name": "Cuvara.DOTS.Netcode.Prediction",
+    "rootNamespace": "Cuvara.DOTS.Netcode.Prediction",
+    "references": [
+        "Cuvara.DOTS.Runtime",
+        "Cuvara.DOTS.Netcode",
+        "Cuvara.Netcode.Runtime",
+        "Shared.GameLogic",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Unity.Transforms"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "CUVARA_NETCODE",
+        "CUVARA_SHARED_GAMELOGIC"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.netcode",
+            "expression": "0.6.0",
+            "define": "CUVARA_NETCODE"
+        },
+        {
+            "name": "com.rpgmmo.shared-gamelogic",
+            "expression": "",
+            "define": "CUVARA_SHARED_GAMELOGIC"
+        }
+    ],
+    "noEngineReferences": false
+}

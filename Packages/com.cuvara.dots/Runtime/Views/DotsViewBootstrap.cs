@@ -85,6 +85,14 @@ namespace Cuvara.DOTS.Views
             initialization.AddSystemToUpdateList(netcode);
             initialization.AddSystemToUpdateList(provisioning);
 
+            // Snapshot application then prediction. Created here, empty, for the same reason the
+            // other empty groups are: a consumer's [UpdateAfter] must resolve today and mean the
+            // same thing once the optional assemblies that fill them are installed.
+            var snapshotApply = world.GetOrCreateSystemManaged<SnapshotApplyGroup>();
+            var prediction = world.GetOrCreateSystemManaged<PredictionSystemGroup>();
+            netcode.AddSystemToUpdateList(snapshotApply);
+            netcode.AddSystemToUpdateList(prediction);
+
             var gameplay = world.GetOrCreateSystemManaged<GameplaySystemGroup>();
             var movement = world.GetOrCreateSystemManaged<MovementSystemGroup>();
             var lifecycle = world.GetOrCreateSystemManaged<LifecycleSystemGroup>();

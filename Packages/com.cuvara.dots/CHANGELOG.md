@@ -5,6 +5,289 @@ All notable changes to the Cuvara DOTS package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-08-14
+
+### Added
+
+- **`Cuvara.DOTS.Netcode.Prediction`** — the DOTS half of client-side prediction. Reads the local
+  entity's `ReconciliationAnchor`, drives netcode's `LocalMovePredictor`, owns `PredictedTransform`,
+  and writes `LocalTransform`.
+  - `DotsPredictionBootstrap.Install(world, predictor, worldState)`.
+  - `LocalPredictionReference` — managed singleton carrying the predictor and the `WorldState` that
+    supplies `AckTick`.
+  - `LocalPredictionSystem` (internal) in the new `PredictionSystemGroup`.
+- **`SnapshotApplyGroup` and `PredictionSystemGroup`** in the core assembly, both inside
+  `NetcodeSystemGroup`, prediction ordered after snapshot apply.
+
+### The seam, and why the split falls where it does
+
+netcode owns the algorithm — input buffer, replay through `TryMove`, smoothing. This package owns
+everything ECS-shaped: reading the anchor, supplying the tick, claiming and releasing the marker,
+writing the transform. A DOTS system in netcode would mean netcode depending on Entities, and the
+arrow between these packages is one-way.
+
+**A third assembly, gated on both `CUVARA_NETCODE` and `CUVARA_SHARED_GAMELOGIC`**, rather than code
+added to `Cuvara.DOTS.Netcode`. The driver names `Vec2`, so it needs `Shared.GameLogic`; widening the
+adapter's gate to require it would change what both CI rows mean and break one of the two
+standalone-install properties CI now guards. The cost is one more assembly; the alternative was
+coupling two independent optional dependencies into one.
+
+### Two ordering groups instead of one `[UpdateAfter]`
+
+Prediction must run **after** snapshot application: the anchor it reconciles against is written
+there, and reconciling first uses the previous frame's authoritative position — a one-frame-stale
+correction that reads as mistuned prediction rather than as an ordering bug, and gets chased in the
+wrong package.
+
+Expressing that with `[UpdateAfter(typeof(NetworkViewCommandSystem))]` would have needed an
+`InternalsVisibleTo` grant and turned an internal system name into a cross-assembly ordering promise —
+exactly what keeping systems internal is meant to prevent. Two public groups say the same thing
+without naming a system, which is the package's stated contract everywhere else.
+
+Both groups are created empty by `DotsViewBootstrap`, so a consumer's `[UpdateAfter]` resolves in a
+project with neither optional package installed and does not change meaning when they arrive.
+
+### The marker has two failure modes, not one
+
+`PredictedTransform` says "something else owns `LocalTransform`". 0.10.0 guarded the case where it is
+absent and the adapter keeps writing. This release guards the other side: **the marker present with
+nothing writing** leaves the transform with *no* writer at all and freezes the avatar. It is reachable
+three ways, and each has a test:
+
+- a predictor with unusable settings (`IsEnabled == false`) — the driver releases rather than claims;
+- a predictor that becomes disabled mid-session — the driver releases a marker it had claimed;
+- `DotsPredictionBootstrap.Uninstall` — removes the marker from every entity before dropping the
+  reference.
+
+All three surface in a build rather than in CI, because a disabled predictor is a runtime
+configuration. `DisabledPredictor_LeavesTheAdapterDrivingTheTransform` asserts the positive half too:
+not claiming is only correct if the adapter is still writing, and asserting the marker's absence alone
+would pass on a frozen avatar.
+
+### Deviation worth flagging
+
+`SimConversions` was the instructed conversion site, and it is `internal` to `Cuvara.DOTS.GameLogic` —
+a differently gated assembly. Reaching it meant widening that assembly's public API or an
+`InternalsVisibleTo` grant coupling two independent gates, for one line. The driver keeps a single
+private conversion site instead, which is what "convert at the boundary, not once per call" asks for.
+
+### Tests
+
+12 in `Tests/Editor.Prediction/`, driven through the public groups. Adapter floor stays 47; the new
+assembly's floor is 12, and `==0` in the netcode-absent configuration.
+
+### Unverified
+
+The driving system has **never run against a live server**. Its tests assert wiring — which
+coordinates reach the predictor, when the marker is claimed and released, that the mapping is shared
+with the adapter — not that prediction feels better. Keypress-to-visible is a measurement, and it has
+not been taken.
+
+## [0.12.0] - 2026-08-14
+
+### Added
+
+- **`ReconciliationAnchor.ServerPosition`** (`float2`) — the server's own `(x, y)`, stored exactly as
+  `IEntityView.SetState` delivered it, before `SnapshotSpaceMapping` touches it.
+
+  ```csharp
+  public struct ReconciliationAnchor : IComponentData
+  {
+      public float3 Position;        // world space — what LocalTransform wants
+      public float2 ServerPosition;  // verbatim (x, y) — what a predictor rewinds to
+  }
+  ```
+
+**The world-space field could not do this job, and 0.10.0 claimed it could.** That release said the
+anchor was "already through `SnapshotSpaceMapping`, so it needs no further conversion" — true for
+writing `LocalTransform`, which was the only use then, and false for feeding a predictor. The shared
+simulation clamps against map bounds expressed in **server** coordinates, and
+`LocalMovePredictor.Reconcile` takes a server-space `Vec2` for that reason. A predictor handed only
+the world-space value has to get back, and `SnapshotSpaceMapping` has `ToWorld` with no inverse.
+
+**Adding an inverse was the rejected option.** `dot(p - Origin, Right)` is one line, and a float round
+trip through a projection is **not bit-exact**: the recovered value differs in the last place, replay
+integrates from a position the server never held, and the outcome is sub-ULP drift in the one system
+whose entire justification is bit-exactness — most likely diagnosed as FMA contraction, in a
+different package, by someone who never saw the inverse. Eight bytes per mirror entity removes the
+possibility instead of making it unlikely. `SnapshotSpaceMapping` still has no inverse on purpose:
+adding one would put the trap back within reach.
+
+The settling argument is the anchor's own docstring — it exists as *"the value a predictor rewinds
+to"*, and a predictor rewinds in the space it simulates in.
+
+At spawn `ServerPosition` is `float2.zero` rather than a mapped value, which agrees with `Position`
+being `mapping.Origin`: both say "the server has said nothing yet".
+
+### Changed
+
+- CI's netcode row now installs **v0.6.0** and the adapter floor is **47** (was 44).
+
+### Tests
+
+47 in `Tests/Editor.Netcode/`. Three new: the raw field carried verbatim alongside the mapped one;
+the raw field unaffected by a hostile mapping with a `1e7` origin offset — the case where a round trip
+would lose precision, asserted to prove the field does not depend on the mapping at all; and both
+fields agreeing at spawn. A fourth existing test now also asserts `ServerPosition` survives while
+`PredictedTransform` suppresses the transform write, which is the exact combination a predictor runs in.
+
+### Corrected from 0.9.0
+
+`"[0.4.0,)"` was named as the fallback if the bare `versionDefines` expression did not work. It is
+**invalid syntax** — Unity throws `ExpressionNotValidException`. The bare `"0.4.0"` form is correct
+and means `>=`, confirmed in CI in both directions and in the Unity project.
+
+## [0.11.0] - 2026-08-14
+
+CI/CD, for the first time. This repository had no `.github/` at all.
+
+### Added — delivery
+
+- **`release.yml`**, driven by a `v*` tag and **only** by a tag. No branch trigger: `npm publish`
+  cannot be undone, and a bad version can only be superseded, never withdrawn. Pushing the tag is the
+  last human gate before a permanent artifact exists.
+  - **`Verify package.json version matches tag`**, a hard `exit 1`. Content checked against label by
+    machine — the defect class that has cost this workspace the most.
+  - Release notes are `awk`-extracted from the `## [VERSION]` CHANGELOG heading, which makes the
+    CHANGELOG load-bearing rather than decorative: a missing or misspelled heading ships empty notes.
+    A warning fires when the extraction comes back empty.
+  - **`publish` job**, `needs: release`, publishing **`@cuvara/dots`** to GitHub Packages. The UPM
+    name in `package.json` is `com.cuvara.dots`; GitHub Packages requires an npm scope, so the name is
+    rewritten at publish time only and never committed. The rewrite asserts the expected input name
+    first, so a rename upstream fails the publish instead of silently publishing something else.
+- **`release-reminder.yml`** — never tags, never publishes; only notices that `main` carries an
+  untagged version. Three states: tag on this commit (notice), tag elsewhere so commits since are
+  unreleased (warning), no tag (warning with the exact commands). Needs `fetch-depth: 0`; a shallow
+  fetch has no tags and would make every version look untagged. **It matters more here than in
+  netcode**: the consuming project takes this package as a git *subtree*, so nothing downstream breaks
+  when a version goes untagged and nothing downstream notices either.
+
+**On publishing at all**: the project consumes this package as a subtree, so a registry artifact has
+no current consumer. That was raised and overruled — publishing is wanted, and the argument is
+recorded here rather than re-litigated. The consequence is what the gate section is about: publishing
+turns every tag into a permanent artifact, so the test floors stop being hygiene and become the only
+thing between an untested commit and an immutable version.
+
+### Added — the gate
+
+- **CI, for the first time.** This repository had no `.github/` at all. That was *honest* — a
+  repository with no checks cannot mislead anyone — but it meant every verification the package ever
+  had came from one person's Editor, and the numbers quoted in earlier releases were the consuming
+  project's, not this package's.
+
+  The gate deliberately does **not** assert "the test runner exited zero". A green run over **zero
+  tests** is worse than no gate: it converts the absence of verification into a positive signal and
+  spends the reviewer's budget for them. That is not hypothetical — `com.cuvara.netcode`'s gate
+  reported `No tests were executed. 0/0 Passed` under a green check while a breaking interface change
+  went through it.
+
+  **This package is unusually exposed to that failure, by its own design.** Two of its four test
+  assemblies are compiled out when their optional dependency is missing:
+
+  | Assembly | Vanishes without |
+  |---|---|
+  | `Cuvara.DOTS.Tests.Netcode` | `com.cuvara.netcode` >= 0.4.0 |
+  | `Cuvara.DOTS.Tests.GameLogic` | `com.rpgmmo.shared-gamelogic` |
+
+  Nothing fails when they vanish. "Absent beats broken" is the right rule for a *consumer* and a
+  dangerous one for a *gate*, and the workflow is where those two jobs are told apart.
+
+- **`.github/scripts/assert_test_floors.py`** — per-assembly test-count floors parsed from the NUnit
+  XML, never an exit code. `Assembly>=N` fails if the assembly ran nothing, which is what catches an
+  assembly compiled out of existence; `Assembly==0` is satisfied by an absent assembly, which is what
+  "correctly compiled out" looks like. Counts come from the `test-case` elements rather than the
+  suite's own `total`/`passed` attributes, because those vary across Unity and NUnit versions and a
+  missing attribute reads as zero — indistinguishable from the failure being checked for. A
+  non-passing case fails the run independently of any floor.
+- **`.github/scripts/test_assert_test_floors.py`** — 11 self-tests for the floor script, run in
+  `validate`, no Unity needed. The gate is a program and it was wrong once; case 7 is the regression
+  test for the `.dll`-suffix bug specifically, and one case asserts that a spec written `Foo.dll` is
+  **not** silently accepted, because normalisation happens on one side only — a spec that can be
+  written two ways will be written both ways.
+- **`.github/scripts/check_metas.py`** — every Unity-visible tracked file and folder must have a
+  committed `.meta`. Same failure family: a missing `.meta` disabled parts of this package for seven
+  releases without failing anything.
+
+### Two configurations, and one of them is not yet provable
+
+| Job | Asserts |
+|---|---|
+| `Unity Tests (netcode absent)` | `Cuvara.DOTS.Netcode.dll` **absent**; Editor >= 30, Runtime >= 23, GameLogic >= 8, **Netcode == 0** |
+| `Unity Tests (netcode 0.4.0)` | `Cuvara.DOTS.Netcode.dll` **present**; the same three, plus **Netcode >= 44** |
+
+The first automates the standalone-install check that had been carried by hand — the one a human
+stops re-running once it has passed twice. **The second cannot pass until `com.cuvara.netcode`
+v0.4.0 is tagged**, and is left red rather than trimmed to make the run green. A gate shaped to pass
+is the thing this whole file argues against.
+
+Floors are lower bounds, not headcounts: they stop an assembly vanishing, and do not need editing
+every time a test is added.
+
+### Also
+
+- The `pull_request` trigger fires on **every** base branch, not only `main`. netcode's fires only on
+  PRs into `main`, so a stacked PR — how this repo has actually been shipping, #5 based on #4 — is
+  ungated there.
+
+### Proven by running it, including the red run
+
+The scripts were exercised locally in both directions first (a missing `.meta` caught; floors
+passing, and failing on a compiled-out assembly, an empty artifacts directory, a missing directory,
+and a met floor with a failing test inside it). Then the workflow was landed with a **deliberately
+failing test**, because a gate that has only ever been green is indistinguishable from one that
+cannot fail.
+
+**The red run earned its keep immediately — it found a bug in the gate itself.** Unity names the
+NUnit Assembly suite after the built *file*, `Cuvara.DOTS.Tests.Editor.dll`, while the floor specs
+name the *assembly*. Every floor therefore read `actual 0` while 95 test cases had in fact executed
+and were printed two lines above. The bug failed **closed** — permanently red, never falsely green —
+but the obvious fix for a permanently red gate is to lower the floors, which would have produced
+exactly the useless gate this file argues against. Nothing but a real run would have surfaced it.
+
+Real counts observed, and the floors now match them: `Tests.Editor` 30, `Tests.Runtime` 23,
+`Tests.GameLogic` **41** — not the 8 a static `[Test]` grep suggested, because its `[TestCase]`
+source expands — and `Tests.Netcode` 44 once netcode resolves.
+
+The red run also confirmed two things that had only ever been argued: `Cuvara.DOTS.Netcode.dll` **is**
+absent with no netcode installed (the standalone-install check, now automated rather than carried by
+hand), and a single failing test does fail the run through the floor script independently of any
+floor.
+
+### Final numbers, both configurations green
+
+| Assembly | netcode absent | netcode 0.4.0 |
+|---|---|---|
+| `Cuvara.DOTS.Tests.Editor` | 30/30 | 30/30 |
+| `Cuvara.DOTS.Tests.GameLogic` | 41/41 | 41/41 |
+| `Cuvara.DOTS.Tests.Runtime` (PlayMode) | 23/23 | 23/23 |
+| `Cuvara.DOTS.Tests.Netcode` | **0, and required to be 0** | **44/44** |
+| `Cuvara.DOTS.Netcode.dll` | **absent** | **present** |
+
+Both halves of the `versionDefines` check are now automated and passing, which retires the manual
+"remove the package and look" pass as the only evidence.
+
+### Found in another package
+
+`com.cuvara.netcode` 0.4.0 has **two undeclared dependencies** that a rich host project happens to
+satisfy — so both are invisible in the Editor and appear only in a minimal project like CI.
+
+1. **VContainer.** `Cuvara.Netcode.Runtime.asmdef` lists it in `references` with no
+   `defineConstraints` gate and no `package.json` dependency. Fails loudly: `CS0246` from inside the
+   package.
+2. **`System.Runtime.CompilerServices.Unsafe`.** netcode ships `Runtime/Plugins/Google.Protobuf.dll`,
+   which needs it; netcode neither ships it nor depends on it. **Fails silently, and cascades:**
+   `Google.Protobuf` does not load → `Cuvara.Netcode.Runtime` does not load → `Cuvara.DOTS.Netcode`
+   does not load → `Cuvara.DOTS.Tests.Netcode` does not load → 44 tests do not run, **and the runner
+   still exits 0**. The real project masks it with four separate providers (`com.gdk.core`, Burst, a
+   NuGet folder, and R3's transitive `org.nuget.system.runtime.compilerservices.unsafe`).
+
+The second is very likely the root cause of netcode's own `No tests were executed. 0/0 Passed`: its
+test assembly references the same runtime assembly that fails to load, so its test count collapses to
+zero by the same cascade.
+
+Both are worked around in this workflow's manifest, with a comment saying they are someone else's
+defects rather than dependencies of this package.
+
 ## [0.10.0] - 2026-08-14
 
 Prepares for prediction by giving the local player's transform a single writer, **before** a predictor
@@ -67,11 +350,13 @@ state; the anchor written for remotes; `PredictedTransform` suppressing the tran
 anchor still lands; removing the tag handing the transform back; and — the guard for the shortcut not
 taken — the local entity moving exactly as before when no predictor exists.
 
-### Unverified
+### Verified after the fact
 
-**Not compiled.** Everything 0.9.0 lists, plus: `EntityManager.HasComponent<PredictedTransform>` per
-entity per state is one lookup on the same path that already calls `HasComponent<Health>`, so it is no
-new shape — but it is unmeasured, and no performance claim is made for it.
+This shipped uncompiled. It is compiled now: the CI gate added in 0.11.0 runs the adapter's tests
+against `com.cuvara.netcode` 0.4.0 and reports **44/44 passing**, which covers everything this release
+added. The one claim still not made is a performance claim —
+`EntityManager.HasComponent<PredictedTransform>` per entity per state is one lookup on a path that
+already calls `HasComponent<Health>`, so it is no new shape, but it remains unmeasured.
 
 ## [0.9.0] - 2026-08-14
 
@@ -150,10 +435,14 @@ landing on `NetworkEntity`, unmapped and empty kinds refused, the once-per-kind 
 ordinal matching, duplicate/incomplete rules throwing at construction, and a respawn that re-resolves
 a *different* kind for a reused id.
 
-### Unverified
+### Verified after the fact
 
-**Nothing here has been compiled.** Same as 0.8.0 — no Unity Editor was available on this side. The
-specific claims a build has to settle:
+**This shipped uncompiled**, and the list below is what a build had to settle. The CI gate added in
+0.11.0 settled all of it: `Cuvara.DOTS.Netcode.dll` is **absent** under no netcode and **present**
+under 0.4.0, so the `versionDefines` expression `"0.4.0"` behaves as ">= 0.4.0"; `FixedString32Bytes`
+as an `IComponentData` field and the `in`-parameter interface implementation both compile; and all
+**44/44** tests pass. The original list, kept because the reasoning is still the reason each one
+mattered:
 
 - The `versionDefines` expression `"0.4.0"` behaving as "0.4.0 or newer". The check is that
   `Cuvara.DOTS.Netcode.dll` **disappears** under netcode 0.3.2 and **appears** under 0.4.0. If the

@@ -23,11 +23,18 @@ namespace Cuvara.DOTS.Tests.Netcode
             // NetcodeSystemGroup, and NetcodeSystemGroup is in InitializationSystemGroup — which runs
             // before SimulationSystemGroup (and so before TransformSystemGroup) and long before
             // PresentationSystemGroup, where ViewSystemGroup lives.
+            // Three hops since 0.13.0, not two: the drain moved into SnapshotApplyGroup so that
+            // prediction could order itself after it without naming a system. What this test
+            // protects is the containment chain, which is unchanged — everything still lands in
+            // InitializationSystemGroup, before this frame's transforms and views.
             var group = DrainSystem.GetCustomAttributes(typeof(UpdateInGroupAttribute), false)
                 .Cast<UpdateInGroupAttribute>()
                 .Single();
 
-            Assert.AreEqual(typeof(NetcodeSystemGroup), group.GroupType);
+            Assert.AreEqual(typeof(SnapshotApplyGroup), group.GroupType);
+            Assert.AreEqual(typeof(NetcodeSystemGroup),
+                typeof(SnapshotApplyGroup).GetCustomAttributes(typeof(UpdateInGroupAttribute), false)
+                    .Cast<UpdateInGroupAttribute>().Single().GroupType);
             Assert.AreEqual(typeof(InitializationSystemGroup),
                 typeof(NetcodeSystemGroup).GetCustomAttributes(typeof(UpdateInGroupAttribute), false)
                     .Cast<UpdateInGroupAttribute>().Single().GroupType);
