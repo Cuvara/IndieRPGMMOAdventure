@@ -5,6 +5,279 @@ All notable changes to the Cuvara DOTS package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-14
+
+Prepares for prediction by giving the local player's transform a single writer, **before** a predictor
+exists. Nothing behaves differently today: with no `PredictedTransform` in the world, every entity is
+positioned by the adapter exactly as in 0.9.0.
+
+### Added
+
+- **`ReconciliationAnchor`** — the last authoritative position the server reported, in world space
+  (already through `SnapshotSpaceMapping`). Written for every replicated entity, at spawn and on every
+  state.
+- **`PredictedTransform`** — a marker something else adds to say "I own this entity's
+  `LocalTransform`". While present, the adapter writes the anchor and leaves the transform alone.
+
+### Why, since nothing is broken yet
+
+Once prediction owns the local player's per-frame position, prediction and this adapter would both
+write `LocalTransform` in the same frame — the adapter first in `InitializationSystemGroup`,
+prediction second in `SimulationSystemGroup`. **That works.** On every frame prediction runs, the
+later write wins and the result is correct. It fails only on the frames prediction does *not* run,
+where the avatar snaps back to the server position for one frame: intermittent, visible only as feel,
+local player only, and presenting as a bug in the release whose entire purpose is prediction. Every
+expensive defect in this project so far has been of that family — green, running, silently wrong — so
+this one is paid for in advance.
+
+The split is not a new mechanism. `NetworkEntityState` already separates "what the server said" from
+"what the client shows", for hp, and for the same reason. Position for a predicted entity is that same
+split arriving at the one field that just started needing it.
+
+### Design notes
+
+- **Named for what a predictor does with it.** Not `ServerPosition` or `NetworkPosition`: those name
+  the source and invite the obvious wrong move, someone deciding the local entity looks stale and
+  writing this into `LocalTransform`. A predictor *rewinds to and replays from* an anchor. The name is
+  meant to make the misuse read as wrong before it is run. Checked against every installed package
+  first — `Anchor` alone is taken (`Unity.Physics.PhysicsJointComponents`); `ReconciliationAnchor` and
+  `PredictedTransform` are free.
+- **Presence, not a flag**, matching `ViewConfigRef`'s reasoning: a `bool` has a default, and a
+  default meaning "predicted" or "not predicted" is a decision made silently for every entity that
+  never set it.
+- **Keyed off the tag, not off `NetworkEntity.IsLocal`.** That was the obvious shortcut and is wrong
+  in a way that bites immediately: with no predictor installed the local avatar would simply stop
+  moving. A test guards exactly that.
+- **No tick on the anchor, deliberately.** An anchor is a position *at a tick*, and this adapter does
+  not know the tick — `IEntityView.SetState` carries `(id, x, y, hp, maxHp)`. The tick is
+  `WorldState.AckTick`, which netcode documents as "the reconciliation anchor for the prediction
+  layer" and a predictor reads directly. Inventing one here, or inferring it from arrival order, would
+  produce a number that looks authoritative and is not.
+- **Written for remotes too, and the reason is chunk layout.** Adding it only to predicted entities
+  would split local and remote mirrors into **different archetypes** — two sets of chunks, with every
+  query over mirror entities iterating both, in a package whose whole justification is chunk
+  iteration. A structural cost at query time on every system, to save one `float3` per entity.
+  Uniform keeps one archetype and pays 12 bytes. Recorded because "why do remotes carry this" is the
+  obvious instinct and splitting the archetype is the obvious, expensive fix for it.
+
+### Tests
+
+44 in `Tests/Editor.Netcode/` (was 39). Five new: the anchor present from spawn and tracking every
+state; the anchor written for remotes; `PredictedTransform` suppressing the transform write while the
+anchor still lands; removing the tag handing the transform back; and — the guard for the shortcut not
+taken — the local entity moving exactly as before when no predictor exists.
+
+### Unverified
+
+**Not compiled.** Everything 0.9.0 lists, plus: `EntityManager.HasComponent<PredictedTransform>` per
+entity per state is one lookup on the same path that already calls `HasComponent<Health>`, so it is no
+new shape — but it is unmeasured, and no performance claim is made for it.
+
+## [0.9.0] - 2026-08-14
+
+Follows `com.cuvara.netcode` 0.4.0, which added the server's entity kind to `IEntityView.Spawn`. The
+guessing this package did in 0.8.0 is gone — and the escalation that produced the netcode change
+started here, in 0.8.0's own note that the prefix resolver was a workaround with a named exit.
+
+### Changed — breaking
+
+- **`DotsEntityView.Spawn` now takes the entity type**: `Spawn(string id, bool isLocal, string type)`,
+  matching netcode 0.4.0. It is not source-compatible with 0.8.0, and could not be: the old signature
+  no longer satisfies `IEntityView`, and an overload does not rescue callers who hold the interface
+  rather than the class.
+- **`INetworkArchetypeResolver.TryResolve` now takes a `NetworkEntityDescriptor`** — `Id`, `Type`,
+  `IsLocal` in one readonly struct — instead of `(string id, bool isLocal)`.
+  **A parameter object, deliberately.** `IEntityView` has just broken every implementation and every
+  call site over adding exactly one field. This seam is younger and smaller and can decline to repeat
+  that: a fifth signal — faction, team, level — becomes a field on the struct, and existing resolvers
+  keep compiling. It is not a claim netcode should have done the same; its interface is three narrow
+  methods where a struct would be a heavier promise than the seam wants.
+- **`NetworkEntity` gains `Type`** (`FixedString32Bytes`), so a system can filter by kind without a
+  managed lookup — what the reference implementation's `EnemyTag` was for, as data rather than as a
+  tag the package cannot name. Truncating rather than refusing, unlike `Id`: resolution runs on the
+  full managed string before the command is queued, so a long kind still reaches the right archetype
+  and only reads back clipped in this convenience field.
+- **The asmdefs now require netcode >= 0.4.0** via the `versionDefines` expression (`"0.4.0"` instead
+  of `""`). With an older netcode installed, `CUVARA_NETCODE` is never defined and
+  `Cuvara.DOTS.Netcode` does not compile into the project at all. That is the point: **absent beats
+  broken.** Without it, netcode 0.3.x plus dots 0.9.0 is a `CS0535` in a package the consumer did not
+  write and cannot easily fix. Expressed here rather than as a `package.json` dependency because the
+  adapter is optional — a `dependencies` entry would force netcode on every consumer of this package.
+
+### Removed
+
+- **`PrefixArchetypeResolver` is deleted**, along with its tests. **Argued, not defaulted.** The case
+  for keeping it as a fallback is that netcode documents `type` as "empty when the server sent no type
+  at all", so a server that never populates the field is representable. The case against, which wins:
+  a server that does not send `Type` has no obligation to encode kind in its ids either — the
+  `"enemy-"` convention was one sample's, not a protocol — so the fallback would be guessing against a
+  server whose vocabulary we would not know, to avoid guessing against one that tells us. And a
+  strictly better answer already exists for the empty-type case: `TypeArchetypeResolver`'s
+  `unknownArchetype`, which is explicit, uniform, and fails *visibly* — every unknown entity looks the
+  same and obviously placeholder — where prefix matching fails invisibly, some ids happening to match
+  and some not. A consumer that genuinely wants id-based dispatch writes its own
+  `INetworkArchetypeResolver`; that is what the seam is for.
+  Nothing depended on it: 0.8.0 shipped hours earlier and the client has no gameplay code yet.
+
+### Added
+
+- **`TypeArchetypeResolver`** — exact ordinal mapping from the server's entity kind to an archetype
+  name, plus an optional local-player override and an optional catch-all.
+  - **No case folding and no prefix matching.** The type is a wire enum in string clothing; treating
+    `"Mob"` as `"mob"` would paper over a schema disagreement that should be visible.
+  - **The local override beats the type rule.** `IsLocal` is derived by comparing the id with the
+    client's own `NetworkClient.UserId`, so it is the one field in a snapshot that does not depend on
+    the server's vocabulary matching this build's. The ordinary case is `"player"` + `IsLocal` → a
+    distinct local archetype; the incoherent case — a `"mob"` whose id is the local player's — is
+    server confusion, answered with the client's own belief.
+  - **An unmapped or empty kind is refused and logged once per kind**, not mapped to a silent
+    default. A build talking to a newer server would otherwise render every unknown kind as a player
+    and look like it was working. The two cases get different messages, because "I don't know that
+    kind" and "you sent no kind" are different diagnoses.
+  - One constructor, `(localArchetype, unknownArchetype, params Rule[])`. An `IReadOnlyList` overload
+    was written and removed: with both present, `new TypeArchetypeResolver(null, "x")` is `CS0121`.
+- **`NetworkEntityDescriptor`** — the resolver's input. Normalises null `Id`/`Type` to empty at the
+  boundary so no implementation has to null-check.
+
+### Tests
+
+39 in `Tests/Editor.Netcode/` (was 28), still driven through the public groups rather than named
+systems. The 20 `Spawn` call sites carry a type now, and **the ids were rewritten to carry no
+meaning**: the mob's id is `"uuid-e1"`, and one test spawns a *player* whose id is literally
+`"enemy-9"`. Under the old prefix resolver the first would have been a player and the second a
+goblin — both wrong, both silent. New coverage: type-decides-archetype in both directions, the type
+landing on `NetworkEntity`, unmapped and empty kinds refused, the once-per-kind logging, the catch-all,
+ordinal matching, duplicate/incomplete rules throwing at construction, and a respawn that re-resolves
+a *different* kind for a reused id.
+
+### Unverified
+
+**Nothing here has been compiled.** Same as 0.8.0 — no Unity Editor was available on this side. The
+specific claims a build has to settle:
+
+- The `versionDefines` expression `"0.4.0"` behaving as "0.4.0 or newer". The check is that
+  `Cuvara.DOTS.Netcode.dll` **disappears** under netcode 0.3.2 and **appears** under 0.4.0. If the
+  expression syntax is wrong the assembly silently never compiles, which is this package's least
+  favourite failure mode; a range literal (`[0.4.0,)`) is the fallback if the bare version does not
+  work. The bare form is what 140 non-empty expressions across this project's own resolved packages
+  use — `com.unity.physics`, `com.unity.collections`, `com.cysharp.messagepipe` gating on VContainer
+  `1.14.0` — so it is the well-trodden shape, but it is still unrun here.
+
+  **Known edge, not a defect**: a bare version excludes that version's prereleases, because
+  `0.4.0-pre.1` sorts below `0.4.0` under semver. Unity's own packages work around it by writing the
+  predecessor (`9.9.9` for "10.0.0 or newer"). `com.cuvara.netcode` has only ever tagged plain
+  versions, so this does not bite today; if it ever ships an `0.4.0-pre`, the expression has to
+  become `0.3.99`.
+- `FixedString32Bytes` as an `IComponentData` field and its `CopyFromTruncated` overload.
+- `in`-parameter interface implementation (`TryResolve(in NetworkEntityDescriptor, out string)`)
+  across the assembly boundary.
+- All 39 tests, and the `LogAssert.Expect` calls in particular — an over- or under-counted expected
+  error fails the test either way.
+
+## [0.8.0] - 2026-08-14
+
+### Added
+
+- **`Cuvara.DOTS.Netcode` — the `IEntityView` adapter.** With `com.cuvara.netcode` installed, server
+  snapshots drive ECS entities through this package's existing view pipeline. It is the piece that
+  makes the package usable by a client rather than only by a scene.
+  - `DotsEntityView` implements `Cuvara.Netcode.View.IEntityView` (the three methods; the interface is
+    not widened). Each replicated id becomes an entity carrying `NetworkEntity` (the wire id and
+    `IsLocal`), `NetworkEntityState` (newest authoritative hp), a `LocalTransform`/`LocalToWorld`
+    pair, and the `EntityViewRequest` + `ViewConfigRef` the spawn path already understands.
+  - `INetworkArchetypeResolver` and `PrefixArchetypeResolver` decide which archetype an id is shown
+    as. `SnapshotSpaceMapping` decides where the server's 2D plane lands in the world.
+  - `DotsNetcodeBootstrap.Install(world, view)` publishes `NetworkEntityViewReference` and creates
+    the internal drain system inside `NetcodeSystemGroup` — the group that shipped empty in 0.6
+    precisely so this could land without changing what a consumer's `[UpdateAfter]` means.
+  - Gated by `versionDefines` on `com.cuvara.netcode` + a matching `defineConstraints`, like
+    `Cuvara.DOTS.GameLogic` is for the shared logic. **The package still installs and compiles with
+    netcode absent**, and `Cuvara.DOTS.Runtime` keeps exactly its five Unity references — the netcode
+    dependency exists in the new assembly and nowhere else. The arrow is one-way: DOTS may reference
+    netcode, netcode never references DOTS.
+
+### Design notes
+
+- **`SetState` enqueues; it does not write components.** Three reasons, in order. (1) *Thread
+  affinity*: `WorldViewBinder.Tick` is called by the consumer, and the netcode's own guidance is to
+  drive world state from the socket thread — `EntityManager` writes from there are undefined
+  behaviour, not an exception, and the reference implementation is main-thread-only without saying
+  so. (2) *Structural changes belong at a declared point in the frame* rather than wherever the
+  caller happens to run, possibly mid-`SimulationSystemGroup`. (3) *Ordering*: one FIFO preserves
+  spawn → state → despawn.
+  The queue costs no view latency. `NetcodeSystemGroup` is in `InitializationSystemGroup`, so a drain
+  runs before `TransformSystemGroup` computes `LocalToWorld` and long before `PresentationSystemGroup`
+  runs `ViewSystemGroup` → `ViewLifecycleGroup` → `ViewTransformSyncGroup`. A snapshot enqueued before
+  frame N's initialization is an entity, a transform, a view and a *positioned* view within frame N.
+  A direct write cannot beat that and can lose to it: one landing after `TransformSystemGroup` gets a
+  stale `LocalToWorld` and spawns its view in the wrong place.
+- **The 2D → 3D mapping is caller-supplied.** The reference implementation wrote
+  `new float3(x, 0.5f, y)` inline, and that literal is two unrelated things fused: which plane the
+  server's coordinates live on (a property of the *world*, identical for every entity — now
+  `SnapshotSpaceMapping`, defaulting to `XZPlane`) and a half-height lift so a capsule's pivot sits on
+  the ground (a property of the *art*, different per archetype — already `ViewConfig.PositionOffset`,
+  and applied to the view instance rather than to the entity). Splitting them is strictly better than
+  the constant: gameplay maths keeps a 2D entity position, and only the visual is lifted. A
+  `ViewConfig` field was rejected because it would let two archetypes disagree about which axis is up.
+
+### Changed
+
+- `Runtime/AssemblyInfo.cs` grants `InternalsVisibleTo` to `Cuvara.DOTS.Tests.Netcode`, for
+  `ViewConfig.Configure` / `ViewArchetypeLibrary.Configure` — the same reason the other two grants
+  exist. The adapter's tests do **not** name a package system: they drive `NetcodeSystemGroup` and
+  `ViewSystemGroup`, so what they assert is the published ordering contract.
+
+### Not carried over from the reference implementation
+
+`Samples~/DOTSSample/DOTSEntityView.cs` in `com.cuvara.netcode` is one game's rules. What was left
+behind, and why:
+
+- **The `"enemy-"` id prefix** — kept as a *mechanism* (`PrefixArchetypeResolver`), dropped as a
+  *value*. The prefix and the archetype it names are constructor arguments. It is still a workaround:
+  `IEntityView.Spawn` takes `(id, isLocal)`, and the snapshot's `ResolvedEntity.Type` is not forwarded
+  through `WorldViewBinder`, so the id is the only signal a view has. `INetworkArchetypeResolver` is
+  the named exit — if a later `com.cuvara.netcode` forwards the type, the move is a resolver over
+  `Type` and the deletion of `PrefixArchetypeResolver`, not more prefix rules.
+- **`Health { 30, 30 }` at spawn** — the wire already carries hp and maxHp, so the adapter writes the
+  real values instead of a literal. They land on `NetworkEntityState`; `Health` is opt-in
+  (`writeHealth: true`) because `Health` means "destroy at zero" in this package, and mirroring server
+  hp into it lets `HealthDeathSystem` destroy an entity the server is still listing. When opted in,
+  `Health` is added on the first *state* rather than at spawn, so no entity ever carries `Health{0,0}`
+  across a simulation tick.
+- **`AutoAttack { 0.3f, 10f, 1 }` and `PlayerCombatTag`/`EnemyTag`** — **no config equivalent exists,
+  and none was invented.** This package has no combat components beyond `Health`, and cooldown, range
+  and damage are game rules, not view configuration. A consumer that wants them adds them to entities
+  carrying `NetworkEntity`, from its own system.
+- **The eight-colour player palette and per-instance material creation** — **no config equivalent
+  exists.** `ViewConfig` carries a view key, pool size, scale, offsets and 2D sorting; it has no
+  colour, material or renderer field, and the view layer spawns pooled prefabs rather than building
+  `RenderMeshArray` entities. Per-player tinting is a consumer concern today. If it should become a
+  package concern, the honest shape is a colour field on `ViewConfig` plus something applying it in
+  `ViewLifecycleGroup` — that is a separate change with a separate justification.
+- **`GetEntityLabels` and the OnGUI overlay** — debug UI for a sample scene.
+- **`RenderMeshUtility` / `Unity.Entities.Graphics`** — the adapter drives the pooled-GameObject view
+  layer this package already has, so it needs no rendering dependency at all.
+
+### Tests
+
+`Tests/Editor.Netcode/` — 28 tests: the adapter end to end through the public groups (same-frame
+positioned view, the config-driven archetype, the mapping/offset split, despawn and re-entry, the
+duplicate-spawn and unknown-id guards, hp routing with and without `writeHealth`, full drain), the
+mapping maths, the resolver's ordering rules, and a reflection layout test asserting the drain system
+is internal, `[DisableAutoCreation]`, and two hops above `PresentationSystemGroup`.
+
+A separate test assembly, mirroring `Cuvara.DOTS.Tests.GameLogic`, rather than the existing ones:
+netcode-dependent tests in `Cuvara.DOTS.Tests.Runtime` would force that assembly to reference
+`com.cuvara.netcode`, which breaks the no-netcode install this release is built around.
+
+### Unverified
+
+**Nothing here has been compiled.** No Unity Editor was available — another workstream owned it — so
+this release is reviewed code, not built code. Specifically unverified: that the asmdef
+`versionDefines`/`defineConstraints` pair resolves as intended in a project with and without
+`com.cuvara.netcode`; that `SystemAPI.ManagedAPI.GetSingleton` works from this `ISystem` as it does in
+`EntityViewSpawnSystem`; and every one of the tests above.
+
 ## [0.7.0] - 2026-08-14
 
 ### Added

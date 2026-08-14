@@ -6,6 +6,8 @@
         "Scripts",
         "NDC.Scripts",
         "Cuvara.Netcode.Runtime",
+        "Cuvara.Netcode.Bootstrap",
+        "Cuvara.Netcode.DI",
         "NDC.Scripts.Nakama"
     ],
     "includePlatforms": [],
