@@ -207,6 +207,26 @@ package keeps its resolution cached, so the assemblies stay missing until the Ed
 Verify by checking that `Library/ScriptAssemblies/Cuvara.DOTS.Tests.Editor.dll` exists, not by
 trusting the manifest edit.
 
+## Releasing
+
+Tagging is manual and deliberate — `npm publish` cannot be undone, so a bad version can only be
+superseded, never withdrawn.
+
+```bash
+# 1. bump package.json, add the matching "## [X.Y.Z]" CHANGELOG section, merge to main
+# 2. wait for CI to be green on the commit you are about to tag
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+The tag triggers `release.yml`, which refuses to proceed unless `package.json` says exactly what the
+tag says, extracts the release notes from that CHANGELOG heading, creates the GitHub Release, and
+then publishes `@cuvara/dots@X.Y.Z` to GitHub Packages. `release-reminder.yml` warns on every push to
+`main` while the version in `package.json` has no tag.
+
+CI asserts a **test-count floor per assembly** rather than an exit code, in two configurations — with
+`com.cuvara.netcode` installed and without it. The reasoning, and why an exit code is not enough for a
+package whose test assemblies are gated on optional dependencies, is in `CHANGELOG.md` under 0.11.0.
+
 ## Requirements
 
 - Unity 6000.3 or newer

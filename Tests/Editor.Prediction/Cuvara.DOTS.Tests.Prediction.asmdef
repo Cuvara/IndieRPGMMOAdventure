@@ -1,0 +1,33 @@
+{
+    "name": "Cuvara.DOTS.Tests.Prediction",
+    "rootNamespace": "Cuvara.DOTS.Tests.Prediction",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Cuvara.DOTS.Runtime",
+        "Cuvara.DOTS.Netcode",
+        "Cuvara.DOTS.Netcode.Prediction",
+        "Cuvara.Netcode.Runtime",
+        "Shared.GameLogic",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Unity.Transforms"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["nunit.framework.dll"],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "CUVARA_NETCODE",
+        "CUVARA_SHARED_GAMELOGIC"
+    ],
+    "versionDefines": [
+        { "name": "com.cuvara.netcode", "expression": "0.6.0", "define": "CUVARA_NETCODE" },
+        { "name": "com.rpgmmo.shared-gamelogic", "expression": "", "define": "CUVARA_SHARED_GAMELOGIC" }
+    ],
+    "noEngineReferences": false
+}

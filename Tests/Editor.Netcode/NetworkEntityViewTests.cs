@@ -438,6 +438,63 @@ namespace Cuvara.DOTS.Tests.Netcode
         }
 
         [Test]
+        public void Anchor_CarriesTheServersOwnCoordinates_Verbatim()
+        {
+            // The predictor's field. It reconciles in server space, so this must be exactly what
+            // the wire said — not the world-space value projected back, which would not be
+            // bit-exact and would make replay integrate from a position the server never held.
+            var view = (IEntityView)_view;
+            view.Spawn("uuid-me", isLocal: true, type: PlayerType);
+            view.SetState("uuid-me", 3f, 7f, 100, 100);
+
+            Tick();
+
+            var anchor = _entityManager.GetComponentData<ReconciliationAnchor>(Find("uuid-me"));
+            Assert.AreEqual(new float2(3f, 7f), anchor.ServerPosition, "server space, untouched");
+            Assert.AreEqual(new float3(3f, 0f, 7f), anchor.Position, "world space, mapped");
+        }
+
+        [Test]
+        public void ServerPosition_SurvivesAMappingThatWouldNotRoundTrip()
+        {
+            // A mapping with a shifted origin: recovering (x, y) from the world-space value means
+            // subtracting Origin and projecting, and that is where the last-place error would come
+            // from. Storing it verbatim makes the mapping irrelevant to this field, which is the
+            // whole point — so the assertion is that a hostile mapping changes nothing.
+            var shifted = new DotsEntityView(
+                _catalog,
+                new TypeArchetypeResolver(LocalArchetype, null,
+                    new TypeArchetypeResolver.Rule(PlayerType, RemoteArchetype)),
+                new SnapshotSpaceMapping(
+                    new float3(1f, 0f, 0f), new float3(0f, 0f, 1f), new float3(1e7f, 0f, -1e7f)));
+            DotsNetcodeBootstrap.Install(_world, shifted);
+
+            var view = (IEntityView)shifted;
+            view.Spawn("uuid-far", isLocal: false, type: PlayerType);
+            view.SetState("uuid-far", 0.1f, 0.2f, 100, 100);
+
+            Tick();
+
+            var anchor = _entityManager.GetComponentData<ReconciliationAnchor>(Find("uuid-far"));
+            Assert.AreEqual(new float2(0.1f, 0.2f), anchor.ServerPosition,
+                "the raw field must not depend on the mapping at all");
+        }
+
+        [Test]
+        public void Anchor_ServerPosition_IsZeroAtSpawn_MatchingItsWorldSpaceField()
+        {
+            // Both fields describe "the server has said nothing yet", and they must agree:
+            // mapping.ToWorld(0, 0) is Origin, so float2.zero is the consistent choice.
+            ((IEntityView)_view).Spawn("uuid-a", isLocal: false, type: PlayerType);
+
+            Tick();
+
+            var anchor = _entityManager.GetComponentData<ReconciliationAnchor>(Find("uuid-a"));
+            Assert.AreEqual(float2.zero, anchor.ServerPosition);
+            Assert.AreEqual(_view.Mapping.ToWorld(0f, 0f), anchor.Position);
+        }
+
+        [Test]
         public void Anchor_IsWrittenForRemotesToo_NotOnlyForPredictedEntities()
         {
             // Uniform on purpose: one float3 per mirror entity, and no "why does the local one have
@@ -476,8 +533,11 @@ namespace Cuvara.DOTS.Tests.Netcode
 
             Assert.AreEqual(predicted, _entityManager.GetComponentData<LocalTransform>(entity).Position,
                 "the adapter must not overwrite a transform something else owns");
-            Assert.AreEqual(new float3(2f, 0f, 2f), _entityManager.GetComponentData<ReconciliationAnchor>(entity).Position,
+            var anchor = _entityManager.GetComponentData<ReconciliationAnchor>(entity);
+            Assert.AreEqual(new float3(2f, 0f, 2f), anchor.Position,
                 "but the authoritative value still lands, because that is what a predictor rewinds to");
+            Assert.AreEqual(new float2(2f, 2f), anchor.ServerPosition,
+                "and in the space the predictor actually replays in");
         }
 
         [Test]

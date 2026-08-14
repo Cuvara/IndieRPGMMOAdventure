@@ -6,7 +6,9 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Cuvara.DOTS.Tests.Runtime")]
 [assembly: InternalsVisibleTo("Cuvara.DOTS.Tests.Editor")]
 
-// The netcode adapter's tests need ViewConfig.Configure and ViewArchetypeLibrary.Configure to build
-// a catalog without authoring assets — the same reason the other two are here. They do NOT name a
-// package system: they drive the public groups, so the ordering contract is what is under test.
+// The netcode adapter's and prediction driver's tests need ViewConfig.Configure and
+// ViewArchetypeLibrary.Configure to build a catalog without authoring assets — the same reason the
+// other two are here. Neither names a package system: they drive the public groups, so the ordering
+// contract is what is under test.
 [assembly: InternalsVisibleTo("Cuvara.DOTS.Tests.Netcode")]
+[assembly: InternalsVisibleTo("Cuvara.DOTS.Tests.Prediction")]

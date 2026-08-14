@@ -31,11 +31,12 @@ namespace Cuvara.DOTS.Netcode
     /// <c>[BurstCompile]</c> would be a claim the code cannot honour.
     /// </para>
     /// </remarks>
-    // In NetcodeSystemGroup — InitializationSystemGroup — so entities and transforms written here
-    // are seen by this frame's TransformSystemGroup and this frame's ViewSystemGroup. See
-    // DotsEntityView for why that makes the queue free rather than a frame late.
+    // In SnapshotApplyGroup, inside NetcodeSystemGroup, inside InitializationSystemGroup — so
+    // entities and transforms written here are seen by this frame's TransformSystemGroup and this
+    // frame's ViewSystemGroup. See DotsEntityView for why that makes the queue free rather than a
+    // frame late. The sub-group exists so prediction can order itself after this without naming it.
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(NetcodeSystemGroup))]
+    [UpdateInGroup(typeof(SnapshotApplyGroup))]
     internal partial struct NetworkViewCommandSystem : ISystem
     {
         private NativeHashMap<FixedString64Bytes, Entity> _entities;
@@ -115,7 +116,13 @@ namespace Cuvara.DOTS.Netcode
 
             // Added at spawn with the same value LocalTransform got, so the component set is stable
             // from the first frame and a predictor attaching later never reads a default.
-            entityManager.AddComponentData(entity, new ReconciliationAnchor { Position = position });
+            entityManager.AddComponentData(entity, new ReconciliationAnchor
+            {
+                Position = position,
+                // float2.zero, not a mapped value: the server has said nothing yet, and
+                // mapping.ToWorld(0, 0) is Origin, so the two fields agree at spawn.
+                ServerPosition = float2.zero,
+            });
 
             // Both, not either: EntityViewSpawnSystem matches on EntityViewRequest and prefers the
             // config's key when a ViewConfigRef is present. Writing the resolved key into the
@@ -155,7 +162,14 @@ namespace Cuvara.DOTS.Netcode
             // Always. This is what the server said, and it is the value a predictor rewinds to —
             // separate from what the client is currently showing, exactly as NetworkEntityState is
             // separate from Health.
-            entityManager.SetComponentData(entity, new ReconciliationAnchor { Position = position });
+            entityManager.SetComponentData(entity, new ReconciliationAnchor
+            {
+                Position = position,
+                // Verbatim from the command, which took it verbatim from SetState. Deliberately not
+                // derived from `position` above — a round trip through the mapping is not bit-exact,
+                // and a predictor replaying from an off-by-one-ULP anchor drifts.
+                ServerPosition = new float2(command.X, command.Y),
+            });
 
             // The transform is written only while nothing else claims it. With a predictor owning
             // LocalTransform, both writing it would work on every frame the predictor runs and snap
