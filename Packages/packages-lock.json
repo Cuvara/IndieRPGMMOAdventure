@@ -9,6 +9,18 @@
       },
       "hash": "c2827598290fe6d8569803e6f4a23af60310ee8d"
     },
+    "com.cuvara.dots": {
+      "version": "https://github.com/Cuvara/com.cuvara.dots.git#v0.6.2",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.entities": "1.4.8",
+        "com.unity.burst": "1.8.30",
+        "com.unity.collections": "2.6.8",
+        "com.unity.mathematics": "1.3.2"
+      },
+      "hash": "2067f93166ec96534f30200d207b1d85f5b62e39"
+    },
     "com.cuvara.netcode": {
       "version": "file:com.cuvara.netcode",
       "depth": 0,
