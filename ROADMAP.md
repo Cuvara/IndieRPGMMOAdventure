@@ -39,8 +39,8 @@ remaining v0.2.0-era items on purpose, to settle the `Shared.GameLogic` question
 
 ## In progress
 
-Nothing. The last shipped version, 0.6.2, closed the asmdef fixes that made the package compile for
-the first time.
+Nothing. 0.6.2 closed the asmdef fixes that made the package compile for the first time; 0.6.3 is
+documentation only.
 
 ## Planned, in order
 
@@ -64,20 +64,18 @@ the first time.
 
 ## Known debts
 
-- **The test assemblies are not compiled in the consuming project, so no test in this package has
-  ever run.** Established, not suspected: a full EditMode run in the consumer passed 139/139, but
-  filtering to `Cuvara.DOTS` returned *no tests found*, and `Library/ScriptAssemblies` holds no
-  `Cuvara.DOTS.Tests.*` assembly — those 139 belong to other packages. "Tested" here does not mean
-  "written but unrun"; it means the code is not built at all.
-  - **Cause:** a git-URL install lives in `Library/PackageCache`, and Unity only builds a package's
-    test assemblies when the consuming project lists it in `testables` in `Packages/manifest.json`.
-    The `testables` entry in this package's own `package.json` does not substitute for that.
-    Documented in the README install section, because every consumer hits it and none will guess it:
-    a package whose tests silently do not exist in the consumer is the same class of failure as a
-    missing `.meta`.
-  - Editing the manifest is necessary but not always sufficient — an Editor that already resolved
-    the package caches that resolution, so the assemblies stay absent until it restarts. Verify by
-    the presence of `Library/ScriptAssemblies/Cuvara.DOTS.Tests.Editor.dll`, not by the manifest.
+- **The test suite runs and passes** — measured in the consuming project, not asserted. EditMode
+  **205/205**, of which **66 are this package's** (the project alone was 139 before the package's
+  assemblies existed); PlayMode **10/10**; re-run after the subtree conversion still 205/205, with
+  six `Cuvara.DOTS.Tests.*` files in `Library/ScriptAssemblies`.
+  - **The `testables` requirement is still load-bearing** and stays documented in the README. It was
+    first found with a git-URL install, but the assemblies are still built via `testables` now that
+    the package is embedded, so it is not a PackageCache-only quirk. Without it the failure is
+    silent: no `Cuvara.DOTS.Tests.*` assembly, and a Test Runner filtered to `Cuvara.DOTS` reporting
+    *no tests found* — indistinguishable from a package that ships no tests.
+  - Editing the manifest is necessary but not sufficient: an Editor that already resolved the
+    package caches that resolution until it restarts. Verify by the presence of
+    `Library/ScriptAssemblies/Cuvara.DOTS.Tests.Editor.dll`, not by the manifest edit.
 - **`Cuvara.DOTS.Tests.GameLogic` has a second gate** beyond `UNITY_INCLUDE_TESTS`: it is also
   constrained on `CUVARA_SHARED_GAMELOGIC`, defined only when `com.rpgmmo.shared-gamelogic` is
   installed, and it references that package's `Shared.GameLogic` assembly. Correct by design — the
