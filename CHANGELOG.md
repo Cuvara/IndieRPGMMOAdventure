@@ -5,6 +5,74 @@ All notable changes to the Cuvara DOTS package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-14
+
+### Added
+
+- **ViewConfig and data setup** — the last piece of the original hybrid core. Until now a consumer
+  configured views by hardcoding asset keys at the call site.
+  - `ViewConfig` (ScriptableObject): view key, pool size, uniform scale, position/rotation offsets,
+    and 2D sorting layer/order. **Runtime authoring, no `Baker`** — consumers spawn from server
+    snapshots, where there is no subscene and no authoring GameObject to bake, and baking would also
+    pull in `Unity.Entities.Hybrid`.
+  - `ViewArchetypeLibrary` (ScriptableObject): named archetype definitions. The name is the join
+    between the server's vocabulary and the art; names are distinct from view keys so two archetypes
+    can share a prefab and differ only in scale or pool size.
+  - `ViewConfigTable`, a blob of `ViewConfigRecord`, published as the unmanaged singleton
+    `ViewConfigTableReference` and built by `ViewConfigCatalog` — which owns the blob's lifetime,
+    resolves names to indices, and reports `PoolSizesByKey()` for feeding `ChunkViewProvisioner`.
+  - `ViewConfigRef`, `ViewTransformOffset` and `ViewSortingKey` components.
+- The spawn path resolves a `ViewConfigRef` against the table for its key and offsets. **The bare-key
+  path is unchanged**: an entity carrying only `EntityViewRequest.ViewKey` behaves exactly as before,
+  which is what the sample and existing consumers use.
+
+- **Simulation components and systems** — `TimeToLive`, `Health`, `MoveToward`, `SpinSpeed`, `MoveData`
+  as `IComponentData`, each with an `internal` Bursted `ISystem` in the groups that were declared
+  empty for them: `MoveTowardSystem` → `MoveBounceSystem` → `SpinSystem` in `MovementSystemGroup`,
+  `HealthDeathSystem` → `TimeToLiveSystem` in `LifecycleSystemGroup`, every position in the chain
+  written down rather than left to Entities' fallback. `DotsSimulationBootstrap.InstallSimulationSystems(World)`
+  installs them; it is separate from the view bootstrap because an entity that moves, spins and
+  expires needs no GameObject, so the simulation half must not require an `IViewAssetProvider`.
+  Three couplings from the reference implementations were removed rather than carried across: the
+  game-specific enemy tag and the stats singleton that `HealthDeathSystem` wrote, and Unity's
+  `EndSimulationEntityCommandBufferSystem` — both destroying systems now use the package's own
+  buffer, which plays back before the transform systems so no view is ever synced against an entity
+  that died this frame. `MoveToward` gains a `StopDistance` field in place of the reference's
+  hardcoded 0.1-unit arrival epsilon, which is a tuning value for one game's scale rather than a
+  constant a shared package may impose. The countdown component is `TimeToLive` rather than the
+  reference's `Lifetime`: that name is ambiguous against `VContainer.Lifetime` in any file importing
+  both, which broke `Cuvara.DOTS.DI` — a common word in a shared assembly will collide again. Covered by `SimulationSystemsTests` (play mode), which ticks
+  `GameplaySystemGroup` rather than individual systems so the shipped ordering is what is asserted.
+
+### Changed
+
+- The transform sync now composes `ViewTransformOffset` into each sample, inside the Bursted job. The
+  sync overwrites the GameObject transform every frame, so an offset applied only at spawn would last
+  exactly one frame — which reads as "offsets don't work" rather than as a lifetime bug.
+- `EntityViewSpawnSystem` adds `ViewTransformOffset` to every linked entity, identity when
+  unconfigured, so the sync keeps a single query.
+
+### Accepted limitations
+
+- **`ViewSortingKey` is carried, not applied.** Nothing in the package touches a `SpriteRenderer`;
+  that is the 2D roadmap item. Authoring it now costs two ints and means the 2D branch need not
+  re-open the asset format, but no sorting order is set on anything today.
+- **Offsets are uniform-scale only**, matching `ViewTransformSample`, which carries one float.
+- **A `ViewConfigRef` with an out-of-range index warns and falls back to the request's own key**
+  rather than throwing or rendering an arbitrary archetype — that state means the catalog was rebuilt
+  without its referencing entities being updated.
+- **Config lookup by name is linear** over the blob. A catalog holds tens of archetypes; resolve once
+  at request time and carry the index rather than scanning per frame.
+- **A view key longer than 61 UTF-8 bytes is truncated, not rejected.** The record's key is a
+  `FixedString64Bytes`; truncating stops one over-long key from failing catalog construction for the
+  whole library. It warns by asset name, and a truncated key matches nothing in the pool, so the view
+  never spawns rather than spawning something wrong.
+- **`ViewConfigCatalog.Build` is only safe between frames**, never while a tick is in flight: it frees
+  the previous blob immediately, and entities hold indices into it. A rebuild also invalidates every
+  index handed out before it — re-resolve names afterwards. The spawn path catches an out-of-range
+  index, but an index that is merely wrong cannot be detected.
+- **Compiles clean**, verified in the consuming project. EditMode 210 (was 205), PlayMode 15 (was 10).
+
 ## [0.6.3] - 2026-08-14
 
 ### Documentation
