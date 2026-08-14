@@ -25,6 +25,28 @@ compiled and the core still works — you construct `EntityViewRegistry` yoursel
 `IViewAssetProvider` over whatever pool you do have. **The core assembly references neither**, and
 installs against its four pinned Unity dependencies alone.
 
+## View configuration
+
+Author a `ViewConfig` per kind of view and list them in a `ViewArchetypeLibrary` under the names the
+server uses. At session start, build the catalog and publish it:
+
+```csharp
+var catalog = new ViewConfigCatalog();
+catalog.Build(library);
+catalog.Install(world);              // publishes ViewConfigTableReference
+
+// Warm what the catalog needs, using its own pool sizes:
+foreach (var (key, size) in catalog.PoolSizesByKey())
+    await provisioner.PrewarmChunkAsync("chunk-12-4", new[] { key }, countPerKey: size);
+
+// Spawn by archetype name — resolve once, carry the index:
+entityManager.AddComponentData(entity, new EntityViewRequest { ViewKey = "goblin" });
+entityManager.AddComponentData(entity, new ViewConfigRef { Index = catalog.IndexOf("goblin") });
+```
+
+The bare-key path still works exactly as before: an entity with only `EntityViewRequest` and no
+`ViewConfigRef` behaves as it always did. `catalog.Dispose()` releases the blob.
+
 ## System groups
 
 Every package system is `[DisableAutoCreation]` and created by `DotsViewBootstrap.Install(world, registry)`.

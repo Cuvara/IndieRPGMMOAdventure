@@ -33,30 +33,23 @@ Two rules constrain everything below.
 | Messaging without a MessagePipe dependency | 0.5.0 | `IDotsPublisher<T>`/`IDotsSubscriber<T>` + `ViewSpawned`, `ViewDespawned`, `ChunkWarmed`, `ChunkReleased`, `ChunkCascadeReleased`. MessagePipe adapters live in `Cuvara.DOTS.DI` behind a version gate; publishing is a no-op when absent. |
 | GameFoundation asset provider | 0.2.0 | `IViewAssetProvider` over UniT's `IAssetsManager` + `IObjectPoolManager`. No loader, cache or pool of its own. |
 | Hybrid Views sample + scene | 0.6.2 | Bootstrap, self-contained primitive provider, orbiting entities, despawn/recycle, narrated chunk warm/release. Ready-to-play scene, pinned `.meta` GUIDs, troubleshooting notes. |
+| View configuration as data | 0.7.0 | ScriptableObject authoring converted to `IComponentData` with a blob table, so a consumer configures views by data instead of hardcoding pool keys. A rebuild invalidates every index handed out before it — an index that is merely wrong rather than out of range fails silently and reads as an art bug. |
+| Simulation components and systems | 0.7.0 | `TimeToLive`, `Health`, `MoveToward`, `SpinSpeed`, `MoveData` with an `internal` Bursted `ISystem` each, filling `MovementSystemGroup` and `LifecycleSystemGroup`. Installed by `DotsSimulationBootstrap`, separate from the view bootstrap: an entity that moves, spins and expires needs no GameObject. Both destroying systems use the package's own command buffer. |
 
 **Ordering decision, not an accident:** the `ISimulationModel` seam (0.3.0) was pulled ahead of the
 remaining v0.2.0-era items on purpose, to settle the `Shared.GameLogic` question early.
 
 ## In progress
 
-Nothing. 0.6.2 closed the asmdef fixes that made the package compile for the first time; 0.6.3 is
-documentation only.
+Nothing. 0.7.0 closed the hybrid core: every item the original plan filed under v0.2.0 is now built,
+alongside the simulation seam and the messaging seam that were pulled forward ahead of it.
 
 ## Planned, in order
 
-1. **ViewConfig + data setup** — **no code in the tree.** ScriptableObject authoring (asset key,
-   pool size, scale, offsets) converted to `IComponentData`, a blob table for many-per-archetype,
-   named archetype definitions. Runtime authoring, not subscene baking: consumers spawn from server
-   snapshots at runtime. This is the last piece of the original hybrid core, and until it lands a
-   consumer configures views by hardcoding keys.
-2. **Simulation components and systems** — **no code in the tree.** `Lifetime`, `Health`,
-   `MoveToward`, `SpinSpeed`, `MoveData` with their `ISystem` counterparts, decoupled from demo
-   singletons and from a hardcoded command-buffer system. `MovementSystemGroup` and
-   `LifecycleSystemGroup` exist and are empty, waiting for exactly these.
-3. **Netcode `IEntityView` adapter** — separate assembly gated on `com.cuvara.netcode`, arrow
+1. **Netcode `IEntityView` adapter** — separate assembly gated on `com.cuvara.netcode`, arrow
    pointing one way only. Plus an ECS → MonoBehaviour event queue for one-shot request entities,
    held until a second consumer exists to shape its API.
-4. **2D** — tile data in ECS (chunked grid in a blob asset, plus lookup / neighbourhood /
+2. **2D** — tile data in ECS (chunked grid in a blob asset, plus lookup / neighbourhood /
    line-of-sight queries) and an ECS sort key drained to `SpriteRenderer.sortingOrder` in the same
    main-thread pass as transform sync. Sprite view pooling needs nothing new: a prefab with a
    `SpriteRenderer` already flows through provisioning. Rendering stays on

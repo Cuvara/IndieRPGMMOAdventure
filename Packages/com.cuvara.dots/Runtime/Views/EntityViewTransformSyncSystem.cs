@@ -1,3 +1,4 @@
+using Cuvara.DOTS.Configuration;
 using Cuvara.DOTS.Groups;
 using Unity.Burst;
 using Unity.Collections;
@@ -42,7 +43,7 @@ namespace Cuvara.DOTS.Views
         public void OnCreate(ref SystemState state)
         {
             _linked = new EntityQueryBuilder(Allocator.Temp)
-                .WithAll<EntityViewLink, LocalToWorld>()
+                .WithAll<EntityViewLink, LocalToWorld, ViewTransformOffset>()
                 .Build(ref state);
 
             state.RequireForUpdate(_linked);
