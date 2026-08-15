@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the predictor's clock ran at ~2x real time and the server's hold window expired in
   half the real time it should — the controlled avatar moved for part of each send
   period and stood still for the rest, at every frame rate, while remote entities stayed
-  smooth. Fixed in `com.cuvara.netcode` 0.15.2; see that package's CHANGELOG for the
+  smooth. Fixed in `com.cuvara.netcode` 0.15.3; see that package's CHANGELOG for the
   measurements.
 - **Input send cadence in the DOTS sample.** Sending was looped on a timer
   (`UniTask.Delay`) and is now driven from `Update` by an accumulator, so the configured
