@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Local player stutter.** The netcode package advanced prediction twice per frame, so
+  the predictor's clock ran at ~2x real time and the server's hold window expired in
+  half the real time it should — the controlled avatar moved for part of each send
+  period and stood still for the rest, at every frame rate, while remote entities stayed
+  smooth. Fixed in `com.cuvara.netcode` 0.15.2; see that package's CHANGELOG for the
+  measurements.
+- **Input send cadence in the DOTS sample.** Sending was looped on a timer
+  (`UniTask.Delay`) and is now driven from `Update` by an accumulator, so the configured
+  `inputRateHz` is the rate actually delivered. The send rate is a contract with the
+  server, not a preference: it must be at least the server's hold window or the avatar
+  stalls between sends regardless of how well prediction behaves. Measured at exactly 15
+  sends per real second afterwards.
+
+### Added
+
+- `FrameRateCap` — optional `-targetFps N` launch override for the render frame rate.
+  Uncapped by default: a 60 fps cap was tried against this stutter and measurably did
+  not help, which is what ruled the frame rate out as the cause. The mechanism stays for
+  pinning the rate during a measurement, and for battery and thermals.
+
+
+## [Unreleased]
+
+### Fixed
+
 - **`NakamaAuthProvider` returned the wrong token, and failed silently**
   (`Assets/Scripts/Nakama/Auth/NakamaAuthProvider.cs`). `GetJwtAsync` returned
   `NakamaSessionService.Session.AuthToken` — the Nakama *session* token — where the

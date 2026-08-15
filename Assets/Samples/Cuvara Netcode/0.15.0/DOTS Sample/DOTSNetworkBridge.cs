@@ -81,6 +81,11 @@ namespace DOTSSample
         private float _moveX;
         private float _moveY;
         private bool _inputFailureReported;
+        private bool _tickRateChecked;
+
+        /// <summary>The timestep replay is using, recovered for the cross-check log.</summary>
+        private float PredictedDt() =>
+            _client != null && _client.TickRate > 0 ? 1f / _client.TickRate : 1f / Mathf.Max(1, inputRateHz);
 
         // --- Status for OnGUI ---
         private string _status = "Initializing...";
@@ -345,6 +350,7 @@ namespace DOTSSample
         private void ResetSessionView()
         {
             _binder?.Reset();
+            _tickRateChecked = false;
             _entityLabelTextCache.Clear();
             _labelCache.Clear();
             _entityCount = 0;
@@ -368,6 +374,8 @@ namespace DOTSSample
             _mapSelected = false;
             _status = "Disconnected";
             _inputTick = 0;
+            _sendInputs = false;
+            _inputAccum = 0f;
             _pendingAttackTarget = "";
             _snapshotCount = 0;
             _entityCount = 0;
@@ -416,21 +424,27 @@ namespace DOTSSample
         {
             uint advertised = _client?.TickRate ?? 0u;
 
-            // Zero means "not sent" — same rule as EntitySnapshot.Speed. An older server
-            // gets the configured fallback rather than a tick rate of zero.
-            int tickRate = advertised > 0 ? (int)advertised : inputRateHz;
+            var settings = PredictionSettings.FromServer(
+                advertised, fallbackTickRate: inputRateHz, playerSpeed, MapBounds.Default);
 
-            _predictor = new LocalMovePredictor(
-                new PredictionSettings(tickRate, playerSpeed, MapBounds.Default));
-
+            _predictor = new LocalMovePredictor(settings);
             _binder = new WorldViewBinder(_view, _predictor);
 
-            Debug.Log(advertised > 0
-                ? $"[DOTSNet] Prediction ON — server tick rate {tickRate}Hz (advertised), " +
-                  $"input {inputRateHz}Hz, speed {playerSpeed}"
-                : $"[DOTSNet] Prediction ON — server advertised no tick rate, falling back to " +
-                  $"{tickRate}Hz. If the server integrates at a different rate, prediction " +
-                  "will drift by the ratio and read as soft, laggy movement.");
+            // The protocol permits a fallback only if it is OBSERVABLE. A silent one is
+            // behaviourally the code that predated the field.
+            if (settings.TickRateIsFallback)
+            {
+                Debug.LogWarning(
+                    $"[DOTSNet] Server advertised no tick rate; predicting at {settings.TickRate}Hz " +
+                    "from local configuration. If the server integrates at a different rate, every " +
+                    "predicted step is wrong by that ratio — which smooths rather than snaps, so it " +
+                    "will feel soft rather than look broken. The measured rate below is the check.");
+            }
+            else
+            {
+                Debug.Log($"[DOTSNet] Prediction ON — server tick rate {settings.TickRate}Hz " +
+                          $"(advertised), input {inputRateHz}Hz, speed {playerSpeed}");
+            }
 
             if (!_binder.IsPredicting)
             {
@@ -547,6 +561,51 @@ namespace DOTSSample
             (positive ? 1f : 0f) - (negative ? 1f : 0f);
 #endif
 
+        private bool _sendInputs;
+        private float _inputAccum;
+
+        /// <summary>
+        /// Emits input at <c>inputRateHz</c> off the frame loop, catching up whole periods
+        /// so the send rate is the one configured rather than the one a timer happens to
+        /// deliver. The rate is a contract with the server, not a preference: it must be at
+        /// least the server's hold window or the avatar stalls between sends.
+        /// </summary>
+        private void SendDueInputs(float deltaTime)
+        {
+            if (!_sendInputs || _client?.Session == null) return;
+
+            float period = 1f / Mathf.Max(1f, inputRateHz);
+            _inputAccum += deltaTime;
+
+            // Bounded so a hitch or a breakpoint does not discharge a burst of stale ticks.
+            const int maxCatchUp = 4;
+            int sent = 0;
+            while (_inputAccum >= period && sent < maxCatchUp)
+            {
+                _inputAccum -= period;
+                sent++;
+
+                _inputTick++;
+
+                var moveX = _moveX;
+                var moveY = _moveY;
+                var attackTarget = _pendingAttackTarget;
+                _pendingAttackTarget = "";
+                if (!string.IsNullOrEmpty(attackTarget))
+                    Debug.Log($"[Attack] Sending attack on {attackTarget} (tick {_inputTick})");
+
+                _client.Session.SendInput(_inputTick, moveX, moveY, attackTarget);
+
+                // Recorded immediately after the send, with the same tick and the same
+                // vector — the predictor's whole contract is that it saw exactly what
+                // the server will see. Only the movement half is predicted;
+                // attackTarget is not passed and combat stays server-authoritative.
+                _predictor?.RecordInput(_inputTick, moveX, moveY);
+            }
+
+            if (_inputAccum > period) _inputAccum = period;
+        }
+
         private void Update()
         {
             SampleMovementInput();
@@ -653,7 +712,41 @@ namespace DOTSSample
             }
 
             _binder.Tick(_client.World, _client.UserId);
+
+            // Per frame, and separately from the snapshot pass above. Snapshot processing
+            // advances prediction once per arriving snapshot — the world rate — so a
+            // client that renders only from it shows the avatar still between snapshots
+            // and jumping on the frame one lands, however fast it is drawing. This is what
+            // makes the smoothing observable rather than merely computed.
+            SendDueInputs(Time.deltaTime);
+            _binder.AdvanceFrame(Time.deltaTime);
+
+
             _entityCount = _view.Count;
+
+            // Verify the advertised rate against one measured off the wire. The protocol
+            // recommends this even when a rate IS advertised, and the reason is that a
+            // wrong rate produces no symptom a player can name — it is wrong by a fixed
+            // ratio on every input, under the correction threshold, forever.
+            if (!_tickRateChecked && _binder.TickRate.HasEstimate)
+            {
+                _tickRateChecked = true;
+                int used = _predictor != null ? (int)Mathf.Round(1f / Mathf.Max(1e-6f, PredictedDt())) : 0;
+
+                if (_binder.TickRate.Disagrees(used))
+                {
+                    Debug.LogError(
+                        $"[DOTSNet] Tick rate mismatch: predicting at {used}Hz but the server's " +
+                        $"snapshots measure {_binder.TickRate.EstimatedHz:F1}Hz. Every predicted step " +
+                        "is wrong by that ratio. This is the failure that reads as soft, laggy " +
+                        "movement rather than as an error.");
+                }
+                else
+                {
+                    Debug.Log($"[DOTSNet] Tick rate verified: predicting at {used}Hz, " +
+                              $"measured {_binder.TickRate.EstimatedHz:F1}Hz off the wire.");
+                }
+            }
         }
 
         private void OnDestroy()
@@ -711,34 +804,25 @@ namespace DOTSSample
                 _status = "In World";
                 Debug.Log($"[DOTSNet] IN WORLD as {_client.UserId}");
 
-                var dt = 1f / Mathf.Max(1f, inputRateHz);
+                // Sending is driven from Update (SendDueInputs) rather than looped on here.
+                // A timer-driven loop overshot the requested period badly enough to break
+                // the server's hold window: at inputRateHz 15 the measured interval between
+                // sends was 138ms against the 66.7ms asked for. The server holds a
+                // direction for WorldEvery base ticks (4 at 60/15) and stops the entity when
+                // that expires, so sending at half the required rate left the avatar
+                // stationary for roughly half of every send period — the local player
+                // stuttered while remotes, which interpolate between snapshots and do not
+                // depend on this cadence, stayed smooth.
+                _sendInputs = true;
                 var started = DateTime.UtcNow;
 
                 while (!ct.IsCancellationRequested)
                 {
-                    var elapsed = (float)(DateTime.UtcNow - started).TotalSeconds;
-                    if (elapsed >= runSeconds) break;
-
-                    _inputTick++;
-
-                    var moveX = _moveX;
-                    var moveY = _moveY;
-                    var attackTarget = _pendingAttackTarget;
-                    _pendingAttackTarget = "";
-                    if (!string.IsNullOrEmpty(attackTarget))
-                        Debug.Log($"[Attack] Sending attack on {attackTarget} (tick {_inputTick})");
-
-                    _client.Session?.SendInput(_inputTick, moveX, moveY, attackTarget);
-
-                    // Recorded immediately after the send, with the same tick and the same
-                    // vector — the predictor's whole contract is that it saw exactly what
-                    // the server will see. Only the movement half is predicted;
-                    // attackTarget is not passed and combat stays server-authoritative.
-                    _predictor?.RecordInput(_inputTick, moveX, moveY);
-
-                    await UniTask.Delay(TimeSpan.FromSeconds(dt), DelayType.Realtime,
-                        PlayerLoopTiming.Update, ct);
+                    if ((float)(DateTime.UtcNow - started).TotalSeconds >= runSeconds) break;
+                    await UniTask.Yield(PlayerLoopTiming.Update, ct);
                 }
+
+                _sendInputs = false;
 
                 _client.Disconnect();
                 _status = "Run complete";
