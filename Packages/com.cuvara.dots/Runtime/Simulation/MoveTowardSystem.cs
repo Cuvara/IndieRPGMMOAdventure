@@ -6,51 +6,59 @@ using Unity.Transforms;
 
 namespace Cuvara.DOTS.Simulation
 {
-    /// <summary>Advances every <see cref="MoveToward"/> entity toward its target.</summary>
+    /// <summary>Steps an entity toward its own target, stopping inside its stop distance.</summary>
+    [BurstCompile]
+    internal partial struct MoveTowardJob : IJobEntity
+    {
+        public float DeltaTime;
+
+        private void Execute(ref LocalTransform transform, in MoveToward move)
+        {
+            var position = transform.Position;
+            var toTarget = move.Target - position;
+            var distance = math.length(toTarget);
+
+            // Arrived — and the zero-distance case must be caught here, because normalising a
+            // zero vector below would produce NaN and poison the transform permanently.
+            if (distance <= move.StopDistance || distance <= math.EPSILON) return;
+
+            var step = math.normalize(toTarget) * move.Speed * DeltaTime;
+            if (math.length(step) > distance) step = toTarget;
+
+            transform.Position = position + step;
+        }
+    }
+
+    /// <summary>Moves everything with a <see cref="MoveToward"/> toward its target.</summary>
     /// <remarks>
-    /// <para>
-    /// First in <see cref="MovementSystemGroup"/>, so the position later movement systems read is
-    /// this frame's, not the previous one's.
-    /// </para>
-    /// <para>
-    /// The step is clamped to the remaining distance, so an entity cannot overshoot its target at
-    /// any speed or delta time — without that clamp a fast entity oscillates around the target
-    /// forever, which is the failure this looks like when frame time spikes rather than when the
-    /// speed is wrong.
-    /// </para>
+    /// Parallel since 0.17.0. The target is a per-entity value rather than another entity's
+    /// position, so nothing here reads state another worker may be writing — which is what makes
+    /// the parallel schedule correct rather than merely fast.
     /// </remarks>
     [BurstCompile]
     [DisableAutoCreation]
     [UpdateInGroup(typeof(MovementSystemGroup))]
     internal partial struct MoveTowardSystem : ISystem
     {
+        private EntityQuery _query;
+
         [BurstCompile]
         public void OnCreate(ref SystemState state)
         {
+            _query = SystemAPI.QueryBuilder().WithAllRW<Unity.Transforms.LocalTransform>().WithAll<MoveToward>().Build();
             state.RequireForUpdate<MoveToward>();
         }
 
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            var deltaTime = SystemAPI.Time.DeltaTime;
-
-            foreach (var (transform, move) in
-                     SystemAPI.Query<RefRW<LocalTransform>, RefRO<MoveToward>>())
-            {
-                var position = transform.ValueRO.Position;
-                var toTarget = move.ValueRO.Target - position;
-                var distance = math.length(toTarget);
-
-                // Arrived — and the zero-distance case must be caught here, because normalising a
-                // zero vector below would produce NaN and poison the transform permanently.
-                if (distance <= move.ValueRO.StopDistance || distance <= math.EPSILON) continue;
-
-                var step = math.normalize(toTarget) * move.ValueRO.Speed * deltaTime;
-                if (math.length(step) > distance) step = toTarget;
-
-                transform.ValueRW.Position = position + step;
-            }
+            // Scheduled only above this job's own measured crossover — see ParallelScheduling for
+            // the table. Below it this job was measurably slower scheduled than run, and this
+            // package's entity count is AOI-bounded, so the common case is below it.
+            var job = new MoveTowardJob { DeltaTime = SystemAPI.Time.DeltaTime };
+            state.Dependency = _query.CalculateEntityCount() >= ParallelScheduling.MoveTowardMinimum
+                ? job.ScheduleParallel(state.Dependency)
+                : job.Schedule(state.Dependency);
         }
     }
 }

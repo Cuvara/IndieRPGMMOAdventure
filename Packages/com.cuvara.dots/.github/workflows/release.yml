@@ -1,0 +1,111 @@
+name: Release
+
+# Driven by the tag and only by the tag. No branch trigger, deliberately: a push
+# to main must never be able to publish, because `npm publish` cannot be undone —
+# a bad version can only be superseded, never withdrawn. Pushing `v*` is the last
+# human gate before a permanent artifact exists.
+#
+# That irreversibility is also why CI's test-count floors matter more here than
+# they would in a package nobody publishes. A publish riding a green run over
+# zero adapter tests would put a version on a registry whose 44 tests never
+# executed, and it could not be taken back.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      # Content checked against label, by machine. This is the defect class that
+      # has cost this workspace the most: a version that says one thing and
+      # contains another. A hard exit, never a warning — it is the last thing
+      # between a mislabelled version and a permanent one.
+      - name: Verify package.json version matches tag
+        run: |
+          PKG_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./package.json','utf8')).version")
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::package.json version ($PKG_VERSION) != tag (v$TAG_VERSION)"
+            exit 1
+          fi
+          echo "package.json $PKG_VERSION matches tag v$TAG_VERSION."
+
+      # Release notes come from the CHANGELOG section for this exact version,
+      # which quietly makes the CHANGELOG load-bearing rather than decorative: a
+      # missing or misspelled `## [VERSION]` heading ships empty notes. The
+      # reminder workflow warns about that before a tag is ever pushed.
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          awk "/^## \[$VERSION\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "::warning::CHANGELOG.md has no '## [$VERSION]' section — this release will have empty notes."
+          fi
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish to GitHub Packages
+    # Only after the Release job succeeded. A publish that races release creation
+    # can leave a registry version with no notes and no release artifact — and the
+    # registry half is the half that cannot be corrected afterwards.
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: '@cuvara'
+
+      # GitHub Packages requires a scoped npm name, which a UPM package.json does
+      # not have: this package is `com.cuvara.dots`, matching how Unity resolves
+      # it. The rewrite is publish-only and never committed — the file on disk in
+      # a consumer's Packages/ folder keeps the UPM name.
+      - name: Prepare package for npm
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+            if (pkg.name !== 'com.cuvara.dots') {
+              console.error('Unexpected package name: ' + pkg.name);
+              process.exit(1);
+            }
+            pkg.name = '@cuvara/dots';
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            pkg.repository = { type: 'git', url: 'https://github.com/Cuvara/com.cuvara.dots.git' };
+            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 4) + '\n');
+          "
+          cat package.json
+
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

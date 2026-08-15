@@ -5,6 +5,1110 @@ All notable changes to the Cuvara DOTS package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-08-15
+
+### Per-system thresholds, from real numbers
+
+12 cores, **Burst on**, median of 41 interleaved pairs:
+
+| job | crossover | speedup @ 65,536 |
+|---|---|---|
+| `SpinJob` | 4,096 | 4.03× |
+| `MoveBounceJob` | 16,384 | 2.45× |
+| `MoveTowardJob` | 16,384 | 3.28× |
+| `HealthDeathJob` | 65,536 | 1.16× |
+| `TimeToLiveJob` | 65,536 | 1.24× |
+
+`ParallelScheduling.MinimumEntities` is replaced by five named constants, each that job's own measured
+crossover. 0.19.0's single constant was honest for the data that existed — a floor against a measured
+pessimisation — but the jobs are different in kind: `SpinJob` writes one component and scales nearly
+4×, while `HealthDeathJob` and `TimeToLiveJob` reach 1.16× and 1.24× even at 65,536, where the
+per-entity work is one comparison and the command buffer dominates. The shared 16,384 would have
+scheduled those two at counts where they measured 0.45×–0.88×.
+
+They keep a threshold rather than being forced serial: a consumer running hundreds of thousands of
+entities should get the win, and this package's own consumer simply never reaches it.
+
+### Why the earlier crossovers were wrong, and predictably so
+
+A 12-core run with `BurstCompiler.IsEnabled == false` reported crossovers of 256 and 1,024. Those
+were **refused rather than adopted**, on the argument that Burst speeds the serial arm far more than
+it speeds scheduling overhead, so the true crossover had to be *higher*. Measurement confirmed it:
+serial `ns/entity` fell from ~535 to 1–13 — roughly two orders of magnitude — and the crossovers rose
+to 4,096–65,536.
+
+Adopting 256 would have scheduled every job from 256 entities upward while measuring 0.4×–0.7× in
+exactly the AOI-bounded range this package operates in: every frame made worse to win a case nobody
+reaches.
+
+### Fixed
+
+`MoveTowardJob`'s benchmark row is credible again — 73 → 5.5 ns/entity monotonically, instead of
+~585 for three sizes and then a 58× cliff. **Nothing about the job changed**; the fix was statistical,
+which is worth recording because the row looked like a workload bug and was a measurement bug.
+
+### Unverified — and a live risk from outside this package
+
+**The backend now runs multi-rate: critical 60 Hz, world 15 Hz**, with `tick_rate` on
+`JoinTokenResponse`. This package cannot consume it, and the chain is broken in two places upstream:
+
+- `com.cuvara.netcode` v0.10.4's `JoinTokenResponse` has **no `TickRate` field**, so the value is
+  dropped at parse.
+- `LocalMovePredictor` has **no tick-rate setter** — only `SetServerSpeed`. `PredictionSettings.TickRate`
+  is fixed at construction.
+
+So `Samples~/NetworkedPrediction` constructs the predictor with `GameConstants.DefaultTickRate`, which
+is **15**. If inputs are now drained and integrated at 60 Hz server-side, replay uses a `dt` four
+times too large and every reconcile overshoots — `PredictionSettings` itself says a tick-rate mismatch
+"scales every predicted step by the ratio". **This is the speed bug again, with a larger multiplier
+and no way to fix it from this package.** The moment netcode surfaces the wire value and adds a setter,
+`LocalPredictionSystem` feeds it in one branch beside the existing `SetServerSpeed` call.
+
+## [0.20.0] - 2026-08-15
+
+### The benchmark refuses to print a table when Burst is off
+
+A 12-core run on the target machine produced a clean six-row table — and `BurstCompiler.IsEnabled:
+False` one line above it. 535 ns/entity for a `RotateY` is the managed path; the `ns/entity` column
+caught it, and the table was still nearly read as real. **A quotable-looking table under a
+`burst=False` line is the same shape as a gate reporting green over zero tests**, so the guard now
+skips the test and prints nothing instead.
+
+It **tries to fix the condition before giving up**: `BurstCompiler.Options.EnableBurstCompilation =
+true`, then re-checks. The setter coerces back to false when `ForceDisableBurstCompilation` is set,
+which is exactly what separates the two cases, and the skip message says which one you are in.
+
+### Why Burst was off, read out of Burst's own source
+
+`BurstCompilerOptions`' static constructor sets `ForceDisableBurstCompilation` for **four** reasons
+and no others:
+
+| Cause | Overridable from script? |
+|---|---|
+| `--burst-disable-compilation` command-line argument | no |
+| non-empty `UNITY_BURST_DISABLE_COMPILATION` env var | no |
+| `ENABLE_CORECLR` in the Editor | no |
+| `CheckIsSecondaryUnityProcess()` — includes `AssetDatabase.IsAssetImportWorkerProcess()` | no |
+
+None of those was present on the machine that ran it. The remaining cause is the Editor's own
+**Jobs > Burst > Enable Compilation** menu toggle, which is per-machine, **persists across sessions,
+and has no command-line override** — a batchmode run silently inherits whatever it was last left at.
+
+**So the honest position: this measurement needs the toggle on, and that is a human action in the
+Editor.** The guard now makes a run with it off produce a skip and an explanation rather than a
+table, so the next person does not rediscover this by nearly quoting a wrong number.
+
+Synchronous compilation is also requested (`EnableBurstCompileSynchronously`), because Burst compiles
+asynchronously by default and the warmup loop would otherwise measure the managed path on the way in.
+
+### Not guarded, deliberately
+
+`BothSchedules_ProduceBitIdenticalResults` runs regardless. Determinism is a property of the schedule,
+not of the compiler — it is the assertion still worth having when Burst is off, and it is the one that
+ran and passed on the machine where every timing was invalid.
+
+### The numbers that are sound, and the ones that are not
+
+From the 12-core run: **the speedup ratios are valid** — both arms ran under identical conditions, so
+`SpinJob` at 5.98× and `MoveBounceJob` at 6.47× at 65,536 are real parallel wins, plateauing near 6 on
+12 cores as memory bandwidth and scheduling begin to bind.
+
+**The crossovers from that run are not, and must not go into docs**: 256 and 1,024 entities were
+measured on the managed path, where the serial arm is ~30× slower than it will be with Burst on. Burst
+speeds the serial arm far more than it speeds scheduling overhead, so **the real crossover is
+substantially higher**. `ParallelScheduling.MinimumEntities` stays at 16,384 — still the CI figure, and
+still explicitly provisional — rather than being lowered to a number measured without the compiler.
+
+## [0.19.0] - 2026-08-15
+
+**The measurement contradicted the change, so the change moved.** 0.17.0 scheduled five simulation
+jobs with `ScheduleParallel` unconditionally. Measured on 4 cores, median of 41 interleaved pairs:
+
+```
+                   64      256     1024     4096    16384    65536
+  SpinJob        0.40x    0.41x    0.54x    0.90x    1.63x    1.69x
+  MoveBounceJob  0.73x    0.79x    0.91x    0.41x    0.98x    0.88x
+  HealthDeathJob 0.67x    0.58x    0.73x    0.88x    0.45x    0.96x
+  TimeToLiveJob  0.60x    0.46x    0.39x    0.55x    0.59x    0.88x
+```
+
+**Below a few thousand entities, every job is slower scheduled than run**, and three of the four
+never overtook their serial form at any count tested. Scheduling overhead is fixed; the work is not.
+
+That is not academic here: this package's entity count is bounded by the server's area of interest —
+tens to low hundreds — so shipping unconditional `ScheduleParallel` would have made the common case
+worse in exchange for a win nobody in this project reaches. It is the spatial-index mistake with
+different ceremony.
+
+### Changed — the schedule is chosen from the measurement
+
+Every simulation system is still an `IJobEntity`. Each now picks its schedule per update:
+
+```csharp
+state.Dependency = _query.CalculateEntityCount() >= ParallelScheduling.MinimumEntities
+    ? job.ScheduleParallel(state.Dependency)
+    : job.Schedule(state.Dependency);
+```
+
+`ParallelScheduling.MinimumEntities` is **16,384** — `SpinJob`'s measured crossover, and explicitly
+nothing more. The other three have unknown, certainly higher thresholds; one constant is a
+deliberate simplification documented as a floor against the measured pessimisation, not a per-system
+tuning. The crossover moves with core count, so this is a compile-time approximation of a runtime
+property, chosen conservatively: serial slightly past the true crossover costs a little throughput,
+parallel below it costs on every frame at the counts this package actually runs.
+
+### One benchmark row is not credible, and says so
+
+`MoveTowardJob` reports ~585 ns/entity at 1,024, 4,096 and 16,384 and then **10.1** at 65,536 — a
+58× drop no scheduling effect produces. That row is left in place with a comment rather than deleted:
+a visibly broken measurement is more useful than a missing one, and the job's schedule is driven by
+the shared threshold rather than by that number. It needs re-measuring on real hardware before
+anyone trusts a `MoveToward` figure.
+
+`SpinJob`, `HealthDeathJob` and `MoveBounceJob` all show flat ns/entity across the top three sizes,
+which is the internal consistency check that makes their rows usable.
+
+### Unverified
+
+The threshold is one machine's number, on four cores, from a shared runner. The **ratio** is credible
+after interleaving; the absolute crossover is not portable. A filtered PlayMode run on the target
+machine would give a real value, and is the one thing that would justify changing the constant.
+
+## [0.18.0] - 2026-08-15
+
+Completes the parallelism bar: every core system now either runs as a parallel job or carries a
+written, evidenced reason it does not, and the measurement is trustworthy enough to quote a ratio.
+
+### Corrected — a cause I asserted without checking
+
+0.17.0 blamed the 90x run-to-run timing variance on "three Unity containers sharing one host". That
+is wrong: **each GitHub Actions job runs on its own runner VM.** The variance is ordinary
+shared-cloud noise, and the fix is statistical rather than structural. Recording the correction
+because the original claim was exactly the kind of confident wrong diagnosis this package keeps
+paying for.
+
+### The benchmark can now be trusted for a ratio
+
+Timing all serial iterations and then all parallel ones lets a stall skew one column — which is how
+the same case reported 0.88 ms in one run and 80.07 ms in the next. Now:
+
+- **arms interleaved A/B/A/B**, so a stall lands in both halves of a pair;
+- **median of 41 pairs**, which discards the pairs that were hit;
+- **all five parallelised jobs measured**, not two standing in for five;
+- the structural pair creates and plays back its command buffer **inside** the measured region,
+  because recording through a `ParallelWriter` is part of what the parallel schedule costs and
+  excluding it would flatter the result;
+- `Health` and `TimeToLive` seeded so nothing is destroyed — the realistic steady state is a scan
+  over live entities, and a benchmark that deletes its own working set measures a shrinking one.
+
+Absolute timings on a shared runner are still not quotable. The **ratio and the crossover** are.
+
+### The complete system inventory, which is the actual pass criterion
+
+| System | Schedule | Why |
+|---|---|---|
+| `SpinSystem` | `ScheduleParallel` | |
+| `MoveBounceSystem` | `ScheduleParallel` | |
+| `MoveTowardSystem` | `ScheduleParallel` | |
+| `HealthDeathSystem` | `ScheduleParallel` + `ParallelWriter` | |
+| `TimeToLiveSystem` | `ScheduleParallel` + `ParallelWriter` | |
+| `EntityViewTransformSyncSystem` | **already parallel** | Bursted `IJobEntity` collects blittable samples; a flat main-thread loop applies them, because `UnityEngine.Transform` is main-thread-only |
+| `EntityViewSpawnSystem` | main thread | `EntityViewRegistry.Spawn` instantiates a pooled `GameObject`; Unity's object API is main-thread-only by contract, not by convention |
+| `EntityViewDespawnSystem` | main thread | same managed pool call, plus a structural removal |
+| `NetworkViewCommandSystem` | main thread | the drain is ordered by definition, and two `SetState`s for one id can share a drain where "last wins" — splitting races two workers on one component, and de-duplicating first is a serial pass over the same data |
+| `LocalPredictionSystem` | main thread, **must stay** | one predictor with an order-dependent input ring buffer; `Reconcile` replays the whole backlog in sequence. Parallelising yields a plausible wrong position rather than a crash, for nothing, since exactly one entity is predicted |
+
+Five parallel, one already parallel, four with reasons. No entry is "did not get to it".
+
+### The hybrid half, audited rather than assumed
+
+- **Zero `MonoBehaviour` in shipping code.** `grep -rln ": MonoBehaviour" Runtime*` returns nothing;
+  the only ones in the repository are in `Samples~`, which is presentation by definition.
+- **No simulation state outside ECS.** `EntityViewRegistry` is a plain `sealed class` holding an
+  id→`GameObject` map — a presentation-side lookup, not simulation state.
+- **The seam is one-directional**: entities carry `EntityViewLink` (an `int` handle, blittable,
+  readable from a job); nothing reads a `GameObject` back into simulation. The handle exists
+  precisely so the component stays unmanaged.
+
+### Unverified
+
+**The crossover numbers still come from a shared runner.** The interleaved median makes the ratio
+credible; it does not make the absolutes real, and the crossover point moves with core count. One
+filtered PlayMode run on the target machine settles it — that remains the only way to get figures
+worth acting on.
+
+## [0.17.0] - 2026-08-15
+
+### The core is actually multithreaded now
+
+Every pure simulation system was `[BurstCompile]` `ISystem` with a `SystemAPI.Query` loop —
+**optimised machine code on exactly one thread**. There was not a single `IJobEntity` or
+`ScheduleParallel` in the package. The foundation was right; the parallelism was never built on it.
+
+Five systems converted to `IJobEntity` scheduled with `ScheduleParallel`:
+
+| System | Job | Structural |
+|---|---|---|
+| `SpinSystem` | `SpinJob` | no |
+| `MoveBounceSystem` | `MoveBounceJob` | no |
+| `MoveTowardSystem` | `MoveTowardJob` | no |
+| `HealthDeathSystem` | `HealthDeathJob` | `EntityCommandBuffer.ParallelWriter` |
+| `TimeToLiveSystem` | `TimeToLiveJob` | `EntityCommandBuffer.ParallelWriter` |
+
+`state.Dependency` is threaded in and out rather than completed inside each system: completing there
+would serialise the job against every other system in the frame and throw away most of the benefit.
+
+**The sort key is `[ChunkIndexInQuery]`, and that is a determinism decision, not a style one.**
+Command-buffer playback replays in sort-key order. Worker threads finish in whatever order the
+scheduler gives them, so without a stable key the playback order — and the outcome — would vary run
+to run on identical input.
+
+### Two systems deliberately left single-threaded
+
+Examined, not skipped, and the reasoning is in the code where the next person will look.
+
+**`NetworkViewCommandSystem`** — the queue drain is ordered by definition (spawn precedes its first
+state, despawn follows its last), so a parallel drain would have to rebuild the FIFO with a sequence
+number. Worse, two `SetState`s for one id can arrive in a single drain and the correct result is
+"last wins" — splitting the apply would race two workers on one component, and de-duplicating first
+is a serial pass over the same data the serial apply already walks. The work is AOI-bounded anyway:
+tens of commands per frame, not thousands.
+
+**`LocalPredictionSystem`** — one predictor instance owns an input ring buffer, and `RecordInput`,
+`Reconcile`, `Advance` are order-dependent against it; `Reconcile` replays the whole unacknowledged
+backlog in sequence. Parallelising would not crash, it would produce a plausible wrong position —
+the failure shape this project has paid for most — in exchange for nothing, since exactly one entity
+is ever predicted.
+
+### Measured, not asserted
+
+`ParallelSchedulingBenchmark` (PlayMode) times **the same job two ways** — `Run()` versus
+`ScheduleParallel().Complete()` — across 64 → 65,536 entities and prints a table with the crossover
+point. Same Bursted code over the same chunks both ways, so what is measured is worker parallelism
+minus scheduling overhead, and nothing else. Comparing a job against a hand-written loop would fold
+in codegen differences and measure the wrong thing.
+
+**No timing is asserted.** A performance assertion on a shared CI runner is a flaky test, and a flaky
+test inside a gate is worse than no measurement — it teaches people to re-run until green. The
+numbers are logged for reading; the assertions are about correctness.
+
+`BothSchedules_ProduceBitIdenticalResults` is the one that had to be earned: identical input through
+both paths, **bit-identical** output, eight steps of integration. A parallel job whose result depends
+on iteration order is a bug that reproduces about one run in ten, and these systems produce positions
+a predictor may later reconcile against. "Approximately equal" is how a drift bug survives its own
+test.
+
+### Measured — and the measurement environment failed, which is itself the result
+
+**CI cannot measure this, and the benchmark proved it rather than papering over it.** Two runs of
+identical code, same commit, gave for the same 65,536-entity `SpinJob` case:
+
+```
+run 1:  Run() 0.88 ms   Parallel 0.57 ms    (13 ns/entity)
+run 2:  Run() 80.07 ms  Parallel 72.60 ms   (1221 ns/entity)
+```
+
+**90× apart.** The cause is in this workflow: it runs three Unity jobs concurrently, each requesting
+four CPUs from one host, so a benchmark measures contention as much as parallelism. `ns/entity` is
+the tell — a trivial `RotateY` costing a microsecond per entity is not measuring compute.
+
+So **no speedup figure from CI is quotable**, and none is quoted. What survives:
+
+- **The shape is consistent across both runs**: parallel loses at small counts and wins at large
+  ones, which is the crossover behaviour the design predicts. Run 1 put `SpinJob`'s crossover at
+  4,096 entities.
+- **`BurstCompiler.IsEnabled: True`** in the run, and Burst exposes no per-job "was this compiled"
+  query — so `ns/entity` is the only available cross-check, and it is reported for exactly that.
+- **The correctness assertion passed in every run**, and it is machine-independent:
+  `BothSchedules_ProduceBitIdenticalResults`, eight integration steps, bit-identical output.
+
+The benchmark now prints a warning saying its own numbers are not quotable from CI. **Running it on
+the real machine is one filtered PlayMode run** and is the only way to get figures worth acting on.
+
+### Unverified
+
+Everything about performance. The conversion is correct — determinism asserted, both structural
+systems recording through a parallel writer with a stable sort key — but **whether it is faster on
+the target hardware is unmeasured**, and the CI numbers are evidence about the runner rather than
+about the code.
+
+## [0.16.1] - 2026-08-15
+
+Two corrections that missed the 0.16.0 merge by minutes — the branch was merged while this commit
+was still in flight, which orphaned it from CI and from the release. Content unchanged from what
+0.16.0 describes; this is the version that actually carries it.
+
+## [0.16.0] - 2026-08-15
+
+### Fixed — the prediction driver now feeds the server's speed
+
+`LocalPredictionSystem` reads the local entity's speed from `WorldState` and calls
+`LocalMovePredictor.SetServerSpeed` immediately before each `Reconcile`.
+
+**Nothing failed without this, which is the point.** `PredictionSettings.Speed` is fixed at
+construction, and a client integrating at a different rate from the server desyncs every tick with no
+error on either side. By eye it is indistinguishable from a badly tuned predictor, so the debugging
+goes to the wrong place. The wire has carried per-entity speed since netcode 0.8.0; until now the
+DOTS path ignored it and ran on whatever literal the consumer constructed with.
+
+**Why it belongs in the driver rather than in the sample or on the anchor:**
+
+- Not on `ReconciliationAnchor` — the anchor is written from `IEntityView.SetState`, which carries no
+  speed. The wire value exists only on `WorldState`.
+- Not left to the consumer — `WorldViewBinder` feeds it, but **only in its predictor overload**, which
+  netcode's own docs tell the DOTS path not to use: *"hand the predictor to that system instead"*.
+  That leaves this system as the only thing that can.
+- Speed is set **before** position, matching the binder. `Reconcile` replays every unacknowledged
+  input, so replaying at a stale speed integrates the whole backlog at the wrong rate.
+
+A non-positive wire value means "not sent" and is ignored inside `SetServerSpeed`, so a server that
+never populates it leaves the constructed fallback standing rather than collapsing speed to zero.
+
+### Changed
+
+- The sample's `moveSpeed` is now `fallbackMoveSpeed` — used before the first snapshot and nothing
+  more. It no longer has to match the server, which removes a literal that was **only correct until
+  someone changed a server constant, and would then have failed silently**.
+- The overlay shows `speed`, so a mismatch is visible rather than inferred.
+- CI's netcode row installs **v0.9.1** (was 0.6.2). The gate was sound — the `versionDefines`
+  expression is `>=` — but the row was validating against an older netcode than the project runs.
+
+### Fixed — three `versionDefines` minimums that were understated
+
+Found by auditing every pin after the stale `sgl` one, rather than by anything failing.
+
+`Cuvara.DOTS.Netcode.Prediction`, its tests and the sample declared `com.cuvara.netcode >= 0.6.0`
+(the sample, `0.6.2`) — while now calling `SetServerSpeed` and `EffectiveSpeed`, **which arrived in
+0.8.0**. On netcode 0.6.x the define would fire, the assemblies would compile, and they would fail
+with `CS1061`. That is **broken, not absent** — the exact inversion of the property those constraints
+exist to guarantee, introduced by this release's own fix. All three now say `0.8.0`.
+
+The adapter and its tests stay at `0.4.0`: they call nothing newer, and a minimum should be the
+version an assembly actually needs rather than the newest one available.
+
+### Fixed — the all-zero diagnostic
+
+When **no** result XML is produced, every floor reported `actual 0`, which reads exactly like every
+assembly vanishing. The real cause is almost always one compile error: a single test assembly that
+fails to build collapses the whole EditMode run. The 0.13.0 entry predicted this trap and it then
+cost someone twenty minutes for real, so the script now says so explicitly before printing any floor,
+and points at version pins as well as `defineConstraints` — a package pinned behind what another
+package requires fails inside *that package's* source, not in ours.
+
+### Tests
+
+16 in `Tests/Editor.Prediction/` (was 14). Two new, and they exist because nothing else can fail when
+this is wrong:
+
+- the wire's speed reaching the predictor and **winning over** the constructed value;
+- a zero wire speed leaving the fallback in place rather than freezing prediction while every counter
+  still looks healthy.
+
+### Measured
+
+Prediction removes **~72 ms** of input-to-visible on a live local server — median 0.1 ms on, 72.0 ms
+off, 20 samples per configuration. Not keypress-to-visible: keyboard, OS input stack and display sit
+outside the engine, but those legs are identical in both runs, so the difference is sound.
+
+That measurement was taken with netcode's own harness, not this sample. **This package's sample still
+has not been run against a live server.**
+
+## [0.15.0] - 2026-08-14
+
+### Added
+
+- **`Samples~/NetworkedPrediction`** — the first thing that drives `DotsEntityView` and the
+  prediction driver **against a real server**. Their unit tests assert wiring with hand-built
+  snapshots; nothing until now proved that a server's actual entity types resolve, that its
+  coordinates arrive intact, or that exactly one thing writes `LocalTransform` under real traffic.
+
+  No prefabs, no Addressables, no DI: `PrimitiveViewProvider` pools Unity primitives so the sample
+  drops into an empty scene, and it pools for real so the recycle path is exercised rather than
+  hidden behind Instantiate/Destroy. The catalog is built in code — the same data a project would
+  author as assets, typed.
+
+  Tick rate and map bounds come from `GameConstants`, not from literals in the sample. A literal copy
+  compiles, passes, and then disagrees with the server the moment the shared package moves — the trap
+  `SimConstants` was written to avoid, and a sample is not exempt from it.
+
+  **Input is sampled and sent by the sample, not by the driver.** The tick recorded must be the tick
+  that went to the server; a driver inventing its own input builds a buffer the server never saw.
+
+  The overlay is the deliverable, not decoration. `writer:` reads `predictor` or `adapter` for the
+  local entity, and it must never be ambiguous: both writing is the failure `PredictedTransform`
+  exists to prevent, and neither writing is a frozen avatar. Toggling **Prediction Enabled** flips it,
+  which is the A/B this sample is for.
+
+### Changed — an API gap the sample exposed
+
+`ViewConfig.Configure` and `ViewArchetypeLibrary.Configure` are **public**. Both docstrings already
+said they were "for tests and for code that generates configs" while being `internal`, so no consumer
+could ever be the second kind of caller. Building this sample is what surfaced the contradiction: a
+package whose whole premise is spawning from **server snapshots at runtime** must let a consumer
+assemble a catalog without authored assets, and the fields are `[SerializeField] private`, so there is
+no other route outside the Editor.
+
+Additive — nothing that compiled before stops compiling. It is also the second time a sample has paid
+for itself before running: the first was catching that `Samples~` compiles nowhere at all.
+
+### Samples are now compiled by CI
+
+**`Samples~/` is excluded from Unity import, so a sample compiles nowhere by default.**
+`com.cuvara.netcode`'s DOTS sample is in exactly that state: 185 tests green while
+`DOTSNetworkBridge.cs` is read and never built. A sample nothing compiles is a sample that rots, and
+this one would have rotted the same way.
+
+Every Unity job now copies `Samples~/.` into `Assets/` before running, and asserts per configuration:
+
+| | netcode absent | netcode 0.6.2 | no optional packages |
+|---|---|---|---|
+| `Samples.HybridViews.dll` | present | present | present |
+| `Samples.NetworkedPrediction.dll` | **absent** | **present** | **absent** |
+
+`HybridViews` needs no optional package and must always build. `NetworkedPrediction` is gated on both
+defines, so its absence in two of three rows is itself an assertion — the same falsifiable shape as
+the assembly rows.
+
+### Known, deferred
+
+The `.meta` generator emits guid-only stubs. Unity rewrites them on import with its defaults, which is
+harmless for folders, `.cs` and `.md`, and is what those types want. **It is not harmless in general**:
+a stub meta does not mean "no settings", it means "every default" — netcode's `Google.Protobuf.dll`
+shipped a stub, imported with `validateReferences: 1`, and that refused the plugin, poisoned
+`Cuvara.Netcode.Runtime` and produced `0/0 Passed` under a green check. This package ships no binary
+assets today. If it ever does, the generator must emit a real importer block for that type and
+**fail** on a type it does not know how to write, rather than emitting a stub.
+
+### Not proven
+
+**The sample has not been run.** No Unity Editor was available on this side, and it needs a live
+backend plus interactive input. CI proves it *compiles* in the configuration that matters, which is
+strictly less than proving it works. It also does not measure keypress-to-visible — the number the
+prediction effort is actually aimed at — which needs a capture rig rather than an overlay.
+
+## [0.14.0] - 2026-08-14
+
+### Added — a third CI configuration
+
+`Unity Tests (no optional packages)`: neither `com.cuvara.netcode` nor
+`com.rpgmmo.shared-gamelogic`.
+
+**Until this row existed, every job installed `com.rpgmmo.shared-gamelogic`**, so the absent path of
+`CUVARA_SHARED_GAMELOGIC` had never once been taken. That gate was asserted, never proven — the shape
+of a gate that quietly never fires.
+
+It is also the only row that can prove `Cuvara.DOTS.Netcode.Prediction` is gated on **both** defines
+rather than only on netcode: the assembly must be absent here for a reason that is not the netcode
+one. A row that can only fail one way is worth less than one that can fail two.
+
+| | netcode absent | netcode 0.6.2 | no optional packages |
+|---|---|---|---|
+| `Tests.Editor` | 30 | 30 | 30 |
+| `Tests.Runtime` | 23 | 23 | 23 |
+| `Tests.GameLogic` | 41 | 41 | **0** |
+| `Tests.Netcode` | 0 | 47 | 0 |
+| `Tests.Prediction` | 0 | 14 | 0 |
+| `Cuvara.DOTS.GameLogic.dll` | present | present | **absent** |
+| `Cuvara.DOTS.Netcode.dll` | absent | present | absent |
+| `Cuvara.DOTS.Netcode.Prediction.dll` | absent | present | absent |
+
+### Added — two tests
+
+- **`TheDependencyRunsOneWayOnly`** — neither `Cuvara.DOTS.Runtime` nor `Cuvara.DOTS.Netcode` may
+  reference `Cuvara.DOTS.Netcode.Prediction`. If either ever did, the standalone-install property
+  would be gone, and it would go *quietly*: a project with both optional packages compiles either
+  way, so only a project missing one would notice — which is to say, only the third CI row.
+- **`TheTwoAnchorFields_Correspond_UnderAnIdentityMapping`** — `Position` and `ServerPosition`
+  describe the same point in different spaces, asserted under `XZPlane` where the mapping is a pure
+  swizzle and correspondence is exact. It is explicitly **not** licence to derive one from the other;
+  `ServerPosition_SurvivesAMappingThatWouldNotRoundTrip` is the test that forbids that, and the two
+  are meant to be read together.
+
+### Documented
+
+The CI header now records, as a standing property rather than an incidental one, that **every job
+installs the minimum its configuration names and hand-feeds nothing on a dependency's behalf** — with
+the two findings that property has already produced about `com.cuvara.netcode`, and an instruction not
+to "simplify" a failing row by adding the convenient dependency. A gate that supplies what the package
+under test failed to declare is not a gate.
+
+### Changed
+
+- CI installs netcode **v0.6.2**, which adds `PredictionSurfaceContractTests` pinning the six members
+  that cross the seam. The driver was written against the tagged package and its four call sites —
+  `Reconcile(Vec2, long)`, `Advance(float)`, `Position`, `IsEnabled` — match the pinned signatures.
+
+### Found in another package
+
+**`com.cuvara.netcode` 0.6.2 still cannot be installed standalone**, and this is the third undeclared
+dependency in it: `Cuvara.Netcode.Runtime.asmdef` references `Shared.GameLogic` with no
+`defineConstraints` gate, while `package.json` declares only `com.cysharp.unitask` and two Unity
+modules. `Shared.GameLogic` is a git-URL package, and the `gitDependencies` key netcode carries is not
+a UPM field — UPM ignores it. So every consumer must hand-add that git URL, and netcode's own CI does
+exactly that in its bootstrap manifest, which is why the gap is invisible there.
+
+## [0.13.0] - 2026-08-14
+
+### Added
+
+- **`Cuvara.DOTS.Netcode.Prediction`** — the DOTS half of client-side prediction. Reads the local
+  entity's `ReconciliationAnchor`, drives netcode's `LocalMovePredictor`, owns `PredictedTransform`,
+  and writes `LocalTransform`.
+  - `DotsPredictionBootstrap.Install(world, predictor, worldState)`.
+  - `LocalPredictionReference` — managed singleton carrying the predictor and the `WorldState` that
+    supplies `AckTick`.
+  - `LocalPredictionSystem` (internal) in the new `PredictionSystemGroup`.
+- **`SnapshotApplyGroup` and `PredictionSystemGroup`** in the core assembly, both inside
+  `NetcodeSystemGroup`, prediction ordered after snapshot apply.
+
+### The seam, and why the split falls where it does
+
+netcode owns the algorithm — input buffer, replay through `TryMove`, smoothing. This package owns
+everything ECS-shaped: reading the anchor, supplying the tick, claiming and releasing the marker,
+writing the transform. A DOTS system in netcode would mean netcode depending on Entities, and the
+arrow between these packages is one-way.
+
+**A third assembly, gated on both `CUVARA_NETCODE` and `CUVARA_SHARED_GAMELOGIC`**, rather than code
+added to `Cuvara.DOTS.Netcode`. The driver names `Vec2`, so it needs `Shared.GameLogic`; widening the
+adapter's gate to require it would change what both CI rows mean and break one of the two
+standalone-install properties CI now guards. The cost is one more assembly; the alternative was
+coupling two independent optional dependencies into one.
+
+### Two ordering groups instead of one `[UpdateAfter]`
+
+Prediction must run **after** snapshot application: the anchor it reconciles against is written
+there, and reconciling first uses the previous frame's authoritative position — a one-frame-stale
+correction that reads as mistuned prediction rather than as an ordering bug, and gets chased in the
+wrong package.
+
+Expressing that with `[UpdateAfter(typeof(NetworkViewCommandSystem))]` would have needed an
+`InternalsVisibleTo` grant and turned an internal system name into a cross-assembly ordering promise —
+exactly what keeping systems internal is meant to prevent. Two public groups say the same thing
+without naming a system, which is the package's stated contract everywhere else.
+
+Both groups are created empty by `DotsViewBootstrap`, so a consumer's `[UpdateAfter]` resolves in a
+project with neither optional package installed and does not change meaning when they arrive.
+
+### The marker has two failure modes, not one
+
+`PredictedTransform` says "something else owns `LocalTransform`". 0.10.0 guarded the case where it is
+absent and the adapter keeps writing. This release guards the other side: **the marker present with
+nothing writing** leaves the transform with *no* writer at all and freezes the avatar. It is reachable
+three ways, and each has a test:
+
+- a predictor with unusable settings (`IsEnabled == false`) — the driver releases rather than claims;
+- a predictor that becomes disabled mid-session — the driver releases a marker it had claimed;
+- `DotsPredictionBootstrap.Uninstall` — removes the marker from every entity before dropping the
+  reference.
+
+All three surface in a build rather than in CI, because a disabled predictor is a runtime
+configuration. `DisabledPredictor_LeavesTheAdapterDrivingTheTransform` asserts the positive half too:
+not claiming is only correct if the adapter is still writing, and asserting the marker's absence alone
+would pass on a frozen avatar.
+
+### Deviation worth flagging
+
+`SimConversions` was the instructed conversion site, and it is `internal` to `Cuvara.DOTS.GameLogic` —
+a differently gated assembly. Reaching it meant widening that assembly's public API or an
+`InternalsVisibleTo` grant coupling two independent gates, for one line. The driver keeps a single
+private conversion site instead, which is what "convert at the boundary, not once per call" asks for.
+
+### Tests
+
+12 in `Tests/Editor.Prediction/`, driven through the public groups. Adapter floor stays 47; the new
+assembly's floor is 12, and `==0` in the netcode-absent configuration.
+
+### Unverified
+
+The driving system has **never run against a live server**. Its tests assert wiring — which
+coordinates reach the predictor, when the marker is claimed and released, that the mapping is shared
+with the adapter — not that prediction feels better. Keypress-to-visible is a measurement, and it has
+not been taken.
+
+## [0.12.0] - 2026-08-14
+
+### Added
+
+- **`ReconciliationAnchor.ServerPosition`** (`float2`) — the server's own `(x, y)`, stored exactly as
+  `IEntityView.SetState` delivered it, before `SnapshotSpaceMapping` touches it.
+
+  ```csharp
+  public struct ReconciliationAnchor : IComponentData
+  {
+      public float3 Position;        // world space — what LocalTransform wants
+      public float2 ServerPosition;  // verbatim (x, y) — what a predictor rewinds to
+  }
+  ```
+
+**The world-space field could not do this job, and 0.10.0 claimed it could.** That release said the
+anchor was "already through `SnapshotSpaceMapping`, so it needs no further conversion" — true for
+writing `LocalTransform`, which was the only use then, and false for feeding a predictor. The shared
+simulation clamps against map bounds expressed in **server** coordinates, and
+`LocalMovePredictor.Reconcile` takes a server-space `Vec2` for that reason. A predictor handed only
+the world-space value has to get back, and `SnapshotSpaceMapping` has `ToWorld` with no inverse.
+
+**Adding an inverse was the rejected option.** `dot(p - Origin, Right)` is one line, and a float round
+trip through a projection is **not bit-exact**: the recovered value differs in the last place, replay
+integrates from a position the server never held, and the outcome is sub-ULP drift in the one system
+whose entire justification is bit-exactness — most likely diagnosed as FMA contraction, in a
+different package, by someone who never saw the inverse. Eight bytes per mirror entity removes the
+possibility instead of making it unlikely. `SnapshotSpaceMapping` still has no inverse on purpose:
+adding one would put the trap back within reach.
+
+The settling argument is the anchor's own docstring — it exists as *"the value a predictor rewinds
+to"*, and a predictor rewinds in the space it simulates in.
+
+At spawn `ServerPosition` is `float2.zero` rather than a mapped value, which agrees with `Position`
+being `mapping.Origin`: both say "the server has said nothing yet".
+
+### Changed
+
+- CI's netcode row now installs **v0.6.0** and the adapter floor is **47** (was 44).
+
+### Tests
+
+47 in `Tests/Editor.Netcode/`. Three new: the raw field carried verbatim alongside the mapped one;
+the raw field unaffected by a hostile mapping with a `1e7` origin offset — the case where a round trip
+would lose precision, asserted to prove the field does not depend on the mapping at all; and both
+fields agreeing at spawn. A fourth existing test now also asserts `ServerPosition` survives while
+`PredictedTransform` suppresses the transform write, which is the exact combination a predictor runs in.
+
+### Corrected from 0.9.0
+
+`"[0.4.0,)"` was named as the fallback if the bare `versionDefines` expression did not work. It is
+**invalid syntax** — Unity throws `ExpressionNotValidException`. The bare `"0.4.0"` form is correct
+and means `>=`, confirmed in CI in both directions and in the Unity project.
+
+## [0.11.0] - 2026-08-14
+
+CI/CD, for the first time. This repository had no `.github/` at all.
+
+### Added — delivery
+
+- **`release.yml`**, driven by a `v*` tag and **only** by a tag. No branch trigger: `npm publish`
+  cannot be undone, and a bad version can only be superseded, never withdrawn. Pushing the tag is the
+  last human gate before a permanent artifact exists.
+  - **`Verify package.json version matches tag`**, a hard `exit 1`. Content checked against label by
+    machine — the defect class that has cost this workspace the most.
+  - Release notes are `awk`-extracted from the `## [VERSION]` CHANGELOG heading, which makes the
+    CHANGELOG load-bearing rather than decorative: a missing or misspelled heading ships empty notes.
+    A warning fires when the extraction comes back empty.
+  - **`publish` job**, `needs: release`, publishing **`@cuvara/dots`** to GitHub Packages. The UPM
+    name in `package.json` is `com.cuvara.dots`; GitHub Packages requires an npm scope, so the name is
+    rewritten at publish time only and never committed. The rewrite asserts the expected input name
+    first, so a rename upstream fails the publish instead of silently publishing something else.
+- **`release-reminder.yml`** — never tags, never publishes; only notices that `main` carries an
+  untagged version. Three states: tag on this commit (notice), tag elsewhere so commits since are
+  unreleased (warning), no tag (warning with the exact commands). Needs `fetch-depth: 0`; a shallow
+  fetch has no tags and would make every version look untagged. **It matters more here than in
+  netcode**: the consuming project takes this package as a git *subtree*, so nothing downstream breaks
+  when a version goes untagged and nothing downstream notices either.
+
+**On publishing at all**: the project consumes this package as a subtree, so a registry artifact has
+no current consumer. That was raised and overruled — publishing is wanted, and the argument is
+recorded here rather than re-litigated. The consequence is what the gate section is about: publishing
+turns every tag into a permanent artifact, so the test floors stop being hygiene and become the only
+thing between an untested commit and an immutable version.
+
+### Added — the gate
+
+- **CI, for the first time.** This repository had no `.github/` at all. That was *honest* — a
+  repository with no checks cannot mislead anyone — but it meant every verification the package ever
+  had came from one person's Editor, and the numbers quoted in earlier releases were the consuming
+  project's, not this package's.
+
+  The gate deliberately does **not** assert "the test runner exited zero". A green run over **zero
+  tests** is worse than no gate: it converts the absence of verification into a positive signal and
+  spends the reviewer's budget for them. That is not hypothetical — `com.cuvara.netcode`'s gate
+  reported `No tests were executed. 0/0 Passed` under a green check while a breaking interface change
+  went through it.
+
+  **This package is unusually exposed to that failure, by its own design.** Two of its four test
+  assemblies are compiled out when their optional dependency is missing:
+
+  | Assembly | Vanishes without |
+  |---|---|
+  | `Cuvara.DOTS.Tests.Netcode` | `com.cuvara.netcode` >= 0.4.0 |
+  | `Cuvara.DOTS.Tests.GameLogic` | `com.rpgmmo.shared-gamelogic` |
+
+  Nothing fails when they vanish. "Absent beats broken" is the right rule for a *consumer* and a
+  dangerous one for a *gate*, and the workflow is where those two jobs are told apart.
+
+- **`.github/scripts/assert_test_floors.py`** — per-assembly test-count floors parsed from the NUnit
+  XML, never an exit code. `Assembly>=N` fails if the assembly ran nothing, which is what catches an
+  assembly compiled out of existence; `Assembly==0` is satisfied by an absent assembly, which is what
+  "correctly compiled out" looks like. Counts come from the `test-case` elements rather than the
+  suite's own `total`/`passed` attributes, because those vary across Unity and NUnit versions and a
+  missing attribute reads as zero — indistinguishable from the failure being checked for. A
+  non-passing case fails the run independently of any floor.
+- **`.github/scripts/test_assert_test_floors.py`** — 11 self-tests for the floor script, run in
+  `validate`, no Unity needed. The gate is a program and it was wrong once; case 7 is the regression
+  test for the `.dll`-suffix bug specifically, and one case asserts that a spec written `Foo.dll` is
+  **not** silently accepted, because normalisation happens on one side only — a spec that can be
+  written two ways will be written both ways.
+- **`.github/scripts/check_metas.py`** — every Unity-visible tracked file and folder must have a
+  committed `.meta`. Same failure family: a missing `.meta` disabled parts of this package for seven
+  releases without failing anything.
+
+### Two configurations, and one of them is not yet provable
+
+| Job | Asserts |
+|---|---|
+| `Unity Tests (netcode absent)` | `Cuvara.DOTS.Netcode.dll` **absent**; Editor >= 30, Runtime >= 23, GameLogic >= 8, **Netcode == 0** |
+| `Unity Tests (netcode 0.4.0)` | `Cuvara.DOTS.Netcode.dll` **present**; the same three, plus **Netcode >= 44** |
+
+The first automates the standalone-install check that had been carried by hand — the one a human
+stops re-running once it has passed twice. **The second cannot pass until `com.cuvara.netcode`
+v0.4.0 is tagged**, and is left red rather than trimmed to make the run green. A gate shaped to pass
+is the thing this whole file argues against.
+
+Floors are lower bounds, not headcounts: they stop an assembly vanishing, and do not need editing
+every time a test is added.
+
+### Also
+
+- The `pull_request` trigger fires on **every** base branch, not only `main`. netcode's fires only on
+  PRs into `main`, so a stacked PR — how this repo has actually been shipping, #5 based on #4 — is
+  ungated there.
+
+### Proven by running it, including the red run
+
+The scripts were exercised locally in both directions first (a missing `.meta` caught; floors
+passing, and failing on a compiled-out assembly, an empty artifacts directory, a missing directory,
+and a met floor with a failing test inside it). Then the workflow was landed with a **deliberately
+failing test**, because a gate that has only ever been green is indistinguishable from one that
+cannot fail.
+
+**The red run earned its keep immediately — it found a bug in the gate itself.** Unity names the
+NUnit Assembly suite after the built *file*, `Cuvara.DOTS.Tests.Editor.dll`, while the floor specs
+name the *assembly*. Every floor therefore read `actual 0` while 95 test cases had in fact executed
+and were printed two lines above. The bug failed **closed** — permanently red, never falsely green —
+but the obvious fix for a permanently red gate is to lower the floors, which would have produced
+exactly the useless gate this file argues against. Nothing but a real run would have surfaced it.
+
+Real counts observed, and the floors now match them: `Tests.Editor` 30, `Tests.Runtime` 23,
+`Tests.GameLogic` **41** — not the 8 a static `[Test]` grep suggested, because its `[TestCase]`
+source expands — and `Tests.Netcode` 44 once netcode resolves.
+
+The red run also confirmed two things that had only ever been argued: `Cuvara.DOTS.Netcode.dll` **is**
+absent with no netcode installed (the standalone-install check, now automated rather than carried by
+hand), and a single failing test does fail the run through the floor script independently of any
+floor.
+
+### Final numbers, both configurations green
+
+| Assembly | netcode absent | netcode 0.4.0 |
+|---|---|---|
+| `Cuvara.DOTS.Tests.Editor` | 30/30 | 30/30 |
+| `Cuvara.DOTS.Tests.GameLogic` | 41/41 | 41/41 |
+| `Cuvara.DOTS.Tests.Runtime` (PlayMode) | 23/23 | 23/23 |
+| `Cuvara.DOTS.Tests.Netcode` | **0, and required to be 0** | **44/44** |
+| `Cuvara.DOTS.Netcode.dll` | **absent** | **present** |
+
+Both halves of the `versionDefines` check are now automated and passing, which retires the manual
+"remove the package and look" pass as the only evidence.
+
+### Found in another package
+
+`com.cuvara.netcode` 0.4.0 has **two undeclared dependencies** that a rich host project happens to
+satisfy — so both are invisible in the Editor and appear only in a minimal project like CI.
+
+1. **VContainer.** `Cuvara.Netcode.Runtime.asmdef` lists it in `references` with no
+   `defineConstraints` gate and no `package.json` dependency. Fails loudly: `CS0246` from inside the
+   package.
+2. **`System.Runtime.CompilerServices.Unsafe`.** netcode ships `Runtime/Plugins/Google.Protobuf.dll`,
+   which needs it; netcode neither ships it nor depends on it. **Fails silently, and cascades:**
+   `Google.Protobuf` does not load → `Cuvara.Netcode.Runtime` does not load → `Cuvara.DOTS.Netcode`
+   does not load → `Cuvara.DOTS.Tests.Netcode` does not load → 44 tests do not run, **and the runner
+   still exits 0**. The real project masks it with four separate providers (`com.gdk.core`, Burst, a
+   NuGet folder, and R3's transitive `org.nuget.system.runtime.compilerservices.unsafe`).
+
+The second is very likely the root cause of netcode's own `No tests were executed. 0/0 Passed`: its
+test assembly references the same runtime assembly that fails to load, so its test count collapses to
+zero by the same cascade.
+
+Both are worked around in this workflow's manifest, with a comment saying they are someone else's
+defects rather than dependencies of this package.
+
+## [0.10.0] - 2026-08-14
+
+Prepares for prediction by giving the local player's transform a single writer, **before** a predictor
+exists. Nothing behaves differently today: with no `PredictedTransform` in the world, every entity is
+positioned by the adapter exactly as in 0.9.0.
+
+### Added
+
+- **`ReconciliationAnchor`** — the last authoritative position the server reported, in world space
+  (already through `SnapshotSpaceMapping`). Written for every replicated entity, at spawn and on every
+  state.
+- **`PredictedTransform`** — a marker something else adds to say "I own this entity's
+  `LocalTransform`". While present, the adapter writes the anchor and leaves the transform alone.
+
+### Why, since nothing is broken yet
+
+Once prediction owns the local player's per-frame position, prediction and this adapter would both
+write `LocalTransform` in the same frame — the adapter first in `InitializationSystemGroup`,
+prediction second in `SimulationSystemGroup`. **That works.** On every frame prediction runs, the
+later write wins and the result is correct. It fails only on the frames prediction does *not* run,
+where the avatar snaps back to the server position for one frame: intermittent, visible only as feel,
+local player only, and presenting as a bug in the release whose entire purpose is prediction. Every
+expensive defect in this project so far has been of that family — green, running, silently wrong — so
+this one is paid for in advance.
+
+The split is not a new mechanism. `NetworkEntityState` already separates "what the server said" from
+"what the client shows", for hp, and for the same reason. Position for a predicted entity is that same
+split arriving at the one field that just started needing it.
+
+### Design notes
+
+- **Named for what a predictor does with it.** Not `ServerPosition` or `NetworkPosition`: those name
+  the source and invite the obvious wrong move, someone deciding the local entity looks stale and
+  writing this into `LocalTransform`. A predictor *rewinds to and replays from* an anchor. The name is
+  meant to make the misuse read as wrong before it is run. Checked against every installed package
+  first — `Anchor` alone is taken (`Unity.Physics.PhysicsJointComponents`); `ReconciliationAnchor` and
+  `PredictedTransform` are free.
+- **Presence, not a flag**, matching `ViewConfigRef`'s reasoning: a `bool` has a default, and a
+  default meaning "predicted" or "not predicted" is a decision made silently for every entity that
+  never set it.
+- **Keyed off the tag, not off `NetworkEntity.IsLocal`.** That was the obvious shortcut and is wrong
+  in a way that bites immediately: with no predictor installed the local avatar would simply stop
+  moving. A test guards exactly that.
+- **No tick on the anchor, deliberately.** An anchor is a position *at a tick*, and this adapter does
+  not know the tick — `IEntityView.SetState` carries `(id, x, y, hp, maxHp)`. The tick is
+  `WorldState.AckTick`, which netcode documents as "the reconciliation anchor for the prediction
+  layer" and a predictor reads directly. Inventing one here, or inferring it from arrival order, would
+  produce a number that looks authoritative and is not.
+- **Written for remotes too, and the reason is chunk layout.** Adding it only to predicted entities
+  would split local and remote mirrors into **different archetypes** — two sets of chunks, with every
+  query over mirror entities iterating both, in a package whose whole justification is chunk
+  iteration. A structural cost at query time on every system, to save one `float3` per entity.
+  Uniform keeps one archetype and pays 12 bytes. Recorded because "why do remotes carry this" is the
+  obvious instinct and splitting the archetype is the obvious, expensive fix for it.
+
+### Tests
+
+44 in `Tests/Editor.Netcode/` (was 39). Five new: the anchor present from spawn and tracking every
+state; the anchor written for remotes; `PredictedTransform` suppressing the transform write while the
+anchor still lands; removing the tag handing the transform back; and — the guard for the shortcut not
+taken — the local entity moving exactly as before when no predictor exists.
+
+### Verified after the fact
+
+This shipped uncompiled. It is compiled now: the CI gate added in 0.11.0 runs the adapter's tests
+against `com.cuvara.netcode` 0.4.0 and reports **44/44 passing**, which covers everything this release
+added. The one claim still not made is a performance claim —
+`EntityManager.HasComponent<PredictedTransform>` per entity per state is one lookup on a path that
+already calls `HasComponent<Health>`, so it is no new shape, but it remains unmeasured.
+
+## [0.9.0] - 2026-08-14
+
+Follows `com.cuvara.netcode` 0.4.0, which added the server's entity kind to `IEntityView.Spawn`. The
+guessing this package did in 0.8.0 is gone — and the escalation that produced the netcode change
+started here, in 0.8.0's own note that the prefix resolver was a workaround with a named exit.
+
+### Changed — breaking
+
+- **`DotsEntityView.Spawn` now takes the entity type**: `Spawn(string id, bool isLocal, string type)`,
+  matching netcode 0.4.0. It is not source-compatible with 0.8.0, and could not be: the old signature
+  no longer satisfies `IEntityView`, and an overload does not rescue callers who hold the interface
+  rather than the class.
+- **`INetworkArchetypeResolver.TryResolve` now takes a `NetworkEntityDescriptor`** — `Id`, `Type`,
+  `IsLocal` in one readonly struct — instead of `(string id, bool isLocal)`.
+  **A parameter object, deliberately.** `IEntityView` has just broken every implementation and every
+  call site over adding exactly one field. This seam is younger and smaller and can decline to repeat
+  that: a fifth signal — faction, team, level — becomes a field on the struct, and existing resolvers
+  keep compiling. It is not a claim netcode should have done the same; its interface is three narrow
+  methods where a struct would be a heavier promise than the seam wants.
+- **`NetworkEntity` gains `Type`** (`FixedString32Bytes`), so a system can filter by kind without a
+  managed lookup — what the reference implementation's `EnemyTag` was for, as data rather than as a
+  tag the package cannot name. Truncating rather than refusing, unlike `Id`: resolution runs on the
+  full managed string before the command is queued, so a long kind still reaches the right archetype
+  and only reads back clipped in this convenience field.
+- **The asmdefs now require netcode >= 0.4.0** via the `versionDefines` expression (`"0.4.0"` instead
+  of `""`). With an older netcode installed, `CUVARA_NETCODE` is never defined and
+  `Cuvara.DOTS.Netcode` does not compile into the project at all. That is the point: **absent beats
+  broken.** Without it, netcode 0.3.x plus dots 0.9.0 is a `CS0535` in a package the consumer did not
+  write and cannot easily fix. Expressed here rather than as a `package.json` dependency because the
+  adapter is optional — a `dependencies` entry would force netcode on every consumer of this package.
+
+### Removed
+
+- **`PrefixArchetypeResolver` is deleted**, along with its tests. **Argued, not defaulted.** The case
+  for keeping it as a fallback is that netcode documents `type` as "empty when the server sent no type
+  at all", so a server that never populates the field is representable. The case against, which wins:
+  a server that does not send `Type` has no obligation to encode kind in its ids either — the
+  `"enemy-"` convention was one sample's, not a protocol — so the fallback would be guessing against a
+  server whose vocabulary we would not know, to avoid guessing against one that tells us. And a
+  strictly better answer already exists for the empty-type case: `TypeArchetypeResolver`'s
+  `unknownArchetype`, which is explicit, uniform, and fails *visibly* — every unknown entity looks the
+  same and obviously placeholder — where prefix matching fails invisibly, some ids happening to match
+  and some not. A consumer that genuinely wants id-based dispatch writes its own
+  `INetworkArchetypeResolver`; that is what the seam is for.
+  Nothing depended on it: 0.8.0 shipped hours earlier and the client has no gameplay code yet.
+
+### Added
+
+- **`TypeArchetypeResolver`** — exact ordinal mapping from the server's entity kind to an archetype
+  name, plus an optional local-player override and an optional catch-all.
+  - **No case folding and no prefix matching.** The type is a wire enum in string clothing; treating
+    `"Mob"` as `"mob"` would paper over a schema disagreement that should be visible.
+  - **The local override beats the type rule.** `IsLocal` is derived by comparing the id with the
+    client's own `NetworkClient.UserId`, so it is the one field in a snapshot that does not depend on
+    the server's vocabulary matching this build's. The ordinary case is `"player"` + `IsLocal` → a
+    distinct local archetype; the incoherent case — a `"mob"` whose id is the local player's — is
+    server confusion, answered with the client's own belief.
+  - **An unmapped or empty kind is refused and logged once per kind**, not mapped to a silent
+    default. A build talking to a newer server would otherwise render every unknown kind as a player
+    and look like it was working. The two cases get different messages, because "I don't know that
+    kind" and "you sent no kind" are different diagnoses.
+  - One constructor, `(localArchetype, unknownArchetype, params Rule[])`. An `IReadOnlyList` overload
+    was written and removed: with both present, `new TypeArchetypeResolver(null, "x")` is `CS0121`.
+- **`NetworkEntityDescriptor`** — the resolver's input. Normalises null `Id`/`Type` to empty at the
+  boundary so no implementation has to null-check.
+
+### Tests
+
+39 in `Tests/Editor.Netcode/` (was 28), still driven through the public groups rather than named
+systems. The 20 `Spawn` call sites carry a type now, and **the ids were rewritten to carry no
+meaning**: the mob's id is `"uuid-e1"`, and one test spawns a *player* whose id is literally
+`"enemy-9"`. Under the old prefix resolver the first would have been a player and the second a
+goblin — both wrong, both silent. New coverage: type-decides-archetype in both directions, the type
+landing on `NetworkEntity`, unmapped and empty kinds refused, the once-per-kind logging, the catch-all,
+ordinal matching, duplicate/incomplete rules throwing at construction, and a respawn that re-resolves
+a *different* kind for a reused id.
+
+### Verified after the fact
+
+**This shipped uncompiled**, and the list below is what a build had to settle. The CI gate added in
+0.11.0 settled all of it: `Cuvara.DOTS.Netcode.dll` is **absent** under no netcode and **present**
+under 0.4.0, so the `versionDefines` expression `"0.4.0"` behaves as ">= 0.4.0"; `FixedString32Bytes`
+as an `IComponentData` field and the `in`-parameter interface implementation both compile; and all
+**44/44** tests pass. The original list, kept because the reasoning is still the reason each one
+mattered:
+
+- The `versionDefines` expression `"0.4.0"` behaving as "0.4.0 or newer". The check is that
+  `Cuvara.DOTS.Netcode.dll` **disappears** under netcode 0.3.2 and **appears** under 0.4.0. If the
+  expression syntax is wrong the assembly silently never compiles, which is this package's least
+  favourite failure mode; a range literal (`[0.4.0,)`) is the fallback if the bare version does not
+  work. The bare form is what 140 non-empty expressions across this project's own resolved packages
+  use — `com.unity.physics`, `com.unity.collections`, `com.cysharp.messagepipe` gating on VContainer
+  `1.14.0` — so it is the well-trodden shape, but it is still unrun here.
+
+  **Known edge, not a defect**: a bare version excludes that version's prereleases, because
+  `0.4.0-pre.1` sorts below `0.4.0` under semver. Unity's own packages work around it by writing the
+  predecessor (`9.9.9` for "10.0.0 or newer"). `com.cuvara.netcode` has only ever tagged plain
+  versions, so this does not bite today; if it ever ships an `0.4.0-pre`, the expression has to
+  become `0.3.99`.
+- `FixedString32Bytes` as an `IComponentData` field and its `CopyFromTruncated` overload.
+- `in`-parameter interface implementation (`TryResolve(in NetworkEntityDescriptor, out string)`)
+  across the assembly boundary.
+- All 39 tests, and the `LogAssert.Expect` calls in particular — an over- or under-counted expected
+  error fails the test either way.
+
+## [0.8.0] - 2026-08-14
+
+### Added
+
+- **`Cuvara.DOTS.Netcode` — the `IEntityView` adapter.** With `com.cuvara.netcode` installed, server
+  snapshots drive ECS entities through this package's existing view pipeline. It is the piece that
+  makes the package usable by a client rather than only by a scene.
+  - `DotsEntityView` implements `Cuvara.Netcode.View.IEntityView` (the three methods; the interface is
+    not widened). Each replicated id becomes an entity carrying `NetworkEntity` (the wire id and
+    `IsLocal`), `NetworkEntityState` (newest authoritative hp), a `LocalTransform`/`LocalToWorld`
+    pair, and the `EntityViewRequest` + `ViewConfigRef` the spawn path already understands.
+  - `INetworkArchetypeResolver` and `PrefixArchetypeResolver` decide which archetype an id is shown
+    as. `SnapshotSpaceMapping` decides where the server's 2D plane lands in the world.
+  - `DotsNetcodeBootstrap.Install(world, view)` publishes `NetworkEntityViewReference` and creates
+    the internal drain system inside `NetcodeSystemGroup` — the group that shipped empty in 0.6
+    precisely so this could land without changing what a consumer's `[UpdateAfter]` means.
+  - Gated by `versionDefines` on `com.cuvara.netcode` + a matching `defineConstraints`, like
+    `Cuvara.DOTS.GameLogic` is for the shared logic. **The package still installs and compiles with
+    netcode absent**, and `Cuvara.DOTS.Runtime` keeps exactly its five Unity references — the netcode
+    dependency exists in the new assembly and nowhere else. The arrow is one-way: DOTS may reference
+    netcode, netcode never references DOTS.
+
+### Design notes
+
+- **`SetState` enqueues; it does not write components.** Three reasons, in order. (1) *Thread
+  affinity*: `WorldViewBinder.Tick` is called by the consumer, and the netcode's own guidance is to
+  drive world state from the socket thread — `EntityManager` writes from there are undefined
+  behaviour, not an exception, and the reference implementation is main-thread-only without saying
+  so. (2) *Structural changes belong at a declared point in the frame* rather than wherever the
+  caller happens to run, possibly mid-`SimulationSystemGroup`. (3) *Ordering*: one FIFO preserves
+  spawn → state → despawn.
+  The queue costs no view latency. `NetcodeSystemGroup` is in `InitializationSystemGroup`, so a drain
+  runs before `TransformSystemGroup` computes `LocalToWorld` and long before `PresentationSystemGroup`
+  runs `ViewSystemGroup` → `ViewLifecycleGroup` → `ViewTransformSyncGroup`. A snapshot enqueued before
+  frame N's initialization is an entity, a transform, a view and a *positioned* view within frame N.
+  A direct write cannot beat that and can lose to it: one landing after `TransformSystemGroup` gets a
+  stale `LocalToWorld` and spawns its view in the wrong place.
+- **The 2D → 3D mapping is caller-supplied.** The reference implementation wrote
+  `new float3(x, 0.5f, y)` inline, and that literal is two unrelated things fused: which plane the
+  server's coordinates live on (a property of the *world*, identical for every entity — now
+  `SnapshotSpaceMapping`, defaulting to `XZPlane`) and a half-height lift so a capsule's pivot sits on
+  the ground (a property of the *art*, different per archetype — already `ViewConfig.PositionOffset`,
+  and applied to the view instance rather than to the entity). Splitting them is strictly better than
+  the constant: gameplay maths keeps a 2D entity position, and only the visual is lifted. A
+  `ViewConfig` field was rejected because it would let two archetypes disagree about which axis is up.
+
+### Changed
+
+- `Runtime/AssemblyInfo.cs` grants `InternalsVisibleTo` to `Cuvara.DOTS.Tests.Netcode`, for
+  `ViewConfig.Configure` / `ViewArchetypeLibrary.Configure` — the same reason the other two grants
+  exist. The adapter's tests do **not** name a package system: they drive `NetcodeSystemGroup` and
+  `ViewSystemGroup`, so what they assert is the published ordering contract.
+
+### Not carried over from the reference implementation
+
+`Samples~/DOTSSample/DOTSEntityView.cs` in `com.cuvara.netcode` is one game's rules. What was left
+behind, and why:
+
+- **The `"enemy-"` id prefix** — kept as a *mechanism* (`PrefixArchetypeResolver`), dropped as a
+  *value*. The prefix and the archetype it names are constructor arguments. It is still a workaround:
+  `IEntityView.Spawn` takes `(id, isLocal)`, and the snapshot's `ResolvedEntity.Type` is not forwarded
+  through `WorldViewBinder`, so the id is the only signal a view has. `INetworkArchetypeResolver` is
+  the named exit — if a later `com.cuvara.netcode` forwards the type, the move is a resolver over
+  `Type` and the deletion of `PrefixArchetypeResolver`, not more prefix rules.
+- **`Health { 30, 30 }` at spawn** — the wire already carries hp and maxHp, so the adapter writes the
+  real values instead of a literal. They land on `NetworkEntityState`; `Health` is opt-in
+  (`writeHealth: true`) because `Health` means "destroy at zero" in this package, and mirroring server
+  hp into it lets `HealthDeathSystem` destroy an entity the server is still listing. When opted in,
+  `Health` is added on the first *state* rather than at spawn, so no entity ever carries `Health{0,0}`
+  across a simulation tick.
+- **`AutoAttack { 0.3f, 10f, 1 }` and `PlayerCombatTag`/`EnemyTag`** — **no config equivalent exists,
+  and none was invented.** This package has no combat components beyond `Health`, and cooldown, range
+  and damage are game rules, not view configuration. A consumer that wants them adds them to entities
+  carrying `NetworkEntity`, from its own system.
+- **The eight-colour player palette and per-instance material creation** — **no config equivalent
+  exists.** `ViewConfig` carries a view key, pool size, scale, offsets and 2D sorting; it has no
+  colour, material or renderer field, and the view layer spawns pooled prefabs rather than building
+  `RenderMeshArray` entities. Per-player tinting is a consumer concern today. If it should become a
+  package concern, the honest shape is a colour field on `ViewConfig` plus something applying it in
+  `ViewLifecycleGroup` — that is a separate change with a separate justification.
+- **`GetEntityLabels` and the OnGUI overlay** — debug UI for a sample scene.
+- **`RenderMeshUtility` / `Unity.Entities.Graphics`** — the adapter drives the pooled-GameObject view
+  layer this package already has, so it needs no rendering dependency at all.
+
+### Tests
+
+`Tests/Editor.Netcode/` — 28 tests: the adapter end to end through the public groups (same-frame
+positioned view, the config-driven archetype, the mapping/offset split, despawn and re-entry, the
+duplicate-spawn and unknown-id guards, hp routing with and without `writeHealth`, full drain), the
+mapping maths, the resolver's ordering rules, and a reflection layout test asserting the drain system
+is internal, `[DisableAutoCreation]`, and two hops above `PresentationSystemGroup`.
+
+A separate test assembly, mirroring `Cuvara.DOTS.Tests.GameLogic`, rather than the existing ones:
+netcode-dependent tests in `Cuvara.DOTS.Tests.Runtime` would force that assembly to reference
+`com.cuvara.netcode`, which breaks the no-netcode install this release is built around.
+
+### Unverified
+
+**Nothing here has been compiled.** No Unity Editor was available — another workstream owned it — so
+this release is reviewed code, not built code. Specifically unverified: that the asmdef
+`versionDefines`/`defineConstraints` pair resolves as intended in a project with and without
+`com.cuvara.netcode`; that `SystemAPI.ManagedAPI.GetSingleton` works from this `ISystem` as it does in
+`EntityViewSpawnSystem`; and every one of the tests above.
+
 ## [0.7.0] - 2026-08-14
 
 ### Added
