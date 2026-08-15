@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.4.1] — 2026-08-15
+
+### Changed
+- Bump `shared-gamelogic` to `sgl-v0.1.9` — single-rate deadzone fix from server v1.4.1
+
+## [v0.4.0] — 2026-08-15
+
+### Changed
+- Netcode updated v0.11.0 → v0.15.5 (tick rate from wire, held movement predictor,
+  elapsed-time step, per-frame prediction fix)
+- DOTS updated to v0.21.0 (per-system parallel thresholds)
+- `shared-gamelogic` updated to `sgl-v0.1.8`
+
 ### Fixed
 
 - **Local player stutter.** The netcode package advanced prediction twice per frame, so
