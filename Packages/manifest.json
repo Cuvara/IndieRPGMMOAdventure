@@ -12,18 +12,20 @@
         "com.adjust",
         "com.frostbun",
         "com.github-glitchenzo",
+        "com.heroiclabs",
         "com.ivanmurzak",
         "extensions.unity"
       ]
     }
   ],
   "dependencies": {
-    "com.company.build-pipeline": "https://github.com/Cuvara/unity-build-workflows.git?path=/unity-package/Packages/com.company.build-pipeline#main",
+    "com.company.build-pipeline": "https://github.com/Cuvara/unity-build-workflows.git?path=/unity-package/Packages/com.company.build-pipeline#v1.1.3",
     "com.cysharp.messagepipe": "1.8.1",
     "com.cysharp.messagepipe.vcontainer": "1.8.1",
     "com.cysharp.unitask": "2.5.10",
+    "com.heroiclabs.nakama-unity": "3.9.0",
     "com.ivanmurzak.unity.mcp": "0.87.0",
-    "com.rpgmmo.shared-gamelogic": "https://github.com/dyCuong03/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.5",
+    "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.8",
     "com.unity.addressables": "2.8.1",
     "com.unity.ai.navigation": "2.0.10",
     "com.unity.burst": "1.8.30",
@@ -77,5 +79,9 @@
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0"
-  }
+  },
+  "testables": [
+    "com.cuvara.dots",
+    "com.cuvara.netcode"
+  ]
 }

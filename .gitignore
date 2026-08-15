@@ -90,3 +90,8 @@ UnityEntitlementLicense.xml
 !/Tools/**/*.csproj
 /Tools/**/bin/
 /Tools/**/obj/
+
+# Written by Claude Code when a project MCP server is accepted. The URL it holds
+# is machine-local — a localhost port plus a per-install id — so a committed copy
+# points every other clone at an endpoint that does not exist there.
+/.mcp.json

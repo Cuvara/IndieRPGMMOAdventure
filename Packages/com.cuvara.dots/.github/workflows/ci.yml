@@ -1,0 +1,455 @@
+name: CI
+
+# This package had no CI at all until 0.10.0. That was honest — a repository with
+# no checks cannot mislead anyone — but it meant every verification it ever had
+# came from one person's Editor.
+#
+# The gate it grew is deliberately not "did the test runner exit zero". A green
+# run over ZERO tests is worse than no gate: it turns the absence of verification
+# into a positive signal and spends the reviewer's budget for them. That is not
+# hypothetical here — com.cuvara.netcode's gate reported "No tests were executed.
+# 0/0 Passed" under a green check while a breaking interface change went through
+# it. So every Unity job below asserts a per-assembly test-count floor, and the
+# floors are what make the check mean something. See .github/scripts/assert_test_floors.py.
+#
+# A STANDING PROPERTY OF THE MANIFESTS BELOW, NOT AN ACCIDENT OF HOW THEY WERE WRITTEN:
+# each job installs the MINIMUM its configuration names and hand-feeds nothing on a
+# dependency's behalf. That is what makes these rows able to answer questions the
+# depended-on package's own CI structurally cannot — netcode's bootstrap manifest
+# hand-writes unitask, vcontainer, shared-gamelogic AND the OpenUPM scopedRegistries
+# block, so it supplies every single thing whose absence is in question, and its gate
+# therefore tests the package plus a scaffold rather than the package.
+#
+# Twice this has settled something about com.cuvara.netcode that netcode's own gate
+# could not: that 0.4.0 did not compile without VContainer, and that its shipped
+# Google.Protobuf.dll did not load without an assembly it never declared.
+#
+# So: DO NOT "simplify" a failing row by adding the convenient dependency to its
+# manifest. A gate that supplies what the package under test failed to declare is not
+# a gate. If a row fails, the failure is the finding.
+#
+# THE PINS BELOW ARE PART OF THE CONFIGURATION UNDER TEST, so a stale one silently
+# validates something nobody ships. This bit once already: the rows pinned
+# sgl-v0.1.6 while per-entity speed shipped in sgl-v0.1.7, and the result was not a
+# missing feature but a hard compile failure inside com.cuvara.netcode's own
+# WorldState.cs — netcode 0.9.1 does not build against 0.1.6 at all. Bump these
+# alongside the netcode pin whenever either moves.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    # Every base, not just main. netcode's gate fires only on PRs into main, so a
+    # stacked PR — which is how this repo has been shipping, #5 based on #4 — is
+    # ungated there. A gate with a hole shaped like the workflow we actually use
+    # is barely a gate.
+    branches: ['**']
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate package.json
+        run: |
+          node -e "
+            const pkg = JSON.parse(require('fs').readFileSync('./package.json','utf8'));
+            const required = ['name', 'version', 'displayName', 'description', 'unity'];
+            const missing = required.filter(k => !pkg[k]);
+            if (missing.length) {
+              console.error('Missing fields:', missing.join(', '));
+              process.exit(1);
+            }
+            console.log(pkg.name + '@' + pkg.version + ' — valid');
+          "
+
+      - name: Validate CHANGELOG has current version
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./package.json','utf8')).version")
+          grep -q "\[$VERSION\]" CHANGELOG.md || {
+            echo "::error::CHANGELOG.md missing entry for v$VERSION"
+            exit 1
+          }
+
+      # A missing .meta disabled parts of this package for seven releases without
+      # failing anything. Same failure family as a green run over zero tests:
+      # both look exactly like success.
+      - name: Every Unity-visible file has a .meta
+        run: python3 .github/scripts/check_metas.py
+
+      # The gate is a program and it has already been wrong once, in a way that
+      # reported "actual 0" for assemblies that had plainly run. Case 7 is the
+      # regression test for that specific bug.
+      - name: Self-test the floor script
+        run: python3 .github/scripts/test_assert_test_floors.py
+
+      - name: List assembly definitions
+        run: |
+          find . -name "*.asmdef" -not -path "./.github/*" | sort | while read f; do
+            node -e "
+              const a = JSON.parse(require('fs').readFileSync('$f','utf8'));
+              const dc = (a.defineConstraints || []).join(', ') || '(none)';
+              console.log('  $f → ' + a.name + '   constraints: ' + dc);
+            "
+          done
+
+  # ---------------------------------------------------------------------------
+  # Configuration 1: netcode absent.
+  #
+  # This is the standalone-install property the package promises, and until now
+  # it was verified once, by hand, by physically removing the package. The
+  # adapter assembly must be compiled out — and the floor `==0` is what proves
+  # it was compiled out rather than merely silent.
+  # ---------------------------------------------------------------------------
+  test-without-netcode:
+    name: Unity Tests (netcode absent)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: package
+
+      - name: Bootstrap test project
+        run: |
+          mkdir -p Assets ProjectSettings Packages
+
+          cat > Packages/manifest.json << 'JSON'
+          {
+            "dependencies": {
+              "com.cuvara.dots": "file:../package",
+              "com.unity.entities": "1.4.8",
+              "com.unity.burst": "1.8.30",
+              "com.unity.collections": "2.6.8",
+              "com.unity.mathematics": "1.3.2",
+              "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.7"
+            },
+            "testables": ["com.cuvara.dots"]
+          }
+          JSON
+
+          cat > ProjectSettings/ProjectSettings.asset << 'YAML'
+          %YAML 1.1
+          %TAG !u! tag:unity3d.com,2011:
+          --- !u!129 &1
+          PlayerSettings:
+            companyName: Cuvara
+            productName: DotsTest
+          YAML
+
+      # Samples~ is EXCLUDED from Unity import, so a sample compiles nowhere by default —
+      # netcode's DOTS sample is in that state right now: 185 tests green while
+      # DOTSNetworkBridge.cs is read and never built. Copying the samples into Assets/ is
+      # what gives them a compiler. Their own defineConstraints still decide whether each
+      # one builds, which is why the assertions below differ per configuration.
+      - name: Import samples so they are compiled
+        run: cp -r package/Samples~/. Assets/
+
+      - name: Run tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.3.9f1
+          testMode: all
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Test Results (netcode absent)
+          artifactsPath: artifacts
+
+      # The adapter must be gone, not broken. If this file exists, the
+      # versionDefines gate is not doing its job and the package would ship a
+      # CS0535 into any project on an older netcode.
+      - name: Samples must compile as their constraints allow
+        if: always()
+        run: |
+          test -f Library/ScriptAssemblies/Cuvara.DOTS.Samples.HybridViews.dll \
+            || { echo "::error::HybridViews sample did not compile; it needs no optional package and must always build"; exit 1; }
+          test ! -f Library/ScriptAssemblies/Cuvara.DOTS.Samples.NetworkedPrediction.dll \
+            || { echo "::error::NetworkedPrediction sample compiled without its optional packages; its defineConstraints are not gating it"; exit 1; }
+          echo "HybridViews built; NetworkedPrediction correctly absent."
+
+      - name: Adapter assembly must be absent
+        if: always()
+        run: |
+          if [ -f Library/ScriptAssemblies/Cuvara.DOTS.Netcode.dll ]; then
+            echo "::error::Cuvara.DOTS.Netcode.dll EXISTS with no com.cuvara.netcode installed. Expected absent. Most likely the CUVARA_NETCODE defineConstraint is missing from the asmdef, or something else in the project defines that symbol."
+            exit 1
+          fi
+          echo "Cuvara.DOTS.Netcode.dll correctly absent."
+
+      - name: Assert test floors
+        if: always()
+        run: |
+          python3 package/.github/scripts/assert_test_floors.py artifacts \
+            'Cuvara.DOTS.Tests.Editor>=30' \
+            'Cuvara.DOTS.Tests.Runtime>=29' \
+            'Cuvara.DOTS.Tests.GameLogic>=41' \
+            'Cuvara.DOTS.Tests.Netcode==0' \
+            'Cuvara.DOTS.Tests.Prediction==0'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-without-netcode
+          path: artifacts/
+
+  # ---------------------------------------------------------------------------
+  # Configuration 2: netcode installed.
+  #
+  # Written before v0.4.0 was tagged, and deliberately left red rather than
+  # trimmed to make the run green — a gate shaped to pass is the thing this whole
+  # file argues against. The tag landed mid-run; the first attempt failed with
+  # "Could not clone ... make sure [v0.4.0] is a valid branch name, tag or full
+  # commit hash", which is the row doing its job.
+  # ---------------------------------------------------------------------------
+  test-with-netcode:
+    name: Unity Tests (netcode 0.9.1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: package
+
+      # THIS MANIFEST SUPPLIES NOTHING ON NETCODE'S BEHALF, DELIBERATELY.
+      #
+      # An earlier revision added jp.hadashikick.vcontainer and
+      # org.nuget.system.runtime.compilerservices.unsafe here to get this job
+      # green. That was wrong: a gate that supplies what the package under test
+      # failed to declare is not a gate, and it would have recreated exactly the
+      # accident that hid these defects — the real Unity project satisfies both by
+      # coincidence, which is why neither was visible in the Editor.
+      #
+      # What stays is `scopedRegistries`, and the distinction is not a loophole:
+      #
+      #   * DECLARING a dependency is the package's job, and netcode 0.4.1 now
+      #     declares jp.hadashikick.vcontainer. This job does not.
+      #   * CONFIGURING a registry is the CONSUMER's job and cannot be done by a
+      #     package at all — package.json has no scopedRegistries. Every real
+      #     consumer of netcode must add OpenUPM themselves; netcode has always
+      #     declared com.cysharp.unitask from there.
+      #
+      # So this job answers the open question honestly: with OpenUPM configured
+      # and nothing hand-fed, does netcode 0.4.1 resolve, compile and load? The
+      # prediction on writing this was that VContainer would resolve and that
+      # Google.Protobuf would still fail to load. Half right: VContainer resolved
+      # from netcode's own declaration, and Google.Protobuf loaded too, because
+      # 0.4.1 set `validateReferences: 0` on its plugin meta rather than declaring
+      # the missing assembly. That is Unity's documented remedy and it loads, but
+      # it defers the risk to runtime instead of removing it — nothing here
+      # exercises a Protobuf path, so nothing here covers it.
+      # If this row fails, the failure IS the finding — do not feed it.
+      - name: Bootstrap test project
+        run: |
+          mkdir -p Assets ProjectSettings Packages
+
+          cat > Packages/manifest.json << 'JSON'
+          {
+            "dependencies": {
+              "com.cuvara.dots": "file:../package",
+              "com.cuvara.netcode": "https://github.com/Cuvara/Netcode.git#v0.9.1",
+              "com.unity.entities": "1.4.8",
+              "com.unity.burst": "1.8.30",
+              "com.unity.collections": "2.6.8",
+              "com.unity.mathematics": "1.3.2",
+              "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.7"
+            },
+            "scopedRegistries": [
+              {
+                "name": "OpenUPM",
+                "url": "https://package.openupm.com",
+                "scopes": ["com.cysharp", "jp.hadashikick", "org.nuget"]
+              }
+            ],
+            "testables": ["com.cuvara.dots"]
+          }
+          JSON
+
+          cat > ProjectSettings/ProjectSettings.asset << 'YAML'
+          %YAML 1.1
+          %TAG !u! tag:unity3d.com,2011:
+          --- !u!129 &1
+          PlayerSettings:
+            companyName: Cuvara
+            productName: DotsTest
+          YAML
+
+      # Samples~ is EXCLUDED from Unity import, so a sample compiles nowhere by default —
+      # netcode's DOTS sample is in that state right now: 185 tests green while
+      # DOTSNetworkBridge.cs is read and never built. Copying the samples into Assets/ is
+      # what gives them a compiler. Their own defineConstraints still decide whether each
+      # one builds, which is why the assertions below differ per configuration.
+      - name: Import samples so they are compiled
+        run: cp -r package/Samples~/. Assets/
+
+      - name: Run tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.3.9f1
+          testMode: all
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Test Results (netcode 0.9.1)
+          artifactsPath: artifacts
+
+      - name: Samples must compile
+        if: always()
+        run: |
+          for DLL in Cuvara.DOTS.Samples.HybridViews Cuvara.DOTS.Samples.NetworkedPrediction; do
+            test -f "Library/ScriptAssemblies/$DLL.dll" \
+              || { echo "::error::$DLL.dll did not compile. A sample nothing compiles is a sample that rots."; exit 1; }
+            echo "$DLL.dll built."
+          done
+
+      - name: Adapter assembly must be present
+        if: always()
+        run: |
+          if [ ! -f Library/ScriptAssemblies/Cuvara.DOTS.Netcode.dll ]; then
+            # OBSERVATION, then candidates. An earlier version of this message
+            # asserted one cause ("the versionDefines expression is wrong") and
+            # was wrong: netcode had failed to compile, so there was no assembly
+            # to reference regardless of any expression. A confident wrong error
+            # message costs more than a vague one, because it aims the reader at
+            # the wrong package.
+            echo "::error::OBSERVED: Cuvara.DOTS.Netcode.dll is absent with com.cuvara.netcode installed. At least four causes produce this, in the order worth checking: (1) com.cuvara.netcode failed to RESOLVE — grep the log for 'cannot be found' / 'Could not clone'; (2) it resolved but failed to COMPILE — grep for 'error CS'; (3) it compiled but failed to LOAD — grep for 'will not be loaded due to errors', which cascades down every dependent assembly; (4) only if none of those, the versionDefines expression in Cuvara.DOTS.Netcode.asmdef did not fire."
+            exit 1
+          fi
+          echo "Cuvara.DOTS.Netcode.dll present."
+
+      # The floor that matters most: 44 adapter tests, not ">= 0". Without it a
+      # mis-typed versionDefines expression compiles the adapter and all its
+      # tests out of existence and this job goes green over nothing.
+      - name: Assert test floors
+        if: always()
+        run: |
+          python3 package/.github/scripts/assert_test_floors.py artifacts \
+            'Cuvara.DOTS.Tests.Editor>=30' \
+            'Cuvara.DOTS.Tests.Runtime>=29' \
+            'Cuvara.DOTS.Tests.GameLogic>=41' \
+            'Cuvara.DOTS.Tests.Netcode>=47' \
+            'Cuvara.DOTS.Tests.Prediction>=16'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-with-netcode
+          path: artifacts/
+
+  # ---------------------------------------------------------------------------
+  # Configuration 3: neither optional package.
+  #
+  # Until this row existed, EVERY job installed com.rpgmmo.shared-gamelogic, so the
+  # absent path of CUVARA_SHARED_GAMELOGIC had never once been taken — the gate was
+  # asserted, never proven, which is the shape of a gate that quietly never fires.
+  #
+  # It is also the only row that proves the two-define assembly is gated on BOTH
+  # defines rather than just on netcode: Cuvara.DOTS.Netcode.Prediction must be
+  # absent here even though it would also be absent for the simpler reason. A row
+  # that can only fail one way is worth less than one that can fail two.
+  # ---------------------------------------------------------------------------
+  test-core-only:
+    name: Unity Tests (no optional packages)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: package
+
+      - name: Bootstrap test project
+        run: |
+          mkdir -p Assets ProjectSettings Packages
+
+          cat > Packages/manifest.json << 'JSON'
+          {
+            "dependencies": {
+              "com.cuvara.dots": "file:../package",
+              "com.unity.entities": "1.4.8",
+              "com.unity.burst": "1.8.30",
+              "com.unity.collections": "2.6.8",
+              "com.unity.mathematics": "1.3.2"
+            },
+            "testables": ["com.cuvara.dots"]
+          }
+          JSON
+
+          cat > ProjectSettings/ProjectSettings.asset << 'YAML'
+          %YAML 1.1
+          %TAG !u! tag:unity3d.com,2011:
+          --- !u!129 &1
+          PlayerSettings:
+            companyName: Cuvara
+            productName: DotsTest
+          YAML
+
+      # Samples~ is EXCLUDED from Unity import, so a sample compiles nowhere by default —
+      # netcode's DOTS sample is in that state right now: 185 tests green while
+      # DOTSNetworkBridge.cs is read and never built. Copying the samples into Assets/ is
+      # what gives them a compiler. Their own defineConstraints still decide whether each
+      # one builds, which is why the assertions below differ per configuration.
+      - name: Import samples so they are compiled
+        run: cp -r package/Samples~/. Assets/
+
+      - name: Run tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.3.9f1
+          testMode: all
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Test Results (no optional packages)
+          artifactsPath: artifacts
+
+      - name: Samples must compile as their constraints allow
+        if: always()
+        run: |
+          test -f Library/ScriptAssemblies/Cuvara.DOTS.Samples.HybridViews.dll \
+            || { echo "::error::HybridViews sample did not compile; it needs no optional package and must always build"; exit 1; }
+          test ! -f Library/ScriptAssemblies/Cuvara.DOTS.Samples.NetworkedPrediction.dll \
+            || { echo "::error::NetworkedPrediction sample compiled without its optional packages; its defineConstraints are not gating it"; exit 1; }
+          echo "HybridViews built; NetworkedPrediction correctly absent."
+
+      - name: Every optional assembly must be absent
+        if: always()
+        run: |
+          FAILED=0
+          for DLL in Cuvara.DOTS.Netcode Cuvara.DOTS.Netcode.Prediction Cuvara.DOTS.GameLogic; do
+            if [ -f "Library/ScriptAssemblies/$DLL.dll" ]; then
+              echo "::error::$DLL.dll EXISTS with no optional package installed. Its defineConstraints are not gating it."
+              FAILED=1
+            else
+              echo "$DLL.dll correctly absent."
+            fi
+          done
+          exit $FAILED
+
+      - name: Assert test floors
+        if: always()
+        run: |
+          python3 package/.github/scripts/assert_test_floors.py artifacts \
+            'Cuvara.DOTS.Tests.Editor>=30' \
+            'Cuvara.DOTS.Tests.Runtime>=29' \
+            'Cuvara.DOTS.Tests.GameLogic==0' \
+            'Cuvara.DOTS.Tests.Netcode==0' \
+            'Cuvara.DOTS.Tests.Prediction==0'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-core-only
+          path: artifacts/

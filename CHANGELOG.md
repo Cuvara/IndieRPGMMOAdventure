@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Local player stutter.** The netcode package advanced prediction twice per frame, so
+  the predictor's clock ran at ~2x real time and the server's hold window expired in
+  half the real time it should — the controlled avatar moved for part of each send
+  period and stood still for the rest, at every frame rate, while remote entities stayed
+  smooth. Fixed in `com.cuvara.netcode` 0.15.3; see that package's CHANGELOG for the
+  measurements.
+### Changed
+
+- **Input send cadence in the DOTS sample** now runs off an `Update` accumulator instead
+  of a timer loop (`UniTask.Delay`), so the delivered rate is the configured
+  `inputRateHz` by construction rather than by a timer's accuracy. The send rate is a
+  contract with the server, not a preference: it must be at least the server's hold
+  window or the avatar stalls between sends however well prediction behaves. Verified
+  afterwards at exactly **15 sends per `real=1.000s`** against an independent
+  `Stopwatch`.
+
+  **This was not the stutter, and an earlier note here claiming the timer delivered
+  ~7.5 Hz was wrong.** That figure came from `ObservedInputInterval` reading 0.138 s —
+  measured in the predictor's own clock, which was the thing running at 2x. In real time
+  that is ~0.069 s, i.e. the timer was delivering close to the configured 15 Hz all
+  along. The only independently-clocked measurement of the send rate was taken *after*
+  this change, so it cannot attribute anything to it. The change stands on determinism,
+  not on a repair it did not perform.
+
+### Added
+
+- `FrameRateCap` — optional `-targetFps N` launch override for the render frame rate.
+  Uncapped by default: a 60 fps cap was tried against this stutter and measurably did
+  not help, which is what ruled the frame rate out as the cause. The mechanism stays for
+  pinning the rate during a measurement, and for battery and thermals.
+
+
+## [Unreleased]
+
+### Fixed
+
+- **`NakamaAuthProvider` returned the wrong token, and failed silently**
+  (`Assets/Scripts/Nakama/Auth/NakamaAuthProvider.cs`). `GetJwtAsync` returned
+  `NakamaSessionService.Session.AuthToken` — the Nakama *session* token — where the
+  gateway expects a *gateway* token minted by the `gateway_token` RPC. The two are
+  not interchangeable, and substituting one is not a clean failure: verified against
+  a live stack, the gateway **accepts** the session token (the deploy can share a
+  single HS256 secret) but the user claim it reads is absent, so the session is
+  established with an **empty `user_id`** and the player is nobody. Any feature
+  keyed on identity — ownership, persistence, duplicate-login eviction — would have
+  silently misbehaved.
+  `GetJwtAsync` now exchanges the session for a gateway token via
+  `Client.RpcAsync(session, "gateway_token", "{}")` and throws with a message naming
+  the RPC if it fails or yields no token, rather than returning a credential that
+  half-works. No signing secret is held client-side on this path.
+  The payload is parsed **once**: the Unity SDK's `IApiRpc.Payload` already yields
+  the inner JSON, unlike Nakama's raw HTTP API where the RPC result is a
+  JSON-encoded string nested in an envelope and must be unwrapped twice. Noted in a
+  comment so the next reader does not double-parse.
+- **`GameLifetimeScope` registered the services but not the component, so the auth
+  provider was never actually reached** (`Assets/Scripts/DI/GameLifetimeScope.cs`).
+  VContainer only injects components it has been told about, so a `LifetimeScope` in the
+  scene was not sufficient: `NetworkBootstrap`'s `[Inject]` never ran, it reported "no
+  container found", built its own `NetworkClient`, and fell back to minting a
+  development JWT — silently bypassing the `NakamaAuthProvider` registered immediately
+  above it. Added `RegisterComponentInHierarchy<NetworkBootstrap>()`. Without this the
+  `IAuthProvider` wiring was inert in any real scene.
+
+- **`NakamaSessionService` documentation asserted the two tokens were the same**
+  (`Assets/Scripts/Nakama/NakamaSessionService.cs`). That claim is what licensed the
+  bug above. Rewritten to state what each credential is for and to spell out the
+  empty-`user_id` failure mode.
+
+### Added
+
+- **`IAuthProvider` interface** (`Cuvara.Netcode.Auth`) — contract for JWT
+  provisioning, defined in the netcode package. `NetworkClient` accepts an
+  optional `IAuthProvider` via DI and exposes a new
+  `ConnectAsync(mapId, ct)` overload that resolves the JWT internally.
+  `DevAuthProvider` wraps `DevJwt` for local development.
+
+- **Nakama Unity SDK integration** (`com.heroiclabs.nakama-unity` v3.9.0) —
+  new `Scripts.Nakama` module (`Assets/Scripts/Nakama/`, assembly
+  `NDC.Scripts.Nakama`) with VContainer DI registration.
+  - `NakamaSessionService` — wrapper around the Nakama SDK `IClient`,
+    registered as a singleton. Provides device auth (primary, auto-creates
+    account), email auth (secondary), session token persistence in PlayerPrefs,
+    and transparent token refresh via the SDK's refresh token flow.
+  - `NakamaAuthProvider` — implements `IAuthProvider`, restores persisted
+    session or authenticates via device ID, then returns the JWT. Registered
+    as the `IAuthProvider` singleton so `NetworkClient.ConnectAsync(mapId, ct)`
+    works out of the box when Nakama is wired up.
+  - `NakamaSettings` — connection configuration (scheme, host, port, server
+    key), defaulting to the local Nakama dev server (`http://127.0.0.1:7350`,
+    `defaultkey`).
+  - `NakamaRegistration.RegisterNakama()` — VContainer extension method, called
+    from `GameLifetimeScope` alongside `RegisterNetworking()`.
+
+### Changed
+
+- **Netcode module extracted to standalone UPM package** `com.cuvara.netcode` —
+  `Assets/Scripts/Net/` → `Packages/com.cuvara.netcode/Runtime/`, with its own
+  `package.json`, `CHANGELOG.md`, `README.md`, tests, and documentation.
+  Namespace renamed from `Scripts.Net` → `Cuvara.Netcode`. Assembly renamed from
+  `NDC.Scripts.Net` → `Cuvara.Netcode.Runtime`. Demo scene and config moved to
+  `Samples~/DemoBootstrap/` (import via Package Manager). Tests moved to
+  `Cuvara.Netcode.Tests.Editor`. The package is embedded and auto-resolved by
+  Unity; no `manifest.json` entry needed.
+
 ### Added
 
 - **`Shared.GameLogic` is now a project dependency** —
