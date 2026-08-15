@@ -15,12 +15,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   period and stood still for the rest, at every frame rate, while remote entities stayed
   smooth. Fixed in `com.cuvara.netcode` 0.15.3; see that package's CHANGELOG for the
   measurements.
-- **Input send cadence in the DOTS sample.** Sending was looped on a timer
-  (`UniTask.Delay`) and is now driven from `Update` by an accumulator, so the configured
-  `inputRateHz` is the rate actually delivered. The send rate is a contract with the
-  server, not a preference: it must be at least the server's hold window or the avatar
-  stalls between sends regardless of how well prediction behaves. Measured at exactly 15
-  sends per real second afterwards.
+### Changed
+
+- **Input send cadence in the DOTS sample** now runs off an `Update` accumulator instead
+  of a timer loop (`UniTask.Delay`), so the delivered rate is the configured
+  `inputRateHz` by construction rather than by a timer's accuracy. The send rate is a
+  contract with the server, not a preference: it must be at least the server's hold
+  window or the avatar stalls between sends however well prediction behaves. Verified
+  afterwards at exactly **15 sends per `real=1.000s`** against an independent
+  `Stopwatch`.
+
+  **This was not the stutter, and an earlier note here claiming the timer delivered
+  ~7.5 Hz was wrong.** That figure came from `ObservedInputInterval` reading 0.138 s —
+  measured in the predictor's own clock, which was the thing running at 2x. In real time
+  that is ~0.069 s, i.e. the timer was delivering close to the configured 15 Hz all
+  along. The only independently-clocked measurement of the send rate was taken *after*
+  this change, so it cannot attribute anything to it. The change stands on determinism,
+  not on a repair it did not perform.
 
 ### Added
 
