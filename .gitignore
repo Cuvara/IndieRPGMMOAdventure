@@ -70,6 +70,12 @@ crashlytics-build.properties
 # Packed Addressables
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
 
+# Addressables link.xml. Regenerated on every Addressables build and deleted in
+# between, so tracking it means unrelated commits carry its churn -- which is
+# exactly how it entered the tree, riding along with 1ccb4204.
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/link.xml
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/link.xml.meta
+
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
