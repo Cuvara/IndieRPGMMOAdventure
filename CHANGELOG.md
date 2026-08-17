@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `packages-lock.json` still resolved `shared-gamelogic` to `sgl-v0.1.8`. The v0.4.1
+  bump changed only `manifest.json`, so the two disagreed about which version the
+  project uses and the lock decides. Now pinned to `sgl-v0.1.9`
+  (`514d454192355943a24b822c1441ab25b5e770e1`, the tag's actual commit).
+
+### Removed
+- `Assets/AddressableAssetsData/link.xml` is no longer tracked, and is now ignored.
+  Addressables regenerates it on build and deletes it in between, so every unrelated
+  commit had the chance to carry its churn — which is how it was committed in the
+  first place.
+
 ## [v0.4.1] — 2026-08-15
 
 ### Changed
