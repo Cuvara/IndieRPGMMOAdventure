@@ -28,6 +28,67 @@ raising it to High is the honest setting for a real stripping test.
 ### Local Build
 Unity Editor opens the project directly. No CLI build tool beyond Unity's batch mode.
 
+### Running several clients against one backend
+
+One client proves nothing about multiplayer. Three processes on one map, each its own
+Nakama user, is the smallest arrangement in which "A sees B" is a real observation.
+
+Build a Windows player (Mono2x, stripping disabled — the quickest target):
+
+```bash
+"/mnt/c/Program Files/Unity/Hub/Editor/6000.3.9f1/Editor/Unity.exe" \
+  -quit -batchmode -nographics \
+  -projectPath 'E:\SecretProject\IndieRPGMMOAdventure' \
+  -buildTarget Win64 \
+  -executeMethod PlayerBuilder.Build \
+  -buildOutput 'E:\SecretProject\IndieRPGMMOAdventure\Builds\MultiClient' \
+  -logFile 'E:\SecretProject\IndieRPGMMOAdventure\Builds\multiclient-build.log'
+```
+
+`-buildOutput` rather than `BUILD_OUTPUT_DIR`: a variable exported in a WSL shell is
+not in the environment of a Windows `Unity.exe`. Paths handed to `Unity.exe` must be
+Windows paths for the same reason. The player lands in
+`Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe`, and boots
+`Assets/Samples/Cuvara Netcode/0.15.0/DOTS Sample/Scenes/DOTSSample.unity` — scene 0 in
+`EditorBuildSettings`, which is what `PlayerBuilder` reads. (`BuildConfig/*.json` lists
+only `MainScene`; that path is the CI toolkit's, not this one.)
+
+Then launch the instances:
+
+```bash
+Tools/run-clients.sh --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
+  --count 3 --gateway-host <host> --gateway-port <port> \
+  --nakama-host <host> --nakama-port <port> \
+  --map map_01 --status-url http://<gs-host>:<gs-port>/status --tile
+```
+
+No address is baked in. The game server is an Agones pod whose port is assigned at
+scheduling time, so every address is a parameter — see `BackendCommandLine` for the
+full flag set and the `CUVARA_*` environment fallbacks.
+
+**Kill the players before rebuilding.** A running player holds
+`lib_burst_generated.dll` open and the build fails on it: `Tools/run-clients.sh --kill`.
+
+#### Telling a real pass from three isolated clients
+
+Three clients that each see only themselves is a failure that looks like success — the
+windows are up, the logs say "IN WORLD", and nothing is wrong on the surface. Check all
+of these, not the first one:
+
+| Where | Expect | What the wrong value means |
+|---|---|---|
+| each client's window | three capsules, not one | remote entities never arrived |
+| each client's log, `[DOTSNet] Auth OK, user_id=` | three **different** user ids | shared identity; the logins evicted each other |
+| game server `/status` | `players_online: 3` | fewer means a client never joined, or was evicted |
+| game server `/metrics` | `gameserver_players_online{map_id="map_01"} 3` | same, and it is the counter the load tests read |
+| Redis `KEYS 'session:*'` | three entries | the gateway holds one session per user |
+| Redis `KEYS 'servers:*'` | **one** entry for the map | one entry per game server, never per player; three means the clients landed on three servers and could never see each other |
+| Redis `KEYS 'player:location:*'` | three entries | per-user location records |
+
+The area-of-interest radius is 50 units. Clients that wander further apart than that are
+mutually invisible and the server is *correct* to omit them, so judge visibility in the
+first seconds after all three have joined, before they drift.
+
 ### CI/CD (GitHub Actions)
 - `.github/workflows/unity-build.yml` — thin dispatcher delegating to `unity-build-workflows` submodule pipeline
 - Platforms: Android (AAB/ARM64), WebGL (Brotli), Linux64, LinuxServer, Windows64

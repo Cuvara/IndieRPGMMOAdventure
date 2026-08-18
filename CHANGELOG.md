@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Run several built clients at once against a chosen backend.** A built player had
+  no way to be told where the backend is: the DOTS sample scene carries only
+  `DOTSSceneSetup`, which adds `DOTSNetworkBridge` at runtime, so the component could
+  never hold anything but its own field initializers — gateway `127.0.0.1:8000`,
+  Nakama `127.0.0.1:7350`, and a `SampleNakamaAuth` constructed with no arguments at
+  all. Pointing a player anywhere else meant editing source and rebuilding, which is
+  untenable now that the game server is an Agones pod whose port is assigned at
+  scheduling time.
+  - `BackendCommandLine` (DOTS sample, mirrored in the package's `Samples~` copy)
+    resolves gateway host/port, Nakama scheme/host/port/server key, map id, the
+    `/status` URL and the device id from the player's command line, falling back to the
+    `CUVARA_*` environment variables the Editor live-backend tests already use, then to
+    the previous defaults. Read once in `Start`, before anything connects; nothing runs
+    per frame and no netcode behaviour changes.
+  - Passing `-cuvara-map` also collapses the offered map set to that one map. With the
+    scene's two maps the bridge draws a selector and waits for a click, which an
+    unattended launcher cannot supply.
+  - The device id is now per-process (`-cuvara-device`, else tag+pid+clock). Two
+    instances sharing one Nakama identity is the failure that reads as success: the
+    second login evicts the first and the survivor sits alone in a world of one.
+  - `Tools/run-clients.sh` starts N players, each with its own log file, device
+    identity and window, all pointed at a backend given as parameters. `--kill` stops
+    them, which is required before a rebuild — a running player holds
+    `lib_burst_generated.dll` open.
+- `PlayerBuilder` accepts `-buildOutput <path>` in addition to `BUILD_OUTPUT_DIR`.
+  Exporting the variable in a WSL shell does not put it in the environment of a Windows
+  `Unity.exe`, so the build silently landed in the default `build/`; a command-line flag
+  crosses that boundary.
+
 ### Fixed
 - `packages-lock.json` still resolved `shared-gamelogic` to `sgl-v0.1.8`. The v0.4.1
   bump changed only `manifest.json`, so the two disagreed about which version the
