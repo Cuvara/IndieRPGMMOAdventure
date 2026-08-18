@@ -35,17 +35,25 @@ namespace Cuvara.Netcode.Tests.Editor
     [TestFixture]
     public sealed class PredictionSurfaceContractTests
     {
-        private static MethodInfo Method(string name) =>
+        // Matched on name AND parameter types, not on name alone. The contract these
+        // tests guard is that a given signature still EXISTS -- the class remarks tell
+        // callers to "add rather than change", so an overload is the sanctioned way to
+        // extend this surface. Selecting on the name alone made the sanctioned move fail:
+        // the lookup threw "Sequence contains more than one matching element" the moment a
+        // second Reconcile appeared, reporting an addition as a broken contract.
+        private static MethodInfo Method(string name, params Type[] parameters) =>
             typeof(LocalMovePredictor)
                 .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .SingleOrDefault(m => m.Name == name);
+                .SingleOrDefault(m => m.Name == name &&
+                    m.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters));
 
         private static void AssertSignature(string name, Type returnType, params Type[] parameters)
         {
-            var method = Method(name);
+            var method = Method(name, parameters);
             Assert.That(method, Is.Not.Null,
                 $"LocalMovePredictor.{name} is part of the contract com.cuvara.dots drives. " +
-                "Removing or renaming it breaks a consumer that is not compiled by this repo.");
+                "Removing or renaming it -- or changing its parameters rather than adding " +
+                "an overload -- breaks a consumer that is not compiled by this repo.");
 
             Assert.That(method.ReturnType, Is.EqualTo(returnType),
                 $"LocalMovePredictor.{name}'s return type is part of the cross-package contract.");
@@ -70,6 +78,19 @@ namespace Cuvara.Netcode.Tests.Editor
         public void ReconcileKeepsItsSignature() =>
             AssertSignature(nameof(LocalMovePredictor.Reconcile),
                 typeof(void), typeof(Vec2), typeof(long));
+
+        [Test]
+        public void ReconcileOffersTheServerTickOverload()
+        {
+            Assert.That(
+                Method(nameof(LocalMovePredictor.Reconcile),
+                    typeof(Vec2), typeof(long), typeof(long)),
+                Is.Not.Null,
+                "Reconcile(position, ackTick, serverTick) is what lets the replay window " +
+                "be anchored to the tick the server actually simulated, so the prediction " +
+                "lead survives a snapshot that acknowledges every outstanding input. " +
+                "It is an addition: the two-argument form above stays for com.cuvara.dots.");
+        }
 
         [Test]
         public void AdvanceKeepsItsSignature() =>

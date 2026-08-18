@@ -200,6 +200,28 @@ namespace Cuvara.Netcode.Prediction
         private float _heldX, _heldY; // direction the server would still be integrating
         private long _heldFrom;       // base tick the hold started on; 0 = nothing held
         private long _lastMoveTick;   // base tick this entity last actually moved on
+
+        // How far ahead of the server's tick this predictor is running, in base ticks.
+        // Alignment between the server's tick counter and this predictor's base tick.
+        // The two are independently based -- _baseTick starts at 1 on this client, the
+        // server's is absolute and already large when anyone connects -- so the offset is
+        // an arbitrary signed number, and adding it to a server tick gives the local base
+        // tick that server tick corresponds to. That is what Reconcile needs in order to
+        // know which base ticks the server has already simulated, and therefore which
+        // remain the client's to replay.
+        //
+        // Kept as a MINIMUM over a sliding window, for the same reason TickRateEstimator
+        // keeps one: a snapshot can only ever arrive late relative to the tick it carries,
+        // so transit inflates a sample and never shrinks it. A mean would track the jitter
+        // and drag the replay window along with it.
+        private const int OffsetSamples = 32;
+        private readonly long[] _offsetRing = new long[OffsetSamples];
+        private int _offsetCount, _offsetNext;
+
+        // Hard cap on how far back an anchor may push the replay, so one absurd server
+        // tick -- a reset, a wrapped counter, a mis-decoded field -- costs a bad frame
+        // rather than a loop over millions of ticks.
+        private const int MaxReplayWindowTicks = 256;
         private float _inputInterval; // observed seconds between inputs; diagnostics
         private float _stepInterval;  // observed seconds between consecutive steps
         private float _lastStepAt;    // _elapsed when the previous step landed
@@ -639,7 +661,89 @@ namespace Cuvara.Netcode.Prediction
         /// to compare against, and treating an initial spawn position as a correction
         /// would count a snap that never happened.
         /// </remarks>
+        /// <summary>
+        /// Records one observation of how far ahead of the server this predictor is.
+        /// </summary>
+        private void ObserveTickOffset(long sample)
+        {
+            // No sign check. This is an OFFSET between two independently-based counters,
+            // not a duration: _baseTick is a local counter starting at 1 while the server
+            // tick is absolute and was in the tens of thousands by the time a client
+            // connected, so the difference is large and negative and every sample of it is
+            // legitimate. An earlier version discarded negatives as impossible, which
+            // discarded all of them -- the estimator stayed empty, the anchor was never
+            // trusted, and the fix silently did nothing.
+            _offsetRing[_offsetNext] = sample;
+            _offsetNext = (_offsetNext + 1) % OffsetSamples;
+            if (_offsetCount < OffsetSamples)
+            {
+                _offsetCount++;
+            }
+        }
+
+        /// <summary>
+        /// The smallest offset observed in the recent window, in base ticks: add it to a
+        /// server tick to get the local base tick that server tick corresponds to.
+        /// </summary>
+        /// <remarks>
+        /// Minimum, not mean, and for the same reason <c>TickRateEstimator</c> takes a
+        /// minimum: a snapshot can only ever arrive LATE relative to the tick it carries,
+        /// so extra transit inflates a sample and never shrinks it. The smallest sample in
+        /// the window is the one that travelled fastest, and therefore the closest reading
+        /// of the true alignment between the two counters.
+        /// </remarks>
+        private long TickOffset
+        {
+            get
+            {
+                long min = long.MaxValue;
+                for (var i = 0; i < _offsetCount; i++)
+                {
+                    if (_offsetRing[i] < min)
+                    {
+                        min = _offsetRing[i];
+                    }
+                }
+
+                return _offsetCount == 0 ? 0 : min;
+            }
+        }
+
         public void Reconcile(Vec2 authoritative, long ackTick)
+            => Reconcile(authoritative, ackTick, 0L);
+
+        /// <summary>
+        /// As <see cref="Reconcile(Vec2,long)"/>, but also given the snapshot's own server
+        /// tick, which lets the replay keep the prediction lead instead of discarding it.
+        /// </summary>
+        /// <param name="serverTick">
+        /// <c>WorldState.Tick</c> — the server tick the snapshot was produced on. Pass 0
+        /// when it is not known; the two-argument behaviour is then reproduced exactly.
+        /// </param>
+        /// <remarks>
+        /// <para>Added rather than folded into the existing signature: the two-argument
+        /// form is part of the cross-package contract with <c>com.cuvara.dots</c>, whose
+        /// compiler errors would not appear in this repository's CI.</para>
+        ///
+        /// <para><b>What this fixes.</b> The predicted position is legitimately ahead of
+        /// the newest authoritative one, by the transit the input took to reach the
+        /// server. Replay is what restores that lead after rewinding. But replay ran only
+        /// <c>if (_count > 0)</c> — over the buffered inputs — and a snapshot that
+        /// acknowledges the last outstanding input empties that buffer, so the lead was
+        /// rewound and then never rebuilt. The correction that produced was exactly the
+        /// lead: a whole number of steps, only ever while moving, and gone at rest.</para>
+        ///
+        /// <para>Measured against a live server before the fix: 18 of 20 samples corrected
+        /// by 2 steps at a 15 Hz send rate, and 14 of 20 by 1 step at 60 Hz — the size
+        /// tracking the interval between acknowledgements, which is what a discarded lead
+        /// does and what a genuine disagreement would not.</para>
+        ///
+        /// <para>The held direction survives an acknowledgement too — the server keeps
+        /// integrating it for <see cref="HoldTicks"/> ticks after the input it came from —
+        /// so the anchored path seeds the replay with the live hold state rather than
+        /// with nothing.</para>
+        /// </remarks>
+        public void Reconcile(Vec2 authoritative, long ackTick, long serverTick)
         {
             if (!IsEnabled)
             {
@@ -673,17 +777,79 @@ namespace Cuvara.Netcode.Prediction
             // a 15 Hz send rate against a 60 Hz base tick.
             Vec2 replayed = authoritative;
 
-            if (_count > 0)
+            // Which base tick the authoritative position corresponds to, and therefore the
+            // first one the server has NOT simulated. Without an anchor this is only
+            // knowable from the input buffer, which is why an empty buffer used to mean
+            // "nothing to replay" when what it actually meant was "no input is outstanding
+            // -- but the ticks since the server's are still ours to re-run".
+            long replayFrom;
+            bool anchored = false;
+
+            if (serverTick > 0)
             {
-                long heldFrom = 0;
-                float heldX = 0f, heldY = 0f;
+                ObserveTickOffset(_baseTick - serverTick);
+                long anchor = serverTick + TickOffset;
+
+                // Trust the anchor only where it is physically possible: the server cannot
+                // have simulated ticks this client has not reached, and an anchor further
+                // back than the cap is a bad read, not a long round trip.
+                if (anchor <= _baseTick && _baseTick - anchor <= MaxReplayWindowTicks)
+                {
+                    replayFrom = anchor + 1;
+                    anchored = true;
+                }
+                else
+                {
+                    replayFrom = _count > 0 ? _pending[_head].BaseTick : _baseTick + 1;
+                }
+            }
+            else
+            {
+                replayFrom = _count > 0 ? _pending[_head].BaseTick : _baseTick + 1;
+            }
+
+            // An outstanding input older than the anchor still has to be replayed, or an
+            // input the server has not seen would be dropped on the floor.
+            if (_count > 0 && _pending[_head].BaseTick < replayFrom)
+            {
+                replayFrom = _pending[_head].BaseTick;
+            }
+
+            if (_count > 0 || anchored)
+            {
+                // The hold outlives the input that started it: the server integrates the
+                // held direction for HoldTicks ticks whether or not another packet
+                // arrives, so a replay that starts with nothing held reproduces a
+                // stationary entity where the server has a moving one. On the anchored
+                // path seed from the live hold, which is the state the server is
+                // integrating from. The unanchored path keeps its original seed so the
+                // two-argument behaviour is bit-identical.
+                long heldFrom = anchored ? _heldFrom : 0;
+                float heldX = anchored ? _heldX : 0f;
+                float heldY = anchored ? _heldY : 0f;
                 var next = 0;
 
                 // Replay banks time exactly as the live path did, seeded from the value
                 // that was actually in effect when the first surviving input was recorded.
-                long replayLastMove = _pending[_head].LastMoveTickBefore;
+                long replayLastMove = _count > 0
+                    ? _pending[_head].LastMoveTickBefore
+                    : _lastMoveTick;
 
-                for (long t = _pending[_head].BaseTick; t <= _baseTick; t++)
+                // ...but never from a tick LATER than the window starts on. StepDeltaTime
+                // banks the gap since the last move, so a last-move tick in the window's
+                // future banks the whole distance back to it and the first replayed step
+                // integrates seconds instead of one tick. That is what "banked movement"
+                // means in the measurement, and seeding this with the live _lastMoveTick
+                // produced 12-step corrections and 39 snaps where the unanchored path had
+                // 2-step ones. While the entity is moving it steps on every base tick, so
+                // at the anchor the last move IS the anchor -- the clamp is exact there,
+                // and conservative when it is not.
+                if (anchored && replayLastMove > replayFrom - 1)
+                {
+                    replayLastMove = replayFrom - 1;
+                }
+
+                for (long t = replayFrom; t <= _baseTick; t++)
                 {
                     // Inputs recorded on this tick step first and take the hold, exactly
                     // as ProcessInput runs before ApplyHeldMovement within a tick.
@@ -916,6 +1082,8 @@ namespace Cuvara.Netcode.Prediction
             _lastInputAt = 0f;
             _elapsed = 0f;
             _baseTick = 1;
+            _offsetCount = 0;
+            _offsetNext = 0;
             _tickAccumulator = 0f;
             _heldX = 0f;
             _heldY = 0f;

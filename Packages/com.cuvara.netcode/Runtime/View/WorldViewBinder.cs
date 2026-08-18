@@ -309,6 +309,12 @@ namespace Cuvara.Netcode.View
                         // side. Non-positive is ignored inside — on the wire that means
                         // "not sent", so the configured fallback stands.
                         _predictor.SetServerSpeed(e.Speed);
+                        // Deliberately the two-argument form. The three-argument overload
+                        // exists and anchors the replay window to world.Tick, but wiring
+                        // it here made the live measurement worse, not better: 39 snaps
+                        // and 12-step corrections against 0 snaps and 2-step ones. Until
+                        // that is understood, the overload stays unused rather than
+                        // shipping a regression -- see IndieRPGMMOAdventure#13.
                         _predictor.Reconcile(new Vec2(e.X, e.Y), world.AckTick);
                     }
 

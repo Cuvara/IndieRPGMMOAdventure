@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — a `Reconcile` overload taking the snapshot's server tick (present, deliberately unused)
+
+`Reconcile(position, ackTick, serverTick)` sits alongside the two-argument form — an
+addition, not a change, because the two-argument signature is part of the cross-package
+contract with `com.cuvara.dots`, which this repository does not compile. Given the server
+tick it anchors the replay window to the tick the snapshot was produced on, instead of to
+the oldest buffered input.
+
+**Nothing calls it.** `WorldViewBinder` still uses the two-argument form, and the runtime
+behaviour of this package is unchanged. Wiring the overload in made the live measurement
+**worse**: 39 snaps and 12-step corrections, against 0 snaps and 2-step ones on the
+existing path. It is committed unused rather than either shipped or discarded, because the
+diagnosis it came from still holds and the next attempt should not start from nothing.
+
+The defect it targets (IndieRPGMMOAdventure#13) is that replay ran only `if (_count > 0)`,
+over the buffered inputs, so a snapshot acknowledging the last outstanding input emptied
+the buffer and the prediction lead was rewound without being rebuilt. Measured against a
+live server: 18 of 20 samples corrected by 2 steps at a 15 Hz send rate and 14 of 20 by 1
+step at 60 Hz — the size tracking the interval between acknowledgements.
+
+`ReconcileLeadTests` is added `[Ignore]`d and says why in the attribute: every
+configuration it runs — including zero latency, including the unanchored path — returns
+exactly 1.000 step, while `HeldMovementParityTests` returns 0 under the same zero-latency
+conditions. That disagreement is the new harness's fault, and it must be fixed against
+that known-good result before any assertion in it means anything.
+
+### Fixed — the contract tests could not tell an addition from a breaking change
+
+`PredictionSurfaceContractTests` looked its methods up by name with `SingleOrDefault`, so
+the moment a second `Reconcile` existed the lookup threw
+`Sequence contains more than one matching element` and reported the sanctioned way of
+extending this surface as a broken contract. Methods are now matched on name **and**
+parameter types, which is what "this signature still exists" actually means.
+
 ### Added — the correction magnitude, sized by the tick rate actually measured
 
 `Report` printed `max correction in steps` as `MaxCorrection / (EffectiveSpeed /
