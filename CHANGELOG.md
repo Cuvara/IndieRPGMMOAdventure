@@ -38,6 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   crosses that boundary.
 
 ### Fixed
+- **Client and server base ticks free-run at arbitrary phase (#13).** The predictor's
+  `_baseTick` started at 1 and free-ran via wall-clock accumulation, while the server's
+  `current_tick` was in the hundreds of thousands. The absolute values did not matter —
+  `StepDeltaTime` and `ApplyHeld` use differences — but the phase did: the hold window
+  is `HoldTicks` base ticks, and where each clock's tick boundary fell relative to an
+  input changed how many held steps got applied between inputs. On localhost with
+  matched rates and no loss, 17 of 20 samples needed a correction of exactly 2 steps.
+  Fixed by seeding `_baseTick` from the server's world tick (`WorldState.Tick`, already
+  on the wire) on the first snapshot, via a new `SeedBaseTick(long)` method called from
+  `WorldViewBinder` before `Reconcile`. The accumulator-driven clock in `Advance` owns
+  the counter after seeding; re-seeding on every snapshot would fight it.
 - `packages-lock.json` still resolved `shared-gamelogic` to `sgl-v0.1.8`. The v0.4.1
   bump changed only `manifest.json`, so the two disagreed about which version the
   project uses and the lock decides. Now pinned to `sgl-v0.1.9`
