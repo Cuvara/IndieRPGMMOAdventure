@@ -39,7 +39,8 @@ public static class PlayerBuilder
                 "Add at least one scene under File > Build Settings.");
         }
 
-        string outputRoot = Environment.GetEnvironmentVariable("BUILD_OUTPUT_DIR");
+        string outputRoot = ReadArg("-buildOutput")
+                            ?? Environment.GetEnvironmentVariable("BUILD_OUTPUT_DIR");
         if (string.IsNullOrEmpty(outputRoot))
         {
             outputRoot = "build";
@@ -77,6 +78,30 @@ public static class PlayerBuilder
         }
 
         Debug.Log($"[PlayerBuilder] Build succeeded: {summary.totalSize} bytes -> {locationPath}");
+    }
+
+    /// <summary>Reads <c>&lt;flag&gt; &lt;value&gt;</c> off the Editor's command line; null when absent.</summary>
+    /// <remarks>
+    /// <c>BUILD_OUTPUT_DIR</c> alone is not enough when the build is driven from WSL:
+    /// exporting a variable in a WSL shell does not put it in the environment of a
+    /// Windows <c>Unity.exe</c>, so the output silently landed in the default
+    /// <c>build/</c> instead of where the caller asked. A command-line flag crosses that
+    /// boundary. The environment variable still works and still wins nothing — the flag
+    /// takes precedence, everything else is unchanged.
+    /// </remarks>
+    private static string ReadArg(string flag)
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], flag, StringComparison.Ordinal) &&
+                !string.IsNullOrEmpty(args[i + 1]))
+            {
+                return args[i + 1];
+            }
+        }
+
+        return null;
     }
 
     // Optional env-driven Android configuration, used by the release-signing lane
