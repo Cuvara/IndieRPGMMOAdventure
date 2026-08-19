@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`.gitignore`: ignore `/.verify/`.** The post-deploy verify suite
+  (`rpg-mmo-server/backend/deploy/k8s/verify`) writes Unity test logs and NUnit XML there
+  when it is pointed at this project. `*.log` already caught the logs, so only the XML
+  surfaced — 5.5 MB across 16 files showing as untracked, which is noise in every
+  `git status` and a standing invitation to commit run output by accident.
 - **Run several built clients at once against a chosen backend.** A built player had
   no way to be told where the backend is: the DOTS sample scene carries only
   `DOTSSceneSetup`, which adds `DOTSNetworkBridge` at runtime, so the component could
