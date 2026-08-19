@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Vendored `com.cuvara.netcode` bumped to upstream `v0.16.0`, with no local renumbering.** The
+  drift the `netcode-vendor-drift` check found is now reconciled: **13 differing paths down to 1**.
+  Root cause of the original divergence was commit `31f7beb`, which vendored upstream **0.15.4** and
+  **relabelled it 0.15.5** locally; upstream then released its own, different 0.15.5. The two never
+  held the same content from the moment both existed, and 16 commits of client-side prediction work
+  accumulated on top with no route back. **Never renumber a vendored copy** — the version field is
+  the only handle the drift check has, and a local relabel makes it lie.
+  The prediction work (`heldFrom` idle guard, `SeedBaseTick`, the estimator's two-observation rule)
+  is now upstream in `Cuvara/Netcode` v0.16.0 rather than living only here, so a fresh install of
+  the package no longer silently desyncs against the current server.
+  EditMode suite before the bump: **388/388**. After: **391/391** — the three added tests are the
+  public-surface contract tests that came with v0.16.0.
+- **`Samples~/DOTSSample/DOTSNetworkBridge.cs` remains a declared client-only difference.** It wires
+  `BackendCommandLine` into the sample, and that file is client-only harness, so the bridge cannot
+  go upstream without it. The drift check reports it and will keep reporting it: `.vendor-client-only`
+  exempts files that are *absent* upstream, never files that *differ*, because an exemption covering
+  modifications would let real drift hide behind it.
+
 ### Added
 - **`sgl-pin-check` CI: the Shared.GameLogic pin in `manifest.json` and `packages-lock.json` must
   agree.** UPM resolves the **lock**, so a manifest-only bump is silently ignored: the diff looks
