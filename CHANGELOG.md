@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`sgl-pin-check` CI: the Shared.GameLogic pin in `manifest.json` and `packages-lock.json` must
+  agree.** UPM resolves the **lock**, so a manifest-only bump is silently ignored: the diff looks
+  like the upgrade happened, the build stays green, and the client keeps running the old
+  simulation. It also blinds the golden-vector tests, which replay fixtures read from the *pinned*
+  package — bump the server's fixtures, forget the lock, and the one cross-language check that
+  exists keeps passing against the stale ones. The job also verifies the pinned tag exists
+  upstream and that its own `package.json` version matches the tag name (nothing on the server
+  side re-verifies a tag after creation). Being *behind* the newest release is reported as
+  informational, never a failure — sitting on an older release is a valid choice.
+  Runs on PRs touching either file, weekly, and on `workflow_dispatch` so `rpg-mmo-server` can
+  fire it when a new `sgl-v*` tag is published.
 - **`.gitignore`: ignore `/.verify/`.** The post-deploy verify suite
   (`rpg-mmo-server/backend/deploy/k8s/verify`) writes Unity test logs and NUnit XML there
   when it is pointed at this project. `*.log` already caught the logs, so only the XML
