@@ -84,7 +84,13 @@ jobs:
           # listed-and-modified file would let a real drift hide behind an exemption.
           ALLOWLIST_FILE="${VENDOR_DIR}/.vendor-client-only"
           if [[ -f "${ALLOWLIST_FILE}" ]]; then
-            grep -vE '^\s*(#|$)' "${ALLOWLIST_FILE}" | sed 's/[[:space:]]*$//' | sort -u > /tmp/allow.txt
+            # `|| true`: an allowlist that is entirely comments is a VALID state — it
+            # means nothing is exempt — but grep exits 1 when it matches nothing, and
+            # under `set -o pipefail` plus the `-e` GitHub adds to `shell: bash` that
+            # kills the job before it compares anything. Measured 2026-08-19: emptying
+            # this file after upstreaming the last exemption turned a clean run into a
+            # bare `exit 1` with no summary and no error line.
+            { grep -vE '^\s*(#|$)' "${ALLOWLIST_FILE}" || true; } | sed 's/[[:space:]]*$//' | sort -u > /tmp/allow.txt
           else
             : > /tmp/allow.txt
           fi
