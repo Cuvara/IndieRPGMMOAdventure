@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Vendored `com.cuvara.netcode` bumped to upstream `v0.16.1`; the drift check now reports zero.**
+  `BackendCommandLine` and the DOTS sample's use of it were the last client-only difference. They
+  are upstream now, so the vendored copy is **byte-for-byte its upstream release** — 13 differing
+  paths at the start of the day, 1 after v0.16.0, **0** now.
+  `.vendor-client-only` is kept but empty, with a comment saying why: an empty allowlist is a
+  statement, and the drift check reads the file. Anything added back to it needs a reason written
+  next to it.
+  Upstreaming rather than exempting was the right call because the allowlist deliberately cannot
+  exempt a file that *differs* — only one that is *absent* — so the alternative was a check that
+  reported the same known difference every week, which is how a check gets ignored.
+  EditMode: **391/391**, unchanged from v0.16.0.
+- **`netcode-vendor-drift` died on an allowlist containing only comments.** Emptying
+  `.vendor-client-only` after upstreaming the last exemption turned a clean run into a bare
+  `exit 1` with no summary and no error line. `grep` exits 1 when it matches nothing, and under
+  `set -o pipefail` plus the `-e` GitHub adds to `shell: bash` that killed the job before it
+  compared anything. An all-comments allowlist is a **valid** state — it means nothing is exempt —
+  so the grep is now guarded. Reproduced under `bash -e` with `pipefail` before and after.
 - **Vendored `com.cuvara.netcode` bumped to upstream `v0.16.0`, with no local renumbering.** The
   drift the `netcode-vendor-drift` check found is now reconciled: **13 differing paths down to 1**.
   Root cause of the original divergence was commit `31f7beb`, which vendored upstream **0.15.4** and

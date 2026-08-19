@@ -107,3 +107,8 @@ UnityEntitlementLicense.xml
 # project. `*.log` already caught the logs, so only the XML was showing up as
 # untracked — 5.5 MB of it, one pair per run.
 /.verify/
+
+# Agent worktrees. These are full checkouts of this repo created by tooling; a
+# bare `git add -A` otherwise stages one as an embedded git repository, which
+# produces a commit that no clone can resolve.
+/.claude/worktrees/
