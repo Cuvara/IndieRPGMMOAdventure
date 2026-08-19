@@ -101,3 +101,9 @@ UnityEntitlementLicense.xml
 # is machine-local — a localhost port plus a per-install id — so a committed copy
 # points every other clone at an endpoint that does not exist there.
 /.mcp.json
+
+# Verification harness output: Unity test logs and NUnit XML written by the
+# post-deploy verify suite (backend/deploy/k8s/verify) when it is pointed at this
+# project. `*.log` already caught the logs, so only the XML was showing up as
+# untracked — 5.5 MB of it, one pair per run.
+/.verify/
