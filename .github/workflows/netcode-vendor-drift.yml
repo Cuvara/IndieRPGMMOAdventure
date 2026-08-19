@@ -1,0 +1,160 @@
+name: Netcode vendor drift
+
+# `Packages/com.cuvara.netcode` is VENDORED, not a submodule and not a subtree — it
+# shares no git history with Cuvara/Netcode, so nothing about git can tell you the two
+# have diverged. Sync is content-based, by hand, through a PR.
+#
+# WHAT THIS CHECKS, AND WHY IT COMPARES AGAINST A TAG AND NOT `main`:
+#
+# The vendored copy declares a version in its package.json. This job clones
+# Cuvara/Netcode at the tag matching THAT version and compares like for like. Comparing
+# against `main` would flag every legitimate lag — the client is entitled to sit on an
+# older release — and would say nothing about the failure that actually matters:
+#
+#   the two copies claim the SAME version and hold DIFFERENT code.
+#
+# That is unfalsifiable from either side. No version comparison catches it, no UPM
+# resolution catches it, and the divergent files here are the prediction path, which has
+# to agree with the server or players see rubber-banding that reproduces nowhere else.
+#
+# WHAT THIS DELIBERATELY DOES NOT DO: open a sync PR. When this was first measured
+# (2026-08-19) the vendored copy was AHEAD — LocalMovePredictor.cs carried +976/-662
+# against the v0.15.5 tag, including a `_baseTickSeeded` field with no upstream
+# counterpart. An automated "sync from upstream" would have deleted real work. Direction
+# is a judgement call, so this job reports and a human reconciles.
+
+on:
+  schedule:
+    # Mondays 07:00 UTC, an hour after the branch cleanup
+    - cron: '0 7 * * 1'
+  pull_request:
+    paths:
+      - 'Packages/com.cuvara.netcode/**'
+      - '.github/workflows/netcode-vendor-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netcode-vendor-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Vendored netcode matches its upstream tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout client
+        uses: actions/checkout@v4
+
+      - name: Compare the vendored package against its upstream tag
+        env:
+          # Public repo — no token needed to read it, and using none keeps this job
+          # runnable from a fork.
+          UPSTREAM: https://github.com/Cuvara/Netcode.git
+          VENDOR_DIR: Packages/com.cuvara.netcode
+        run: |
+          set -uo pipefail
+
+          VERSION=$(python3 -c "import json;print(json.load(open('${VENDOR_DIR}/package.json'))['version'])")
+          TAG="v${VERSION}"
+          echo "Vendored version : ${VERSION}"
+          echo "Upstream tag     : ${TAG}"
+
+          if ! git ls-remote --exit-code --tags "${UPSTREAM}" "refs/tags/${TAG}" >/dev/null 2>&1; then
+            {
+              echo "### Netcode vendor drift — UNRESOLVABLE"
+              echo ""
+              echo "\`${VENDOR_DIR}/package.json\` declares **${VERSION}**, but \`Cuvara/Netcode\` has no \`${TAG}\` tag."
+              echo ""
+              echo "A vendored copy whose version does not exist upstream cannot be compared to anything."
+              echo "Either the version was invented locally, or the upstream release was never tagged."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Vendored netcode declares ${VERSION}; upstream has no ${TAG} tag to compare against."
+            exit 1
+          fi
+
+          git clone --quiet --depth 1 --branch "${TAG}" "${UPSTREAM}" /tmp/upstream
+          rm -rf /tmp/upstream/.git
+
+          # Files the client intentionally adds on top of the package. Anything listed
+          # here may exist ONLY in the vendored copy; it may not differ, because a
+          # listed-and-modified file would let a real drift hide behind an exemption.
+          ALLOWLIST_FILE="${VENDOR_DIR}/.vendor-client-only"
+          if [[ -f "${ALLOWLIST_FILE}" ]]; then
+            grep -vE '^\s*(#|$)' "${ALLOWLIST_FILE}" | sed 's/[[:space:]]*$//' | sort -u > /tmp/allow.txt
+          else
+            : > /tmp/allow.txt
+          fi
+
+          # The upstream REPO carries things the PACKAGE does not: its own CI, its own
+          # scripts, its own git metadata. Vendoring copies the package, not the repo, so
+          # comparing those would report drift forever and train everyone to ignore this
+          # job. `.vendor-client-only` is ours and has no upstream counterpart by design.
+          EXCLUDES=(-x '.github' -x '.git' -x '.gitignore' -x '.vendor-client-only')
+
+          ONLY_VENDOR=(); ONLY_UPSTREAM=(); MODIFIED=()
+          while IFS= read -r line; do
+            case "${line}" in
+              "Only in ${VENDOR_DIR}"*)
+                p=$(sed -E "s|^Only in ${VENDOR_DIR}/?([^:]*): (.*)$|\1/\2|;s|^/||" <<< "${line}")
+                grep -qxF "${p}" /tmp/allow.txt || ONLY_VENDOR+=("${p}") ;;
+              "Only in /tmp/upstream"*)
+                p=$(sed -E "s|^Only in /tmp/upstream/?([^:]*): (.*)$|\1/\2|;s|^/||" <<< "${line}")
+                ONLY_UPSTREAM+=("${p}") ;;
+              Files*differ)
+                p=$(sed -E "s|^Files /tmp/upstream/(.*) and .*$|\1|" <<< "${line}")
+                MODIFIED+=("${p}") ;;
+            esac
+          done < <(diff -rq "${EXCLUDES[@]}" /tmp/upstream "${VENDOR_DIR}" 2>/dev/null || true)
+
+          TOTAL=$(( ${#ONLY_VENDOR[@]} + ${#ONLY_UPSTREAM[@]} + ${#MODIFIED[@]} ))
+
+          {
+            echo "### Netcode vendor drift"
+            echo ""
+            echo "Vendored \`${VERSION}\` compared against upstream tag \`${TAG}\`."
+            echo ""
+            if (( TOTAL == 0 )); then
+              echo "**Identical.** The vendored copy is byte-for-byte its upstream release."
+            else
+              echo "**${TOTAL} difference(s) at the same version number.**"
+              echo ""
+              if (( ${#MODIFIED[@]} > 0 )); then
+                echo "#### Modified — same path, different content"
+                echo ""
+                echo "These are the ones that matter. Both copies claim ${VERSION}; only one can be right."
+                echo ""
+                for f in "${MODIFIED[@]}"; do echo "- \`${f}\`"; done
+                echo ""
+              fi
+              if (( ${#ONLY_VENDOR[@]} > 0 )); then
+                echo "#### Present only in the client, and not declared"
+                echo ""
+                echo "If these are deliberate client-side additions, list them in \`${ALLOWLIST_FILE}\`."
+                echo ""
+                for f in "${ONLY_VENDOR[@]}"; do echo "- \`${f}\`"; done
+                echo ""
+              fi
+              if (( ${#ONLY_UPSTREAM[@]} > 0 )); then
+                echo "#### Present upstream, missing from the client"
+                echo ""
+                for f in "${ONLY_UPSTREAM[@]}"; do echo "- \`${f}\`"; done
+                echo ""
+              fi
+              echo "---"
+              echo ""
+              echo "Reconcile by hand. **Do not assume upstream wins** — when this check was written the"
+              echo "client copy was ahead, carrying prediction work that had never been pushed back."
+              echo "Decide direction per file, then either bump the vendored version to a new upstream"
+              echo "release, or upstream the client's changes and cut a release from them."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( TOTAL > 0 )); then
+            echo "::error::Vendored netcode differs from upstream ${TAG} in ${TOTAL} file(s) while claiming the same version. See the job summary."
+            exit 1
+          fi
+          echo "Vendored copy matches upstream ${TAG} exactly."

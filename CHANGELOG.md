@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`netcode-vendor-drift` CI: fail when the vendored `com.cuvara.netcode` differs from its
+  upstream release.** The package is vendored, not a submodule and not a subtree — it shares no
+  git history with `Cuvara/Netcode`, so nothing about git can tell you the copies have diverged.
+  The job reads the version from the vendored `package.json` and compares against **that tag**,
+  not `main`: comparing to `main` flags every legitimate lag and stays silent on the failure that
+  matters, which is two copies claiming the same version and holding different code.
+  Measured on introduction: **11 files differ at `0.15.5`**, including `LocalMovePredictor.cs`,
+  `TickRateEstimator.cs` and `WorldViewBinder.cs` — the prediction path that has to agree with the
+  server — plus a `package.json` pinning a different `Shared.GameLogic` (`sgl-v0.1.8` upstream vs
+  `sgl-v0.1.9` here). The job deliberately does **not** open a sync PR: the client copy is the one
+  that is ahead, so an automated sync from upstream would delete real work. Client-only additions
+  are declared in `Packages/com.cuvara.netcode/.vendor-client-only`; a declared file may be absent
+  upstream but may not differ, so an exemption cannot hide a real drift.
 - **`.gitignore`: ignore `/.verify/`.** The post-deploy verify suite
   (`rpg-mmo-server/backend/deploy/k8s/verify`) writes Unity test logs and NUnit XML there
   when it is pointed at this project. `*.log` already caught the logs, so only the XML
