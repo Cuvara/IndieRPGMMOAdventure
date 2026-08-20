@@ -6,7 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Samples/Cuvara Netcode/0.16.1/DOTS Sample/Scenes/DOTSSample.unity
+    path: Assets/Samples/Cuvara Netcode/0.16.3/DOTS Sample/Scenes/DOTSSample.unity
     guid: d0e1f2a3b4c5d6e7f8091011121314d0
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 2162b1c394ad36c42b39b9ef90daaf84, type: 2}

@@ -28,6 +28,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of two vendored packages reads, to anyone glancing at a green run, as if it covers vendoring.
 
 ### Changed
+- **`com.cuvara.netcode` re-vendored 0.16.1 -> 0.16.3**, byte-identical to upstream `v0.16.3`.
+
+  Test-only upstream: `0.16.2` fixed `PredictionSurfaceContractTests` resolving the prediction
+  surface by name, which threw the moment a second overload existed; `0.16.3` taught
+  `PredictionLatencyMeasurement` to measure the **unseeded** base tick, which it could not do
+  before — it drives the predictor through `WorldViewBinder`, and the binder seeds on every
+  snapshot, so every run it had ever produced was already the "after".
+
+  That measurement is why this is worth vendoring rather than skipping. Against staging, medians
+  of 3 interleaved runs, 20/20 usable samples, 60 Hz advertised and 60.0 Hz measured off the wire:
+  **max correction 0.0833 world units unseeded, 0.0000 seeded**. `0.0833` is speed 5 ÷ 60 Hz —
+  *exactly one base tick of movement*, which is what a one-tick phase misalignment produces, so
+  the number and the documented mechanism corroborate each other. The reconcile count (140 vs 162)
+  is inside the unseeded arm's own spread and is **not** a result.
+
+  No runtime assembly changed between 0.16.1 and 0.16.3, so nothing about transport, codec,
+  handshake, snapshots or prediction moves for the player.
+
+  `Assets/Samples/Cuvara Netcode/0.16.1` was renamed to `0.16.3` and `EditorBuildSettings`
+  repointed. `Samples~` is byte-identical across the two releases, so this is a rename rather than
+  a re-import — but the directory name still had to move, because the imported-sample check
+  compares it against the package version and a stale name is exactly the lag that once shipped a
+  player ignoring every backend flag.
+
+  `packages-lock.json` needs no edit: the package is `embedded` (`file:`), so the lock carries no
+  version, only the dependency set, which is unchanged (verified).
+
 - **`--nakama-key` is now required when running clients by hand.** The Nakama server keys were
   rotated on 2026-08-20 and each backend cluster has its own, so the flag's `defaultkey` default
   no longer authenticates anywhere.
