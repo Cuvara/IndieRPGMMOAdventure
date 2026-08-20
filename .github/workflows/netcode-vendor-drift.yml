@@ -30,6 +30,8 @@ on:
   pull_request:
     paths:
       - 'Packages/com.cuvara.netcode/**'
+      - 'Assets/Samples/Cuvara Netcode/**'
+      - 'ProjectSettings/EditorBuildSettings.asset'
       - '.github/workflows/netcode-vendor-drift.yml'
   workflow_dispatch:
 
@@ -164,3 +166,148 @@ jobs:
             exit 1
           fi
           echo "Vendored copy matches upstream ${TAG} exactly."
+
+  imported-sample:
+    name: Imported samples match the package
+    runs-on: ubuntu-latest
+
+    # A SECOND question, and the reason it is a separate job: the drift job above
+    # compares Packages/ against the upstream RELEASE. This one compares
+    # Assets/Samples/ against Packages/. Both were green on 2026-08-19 while a built
+    # player ignored every -cuvara-* flag, because the thing that was wrong sat
+    # between them and neither was looking there.
+    #
+    # `Samples~` carries a `~`, so Unity never imports it. The copy Unity compiles
+    # lives in Assets/Samples/, is made ONCE at import time, and does not update when
+    # the package is vendored. So the package can be perfect, the drift check can read
+    # zero, and the player can still be built from a sample that is releases behind.
+    #
+    # Measured: the project held Assets/Samples/Cuvara Netcode/0.15.5 (complete except
+    # BackendCommandLine) and 0.15.0 (two hand-dropped files with their own GUIDs and
+    # no asmdef). EditorBuildSettings pointed scene 0 at the 0.15.5 copy, so the built
+    # player fell back to Nakama's default 7350 and could not be pointed at a backend.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare the imported samples against the package
+        run: |
+          set -uo pipefail
+          python3 - <<'PYEOF'
+          import json, os, sys, hashlib
+
+          PKG   = "Packages/com.cuvara.netcode"
+          ROOT  = "Assets/Samples"
+
+          pkg   = json.load(open(f"{PKG}/package.json", encoding="utf-8"))
+          ver   = pkg["version"]
+          disp  = pkg.get("displayName", "Cuvara Netcode")
+          # displayName -> Samples~ path, straight out of the manifest rather than
+          # hardcoded, so a new sample is covered the day it is declared.
+          decl  = {s["displayName"]: s["path"] for s in pkg.get("samples", [])}
+          base  = os.path.join(ROOT, disp)
+
+          def digest(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as fh:
+                  for chunk in iter(lambda: fh.read(65536), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          def tree(root):
+              out = {}
+              for dirpath, _, files in os.walk(root):
+                  for f in files:
+                      full = os.path.join(dirpath, f)
+                      out[os.path.relpath(full, root)] = digest(full)
+              return out
+
+          problems, notes = [], []
+
+          if not os.path.isdir(base):
+              notes.append(f"No samples imported under `{base}`. Nothing to check.")
+          else:
+              versions = sorted(d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d)))
+
+              stale = [v for v in versions if v != ver]
+              if stale:
+                  problems.append(
+                      f"**Imported sample versions do not match the package.** Package is `{ver}`; "
+                      f"found {', '.join('`'+v+'`' for v in stale)} under `{base}`. An import does not "
+                      f"update when the package is vendored — delete the stale copies and re-import.")
+
+              if len(versions) > 1:
+                  problems.append(
+                      f"**{len(versions)} imported versions coexist** ({', '.join('`'+v+'`' for v in versions)}). "
+                      f"Two copies of one sample compile two copies of its scripts, and only one is in the build.")
+
+              for v in versions:
+                  for sample in sorted(os.listdir(os.path.join(base, v))):
+                      imp = os.path.join(base, v, sample)
+                      if not os.path.isdir(imp):
+                          continue
+                      rel = decl.get(sample)
+                      if rel is None:
+                          problems.append(f"`{imp}` is not a sample this package declares. Package samples: "
+                                          + ", ".join(f"`{k}`" for k in decl) + ".")
+                          continue
+                      src = os.path.join(PKG, rel)
+                      if not os.path.isdir(src):
+                          problems.append(f"`{imp}` imported from `{rel}`, which no longer exists in the package.")
+                          continue
+                      a, b = tree(src), tree(imp)
+                      only_pkg = sorted(set(a) - set(b))
+                      only_imp = sorted(set(b) - set(a))
+                      differ   = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+                      if only_pkg or only_imp or differ:
+                          lines = [f"**`{imp}` differs from `{src}`.**"]
+                          if only_pkg: lines.append("  Missing from the import: " + ", ".join(f"`{x}`" for x in only_pkg[:10]))
+                          if only_imp: lines.append("  Present only in the import: " + ", ".join(f"`{x}`" for x in only_imp[:10]))
+                          if differ:   lines.append("  Content differs: " + ", ".join(f"`{x}`" for x in differ[:10]))
+                          problems.append("\n".join(lines))
+
+          # The failure that actually shipped: the build scene pointed at a stale copy.
+          ebs = "ProjectSettings/EditorBuildSettings.asset"
+          if os.path.exists(ebs):
+              import re
+              scenes = [m.strip() for m in re.findall(r"path:\s*(.+)", open(ebs, encoding="utf-8", errors="ignore").read())]
+              for sc in scenes:
+                  if sc.startswith(os.path.join(ROOT, disp)) and f"/{ver}/" not in sc:
+                      problems.append(
+                          f"**`EditorBuildSettings` builds a scene from a stale import:** `{sc}`. "
+                          f"The package is `{ver}`. This is exactly the shape that shipped a player "
+                          f"which ignored every backend flag.")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          out = []
+          out.append("### Imported samples vs package")
+          out.append("")
+          out.append(f"Package `com.cuvara.netcode` version **{ver}**.")
+          out.append("")
+          if problems:
+              out.append(f"**{len(problems)} problem(s).**")
+              out.append("")
+              for p in problems:
+                  out.append(f"- {p}")
+                  out.append("")
+              out.append("---")
+              out.append("")
+              out.append("`Samples~` is never imported by Unity — the copy under `Assets/Samples/` is what a "
+                         "build compiles, it is made once at import time, and it does **not** follow the package. "
+                         "The netcode drift job cannot see this: it compares `Packages/` against the upstream "
+                         "release and says nothing about whether the import matches the package.")
+          elif notes:
+              out += [f"- {n}" for n in notes]
+          else:
+              out.append("**Every imported sample is byte-for-byte its package source, and the build scenes point at the current version.**")
+          text = "\n".join(out) + "\n"
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write(text)
+          print(text)
+
+          if problems:
+              print(f"::error::{len(problems)} imported-sample problem(s) — see the job summary.")
+              sys.exit(1)
+          PYEOF

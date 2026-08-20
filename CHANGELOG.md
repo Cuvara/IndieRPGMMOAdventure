@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`netcode-vendor-drift` gains a second job: the imported samples must match the package.** The
+  existing job compares `Packages/` against the upstream *release*; this one compares
+  `Assets/Samples/` against `Packages/`. Both were green while a built player ignored every
+  `-cuvara-*` flag, because the fault sat between them and neither was looking there.
+  It fails on any of: an imported version that is not the package's, two imported versions
+  coexisting, an import whose content differs from its `Samples~` source, an import of a sample the
+  package no longer declares, or an `EditorBuildSettings` scene under a stale import — that last
+  being the one that actually shipped. Samples are read from `package.json`'s `samples[]` rather
+  than hardcoded, so a new sample is covered the day it is declared.
+  Verified by reconstructing the exact defect in a scratch tree: it reports all three faces of it
+  and exits 1, and reports clean on the fixed project.
+
+### Fixed
+- **The built player ignored every `-cuvara-*` backend flag, because the imported sample lagged the
+  package.** `Samples~` carries a `~`, so Unity never imports it; the copy Unity actually compiles
+  lives in `Assets/Samples/`, is made once at import time, and **does not update when the package
+  is vendored**. The project held two stale imports: `0.15.5` (complete except `BackendCommandLine`)
+  and `0.15.0` (two hand-dropped files with their own GUIDs, no asmdef, landing in
+  `Assembly-CSharp`). `EditorBuildSettings` pointed scene 0 at the `0.15.5` copy, so a built player
+  fell back to Nakama's default `7350` and could never be pointed at a backend.
+  Replaced both with a single `0.16.1` import taken from the package. GUIDs are identical between
+  package and import (verified per file), so scene references survive the swap untouched — and the
+  scene itself was byte-identical to the package's, so no project-local customisation was lost.
+  **This is the vendoring problem one level deeper**, and the netcode drift check cannot see it:
+  that check compares `Packages/` against the upstream release and says nothing about whether
+  `Assets/Samples/` matches `Packages/`.
+  Verified end to end against a live backend: three players, three distinct Nakama users, full
+  ADR-3 flow — device auth, gateway auth, `map_01` assigned to the Agones-assigned port, direct
+  dial, `IN WORLD`, prediction on — and zero references to the default port in any client log.
+
 ### Changed
 - **Vendored `com.cuvara.netcode` bumped to upstream `v0.16.1`; the drift check now reports zero.**
   `BackendCommandLine` and the DOTS sample's use of it were the last client-only difference. They
