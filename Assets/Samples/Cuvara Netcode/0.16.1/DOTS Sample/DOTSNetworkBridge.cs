@@ -414,8 +414,6 @@ namespace DOTSSample
             _mapSelected = false;
             _status = "Disconnected";
             _inputTick = 0;
-            _sendInputs = false;
-            _inputAccum = 0f;
             _pendingAttackTarget = "";
             _snapshotCount = 0;
             _entityCount = 0;
@@ -601,51 +599,6 @@ namespace DOTSSample
             (positive ? 1f : 0f) - (negative ? 1f : 0f);
 #endif
 
-        private bool _sendInputs;
-        private float _inputAccum;
-
-        /// <summary>
-        /// Emits input at <c>inputRateHz</c> off the frame loop, catching up whole periods
-        /// so the send rate is the one configured rather than the one a timer happens to
-        /// deliver. The rate is a contract with the server, not a preference: it must be at
-        /// least the server's hold window or the avatar stalls between sends.
-        /// </summary>
-        private void SendDueInputs(float deltaTime)
-        {
-            if (!_sendInputs || _client?.Session == null) return;
-
-            float period = 1f / Mathf.Max(1f, inputRateHz);
-            _inputAccum += deltaTime;
-
-            // Bounded so a hitch or a breakpoint does not discharge a burst of stale ticks.
-            const int maxCatchUp = 4;
-            int sent = 0;
-            while (_inputAccum >= period && sent < maxCatchUp)
-            {
-                _inputAccum -= period;
-                sent++;
-
-                _inputTick++;
-
-                var moveX = _moveX;
-                var moveY = _moveY;
-                var attackTarget = _pendingAttackTarget;
-                _pendingAttackTarget = "";
-                if (!string.IsNullOrEmpty(attackTarget))
-                    Debug.Log($"[Attack] Sending attack on {attackTarget} (tick {_inputTick})");
-
-                _client.Session.SendInput(_inputTick, moveX, moveY, attackTarget);
-
-                // Recorded immediately after the send, with the same tick and the same
-                // vector — the predictor's whole contract is that it saw exactly what
-                // the server will see. Only the movement half is predicted;
-                // attackTarget is not passed and combat stays server-authoritative.
-                _predictor?.RecordInput(_inputTick, moveX, moveY);
-            }
-
-            if (_inputAccum > period) _inputAccum = period;
-        }
-
         private void Update()
         {
             SampleMovementInput();
@@ -758,10 +711,7 @@ namespace DOTSSample
             // client that renders only from it shows the avatar still between snapshots
             // and jumping on the frame one lands, however fast it is drawing. This is what
             // makes the smoothing observable rather than merely computed.
-            SendDueInputs(Time.deltaTime);
             _binder.AdvanceFrame(Time.deltaTime);
-
-
             _entityCount = _view.Count;
 
             // Verify the advertised rate against one measured off the wire. The protocol
@@ -854,25 +804,34 @@ namespace DOTSSample
                 _status = "In World";
                 Debug.Log($"[DOTSNet] IN WORLD as {_client.UserId}");
 
-                // Sending is driven from Update (SendDueInputs) rather than looped on here.
-                // A timer-driven loop overshot the requested period badly enough to break
-                // the server's hold window: at inputRateHz 15 the measured interval between
-                // sends was 138ms against the 66.7ms asked for. The server holds a
-                // direction for WorldEvery base ticks (4 at 60/15) and stops the entity when
-                // that expires, so sending at half the required rate left the avatar
-                // stationary for roughly half of every send period — the local player
-                // stuttered while remotes, which interpolate between snapshots and do not
-                // depend on this cadence, stayed smooth.
-                _sendInputs = true;
+                var dt = 1f / Mathf.Max(1f, inputRateHz);
                 var started = DateTime.UtcNow;
 
                 while (!ct.IsCancellationRequested)
                 {
-                    if ((float)(DateTime.UtcNow - started).TotalSeconds >= runSeconds) break;
-                    await UniTask.Yield(PlayerLoopTiming.Update, ct);
-                }
+                    var elapsed = (float)(DateTime.UtcNow - started).TotalSeconds;
+                    if (elapsed >= runSeconds) break;
 
-                _sendInputs = false;
+                    _inputTick++;
+
+                    var moveX = _moveX;
+                    var moveY = _moveY;
+                    var attackTarget = _pendingAttackTarget;
+                    _pendingAttackTarget = "";
+                    if (!string.IsNullOrEmpty(attackTarget))
+                        Debug.Log($"[Attack] Sending attack on {attackTarget} (tick {_inputTick})");
+
+                    _client.Session?.SendInput(_inputTick, moveX, moveY, attackTarget);
+
+                    // Recorded immediately after the send, with the same tick and the same
+                    // vector — the predictor's whole contract is that it saw exactly what
+                    // the server will see. Only the movement half is predicted;
+                    // attackTarget is not passed and combat stays server-authoritative.
+                    _predictor?.RecordInput(_inputTick, moveX, moveY);
+
+                    await UniTask.Delay(TimeSpan.FromSeconds(dt), DelayType.Realtime,
+                        PlayerLoopTiming.Update, ct);
+                }
 
                 _client.Disconnect();
                 _status = "Run complete";
