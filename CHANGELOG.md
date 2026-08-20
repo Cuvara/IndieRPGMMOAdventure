@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`netcode-vendor-drift` gains a second job: the imported samples must match the package.** The
+  existing job compares `Packages/` against the upstream *release*; this one compares
+  `Assets/Samples/` against `Packages/`. Both were green while a built player ignored every
+  `-cuvara-*` flag, because the fault sat between them and neither was looking there.
+  It fails on any of: an imported version that is not the package's, two imported versions
+  coexisting, an import whose content differs from its `Samples~` source, an import of a sample the
+  package no longer declares, or an `EditorBuildSettings` scene under a stale import — that last
+  being the one that actually shipped. Samples are read from `package.json`'s `samples[]` rather
+  than hardcoded, so a new sample is covered the day it is declared.
+  Verified by reconstructing the exact defect in a scratch tree: it reports all three faces of it
+  and exits 1, and reports clean on the fixed project.
+
 ### Fixed
 - **The built player ignored every `-cuvara-*` backend flag, because the imported sample lagged the
   package.** `Samples~` carries a `~`, so Unity never imports it; the copy Unity actually compiles
