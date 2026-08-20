@@ -8,6 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The vendor drift check now covers `com.cuvara.dots` as well as `com.cuvara.netcode`.** Both jobs
+  became a two-leg matrix and the workflow was renamed `netcode-vendor-drift.yml` ->
+  `vendor-drift.yml`, since it is no longer about one package. `fail-fast` is off: one package
+  drifting says nothing about the other, and cancelling the second leg would hide an independent
+  divergence behind the first one found.
+
+  `com.cuvara.dots` is vendored on exactly the same terms as netcode — copied content, no shared git
+  history, no submodule — and it had been uncovered for as long as it existed. Two consequences were
+  already sitting in the tree when the check was extended, and neither was visible from inside the
+  client:
+
+  1. the vendored copy declared **0.21.0** while upstream had reached **0.23.0**; and
+  2. at its *own* declared version it did not match upstream `v0.21.0` either — two folder `.meta`
+     files had been repaired here and the repair never went back, so the copy silently differed from
+     the tag it claimed to be.
+
+  The second is the failure the check exists to catch, and it was found by hand. A check covering one
+  of two vendored packages reads, to anyone glancing at a green run, as if it covers vendoring.
+
+### Changed
+- **`Packages/com.cuvara.dots` re-vendored 0.21.0 -> 0.23.1**, byte-identical to upstream `v0.23.1`.
+
+  The substantive change is upstream `0.23.0`: `LocalPredictionSystem` never called
+  `SeedBaseTick`, so netcode's #13 fix had no effect on the DOTS path — the only path the DOTS
+  sample actually runs. netcode v0.16.0 added that call and wired its own `WorldViewBinder`; its
+  CHANGELOG states that a consumer binding views itself must call it "or the feature is inert and you
+  keep the defect". This system was that consumer.
+
+  Upstream `0.23.1` is the `.meta` repair described above, which is what makes the vendored copy
+  byte-identical rather than merely current.
+
+  `packages-lock.json` needs no edit: both packages are `embedded` (`file:`), so the lock carries no
+  version to bump — only the dependency set, which is unchanged. The `versionDefines` expression
+  gating `CUVARA_NETCODE` moved `0.8.0` -> `0.15.0` with upstream; the vendored netcode is `0.16.1`,
+  so the define still fires.
+
+  **Not measured.** The prediction improvement is a mechanism documented by netcode plus a missing
+  call that is a matter of fact, not a before/after run against a live backend.
+
+### Added
 - **`netcode-vendor-drift` gains a second job: the imported samples must match the package.** The
   existing job compares `Packages/` against the upstream *release*; this one compares
   `Assets/Samples/` against `Packages/`. Both were green while a built player ignored every
