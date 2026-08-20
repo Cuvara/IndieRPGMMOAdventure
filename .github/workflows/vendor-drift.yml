@@ -1,13 +1,21 @@
-name: Netcode vendor drift
+name: Vendored package drift
 
-# `Packages/com.cuvara.netcode` is VENDORED, not a submodule and not a subtree — it
-# shares no git history with Cuvara/Netcode, so nothing about git can tell you the two
-# have diverged. Sync is content-based, by hand, through a PR.
+# `Packages/com.cuvara.netcode` and `Packages/com.cuvara.dots` are both VENDORED — not
+# submodules and not subtrees. Neither shares git history with its upstream repo, so
+# nothing about git can tell you a copy has diverged. Sync is content-based, by hand,
+# through a PR.
+#
+# Both packages are checked by the same matrix. `com.cuvara.dots` was added on
+# 2026-08-20, and it had been uncovered for as long as it existed: while only netcode was
+# watched, the vendored dots copy sat at 0.21.0 against an upstream that had moved to
+# 0.23.0, and that gap was found by hand rather than by this job. A check covering one of
+# two vendored packages reads, to anyone glancing at a green run, as if it covers
+# vendoring.
 #
 # WHAT THIS CHECKS, AND WHY IT COMPARES AGAINST A TAG AND NOT `main`:
 #
-# The vendored copy declares a version in its package.json. This job clones
-# Cuvara/Netcode at the tag matching THAT version and compares like for like. Comparing
+# The vendored copy declares a version in its package.json. This job clones that
+# package's upstream repo at the tag matching THAT version and compares like for like. Comparing
 # against `main` would flag every legitimate lag — the client is entitled to sit on an
 # older release — and would say nothing about the failure that actually matters:
 #
@@ -30,22 +38,37 @@ on:
   pull_request:
     paths:
       - 'Packages/com.cuvara.netcode/**'
+      - 'Packages/com.cuvara.dots/**'
       - 'Assets/Samples/Cuvara Netcode/**'
       - 'ProjectSettings/EditorBuildSettings.asset'
-      - '.github/workflows/netcode-vendor-drift.yml'
+      - '.github/workflows/vendor-drift.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: netcode-vendor-drift-${{ github.ref }}
+  group: vendor-drift-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   drift:
-    name: Vendored netcode matches its upstream tag
+    name: Vendored ${{ matrix.pkg.name }} matches its upstream tag
     runs-on: ubuntu-latest
+
+    strategy:
+      # Never fail-fast: one package drifting says nothing about the other, and
+      # cancelling the second leg would hide an independent divergence behind the
+      # first one found.
+      fail-fast: false
+      matrix:
+        pkg:
+          - name: com.cuvara.netcode
+            upstream: https://github.com/Cuvara/Netcode.git
+            dir: Packages/com.cuvara.netcode
+          - name: com.cuvara.dots
+            upstream: https://github.com/Cuvara/UnityDots.git
+            dir: Packages/com.cuvara.dots
 
     steps:
       - name: Checkout client
@@ -55,8 +78,9 @@ jobs:
         env:
           # Public repo — no token needed to read it, and using none keeps this job
           # runnable from a fork.
-          UPSTREAM: https://github.com/Cuvara/Netcode.git
-          VENDOR_DIR: Packages/com.cuvara.netcode
+          UPSTREAM: ${{ matrix.pkg.upstream }}
+          VENDOR_DIR: ${{ matrix.pkg.dir }}
+          PKG_NAME: ${{ matrix.pkg.name }}
         run: |
           set -uo pipefail
 
@@ -67,14 +91,14 @@ jobs:
 
           if ! git ls-remote --exit-code --tags "${UPSTREAM}" "refs/tags/${TAG}" >/dev/null 2>&1; then
             {
-              echo "### Netcode vendor drift — UNRESOLVABLE"
+              echo "### ${PKG_NAME} vendor drift — UNRESOLVABLE"
               echo ""
-              echo "\`${VENDOR_DIR}/package.json\` declares **${VERSION}**, but \`Cuvara/Netcode\` has no \`${TAG}\` tag."
+              echo "\`${VENDOR_DIR}/package.json\` declares **${VERSION}**, but its upstream repo has no \`${TAG}\` tag."
               echo ""
               echo "A vendored copy whose version does not exist upstream cannot be compared to anything."
               echo "Either the version was invented locally, or the upstream release was never tagged."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Vendored netcode declares ${VERSION}; upstream has no ${TAG} tag to compare against."
+            echo "::error::Vendored ${PKG_NAME} declares ${VERSION}; upstream has no ${TAG} tag to compare against."
             exit 1
           fi
 
@@ -121,7 +145,7 @@ jobs:
           TOTAL=$(( ${#ONLY_VENDOR[@]} + ${#ONLY_UPSTREAM[@]} + ${#MODIFIED[@]} ))
 
           {
-            echo "### Netcode vendor drift"
+            echo "### ${PKG_NAME} vendor drift"
             echo ""
             echo "Vendored \`${VERSION}\` compared against upstream tag \`${TAG}\`."
             echo ""
@@ -162,14 +186,19 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           if (( TOTAL > 0 )); then
-            echo "::error::Vendored netcode differs from upstream ${TAG} in ${TOTAL} file(s) while claiming the same version. See the job summary."
+            echo "::error::Vendored ${PKG_NAME} differs from upstream ${TAG} in ${TOTAL} file(s) while claiming the same version. See the job summary."
             exit 1
           fi
-          echo "Vendored copy matches upstream ${TAG} exactly."
+          echo "Vendored ${PKG_NAME} matches upstream ${TAG} exactly."
 
   imported-sample:
-    name: Imported samples match the package
+    name: Imported ${{ matrix.pkg }} samples match the package
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [com.cuvara.netcode, com.cuvara.dots]
 
     # A SECOND question, and the reason it is a separate job: the drift job above
     # compares Packages/ against the upstream RELEASE. This one compares
@@ -192,17 +221,22 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Compare the imported samples against the package
+        env:
+          PKG_NAME: ${{ matrix.pkg }}
         run: |
           set -uo pipefail
           python3 - <<'PYEOF'
           import json, os, sys, hashlib
 
-          PKG   = "Packages/com.cuvara.netcode"
+          # A package with no imported samples is a VALID state, not a skip: the job
+          # still has to prove that no stale import is lying around under its
+          # displayName. com.cuvara.dots declares two samples and has none imported.
+          PKG   = f"Packages/{os.environ['PKG_NAME']}"
           ROOT  = "Assets/Samples"
 
           pkg   = json.load(open(f"{PKG}/package.json", encoding="utf-8"))
           ver   = pkg["version"]
-          disp  = pkg.get("displayName", "Cuvara Netcode")
+          disp  = pkg.get("displayName", os.environ["PKG_NAME"])
           # displayName -> Samples~ path, straight out of the manifest rather than
           # hardcoded, so a new sample is covered the day it is declared.
           decl  = {s["displayName"]: s["path"] for s in pkg.get("samples", [])}
@@ -283,7 +317,7 @@ jobs:
           out = []
           out.append("### Imported samples vs package")
           out.append("")
-          out.append(f"Package `com.cuvara.netcode` version **{ver}**.")
+          out.append(f"Package `{os.environ['PKG_NAME']}` version **{ver}**.")
           out.append("")
           if problems:
               out.append(f"**{len(problems)} problem(s).**")
