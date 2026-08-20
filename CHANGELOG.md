@@ -33,9 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer authenticates anywhere.
 
   Documented rather than defaulted differently, because there is no value that would be right for
-  every backend. The failure mode is the reason it is called out: omitting it does not fail at
-  launch — the player starts, the window opens, and authentication returns 401, which shows up as
-  a client that never reaches `IN WORLD` rather than as anything naming the key.
+  every backend.
+
+  **Correction to the first version of this entry.** It claimed omitting the flag "shows up as a
+  client that never reaches `IN WORLD` rather than as anything naming the key". Measured against
+  staging afterwards, that is wrong in the half that matters: the player does launch and never
+  reaches `IN WORLD`, but the log names the cause outright —
+  `[DOTSNet] FATAL: UnityWebRequestException: HTTP/1.1 401 Unauthorized`. The diagnosis is one
+  line away, not hidden. Overstating how opaque a failure is sends the next person looking in the
+  wrong place, which is the same cost as understating it.
 
   `Tools/run-clients.sh` already accepted `--nakama-key`; only the documented invocation needed
   it. The server-side verification harness reads the key from the cluster and exports
