@@ -1,0 +1,135 @@
+name: Shared.GameLogic pin
+
+# Shared.GameLogic is consumed as a UPM **git package**, pinned by tag in TWO files:
+#
+#   Packages/manifest.json        — what a human edits
+#   Packages/packages-lock.json   — what UPM actually resolves
+#
+# The lock wins. A manifest-only bump is silently ignored: the diff looks like the
+# upgrade happened, the build stays green, and the client keeps running the old
+# simulation. That is the most deceptive shape a mistake can take here, because the
+# review artefact says the opposite of the truth.
+#
+# It also blinds the one cross-language check that exists. The golden vectors
+# (Packages/com.cuvara.netcode/Tests/Editor/GoldenVectorTests.cs) replay fixtures read
+# from the PINNED package. Bump the server's fixtures, forget the lock, and the client
+# keeps testing against the old ones — and passes. The check built to catch prediction
+# divergence certifies it instead.
+#
+# This job is also the target of a cross-repo dispatch: rpg-mmo-server fires it via
+# workflow_dispatch when a new sgl-v* tag is published, so the client finds out from the
+# release rather than from a bug report.
+
+on:
+  pull_request:
+    paths:
+      - 'Packages/manifest.json'
+      - 'Packages/packages-lock.json'
+      - '.github/workflows/sgl-pin-check.yml'
+  schedule:
+    # Mondays 07:30 UTC — after branch cleanup, after the netcode drift check
+    - cron: '30 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why this run was triggered (set by the cross-repo dispatch)"
+        type: string
+        required: false
+        default: manual
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sgl-pin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pin:
+    name: manifest and lock agree, and the tag is real
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check the pin
+        env:
+          SERVER_REPO: Cuvara/rpg-mmo-server
+          # Public repo — reading tags and file contents needs no token.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          echo "Trigger reason: ${{ inputs.reason || github.event_name }}"
+
+          PKG='com.rpgmmo.shared-gamelogic'
+
+          MANIFEST=$(python3 -c "
+          import json,sys
+          d=json.load(open('Packages/manifest.json'))
+          print(d.get('dependencies',{}).get('${PKG}',''))")
+
+          LOCK=$(python3 -c "
+          import json,sys
+          d=json.load(open('Packages/packages-lock.json'))
+          print(d.get('dependencies',{}).get('${PKG}',{}).get('version',''))")
+
+          echo "manifest : ${MANIFEST:-<absent>}"
+          echo "lock     : ${LOCK:-<absent>}"
+
+          FAIL=0
+          NOTES=()
+
+          if [[ -z "${MANIFEST}" || -z "${LOCK}" ]]; then
+            NOTES+=("**\`${PKG}\` is missing from manifest.json or packages-lock.json.** One of the two files does not declare it at all.")
+            FAIL=1
+          elif [[ "${MANIFEST}" != "${LOCK}" ]]; then
+            NOTES+=("**manifest and lock disagree.** UPM resolves the LOCK, so the client is running \`${LOCK##*#}\` while the manifest claims \`${MANIFEST##*#}\`. A manifest-only bump is silently ignored — the diff says the upgrade happened and it did not.")
+            FAIL=1
+          fi
+
+          PINNED_TAG="${LOCK##*#}"
+          if [[ -n "${PINNED_TAG}" && "${PINNED_TAG}" == sgl-v* ]]; then
+            # 1. does the pinned tag exist upstream at all?
+            if ! gh api "repos/${SERVER_REPO}/git/ref/tags/${PINNED_TAG}" >/dev/null 2>&1; then
+              NOTES+=("**The pinned tag \`${PINNED_TAG}\` does not exist in \`${SERVER_REPO}\`.** UPM will fail to resolve it on a clean clone, even though a warm Library/ cache keeps working locally.")
+              FAIL=1
+            else
+              # 2. integrity: does that tag's own package.json agree with the tag name?
+              TAG_VER=$(gh api "repos/${SERVER_REPO}/contents/backend/gameserver-dotnet/Shared.GameLogic/package.json?ref=${PINNED_TAG}" \
+                          -q .content 2>/dev/null | base64 -d \
+                        | python3 -c "import json,sys;print(json.load(sys.stdin).get('version',''))" 2>/dev/null || echo "")
+              if [[ -n "${TAG_VER}" && "sgl-v${TAG_VER}" != "${PINNED_TAG}" ]]; then
+                NOTES+=("**Tag \`${PINNED_TAG}\` points at a commit whose package.json says \`${TAG_VER}\`.** The tag was moved, or cut by hand. Nothing on the server side re-verifies this after creation.")
+                FAIL=1
+              fi
+            fi
+
+            # 3. how far behind is it? Being behind is legitimate — say so, never fail.
+            LATEST=$(gh api "repos/${SERVER_REPO}/tags" --paginate -q '.[].name' 2>/dev/null \
+                     | grep '^sgl-v' | sort -V | tail -1)
+            if [[ -n "${LATEST}" && "${LATEST}" != "${PINNED_TAG}" ]]; then
+              NOTES+=("_Informational:_ the newest published release is \`${LATEST}\`; this client is pinned to \`${PINNED_TAG}\`. Sitting on an older release is a valid choice — this is not a failure. But note the golden-vector tests replay fixtures from the **pinned** package, so they are validating \`${PINNED_TAG}\`'s behaviour, not the server's current behaviour.")
+            fi
+          fi
+
+          {
+            echo "### Shared.GameLogic pin"
+            echo ""
+            echo "| file | pin |"
+            echo "|---|---|"
+            echo "| \`Packages/manifest.json\` | \`${MANIFEST:-absent}\` |"
+            echo "| \`Packages/packages-lock.json\` | \`${LOCK:-absent}\` |"
+            echo ""
+            if (( ${#NOTES[@]} == 0 )); then
+              echo "Manifest and lock agree on \`${PINNED_TAG}\`, the tag exists upstream, and its \`package.json\` matches the tag name."
+            else
+              for n in "${NOTES[@]}"; do echo "- ${n}"; echo ""; done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( FAIL == 1 )); then
+            echo "::error::Shared.GameLogic pin is inconsistent — see the job summary."
+            exit 1
+          fi
+          echo "Pin is consistent."

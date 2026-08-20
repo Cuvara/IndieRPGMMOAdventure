@@ -1,0 +1,347 @@
+name: Vendored package drift
+
+# `Packages/com.cuvara.netcode` and `Packages/com.cuvara.dots` are both VENDORED — not
+# submodules and not subtrees. Neither shares git history with its upstream repo, so
+# nothing about git can tell you a copy has diverged. Sync is content-based, by hand,
+# through a PR.
+#
+# Both packages are checked by the same matrix. `com.cuvara.dots` was added on
+# 2026-08-20, and it had been uncovered for as long as it existed: while only netcode was
+# watched, the vendored dots copy sat at 0.21.0 against an upstream that had moved to
+# 0.23.0, and that gap was found by hand rather than by this job. A check covering one of
+# two vendored packages reads, to anyone glancing at a green run, as if it covers
+# vendoring.
+#
+# WHAT THIS CHECKS, AND WHY IT COMPARES AGAINST A TAG AND NOT `main`:
+#
+# The vendored copy declares a version in its package.json. This job clones that
+# package's upstream repo at the tag matching THAT version and compares like for like. Comparing
+# against `main` would flag every legitimate lag — the client is entitled to sit on an
+# older release — and would say nothing about the failure that actually matters:
+#
+#   the two copies claim the SAME version and hold DIFFERENT code.
+#
+# That is unfalsifiable from either side. No version comparison catches it, no UPM
+# resolution catches it, and the divergent files here are the prediction path, which has
+# to agree with the server or players see rubber-banding that reproduces nowhere else.
+#
+# WHAT THIS DELIBERATELY DOES NOT DO: open a sync PR. When this was first measured
+# (2026-08-19) the vendored copy was AHEAD — LocalMovePredictor.cs carried +976/-662
+# against the v0.15.5 tag, including a `_baseTickSeeded` field with no upstream
+# counterpart. An automated "sync from upstream" would have deleted real work. Direction
+# is a judgement call, so this job reports and a human reconciles.
+
+on:
+  schedule:
+    # Mondays 07:00 UTC, an hour after the branch cleanup
+    - cron: '0 7 * * 1'
+  pull_request:
+    paths:
+      - 'Packages/com.cuvara.netcode/**'
+      - 'Packages/com.cuvara.dots/**'
+      - 'Assets/Samples/Cuvara Netcode/**'
+      - 'ProjectSettings/EditorBuildSettings.asset'
+      - '.github/workflows/vendor-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vendor-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Vendored ${{ matrix.pkg.name }} matches its upstream tag
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Never fail-fast: one package drifting says nothing about the other, and
+      # cancelling the second leg would hide an independent divergence behind the
+      # first one found.
+      fail-fast: false
+      matrix:
+        pkg:
+          - name: com.cuvara.netcode
+            upstream: https://github.com/Cuvara/Netcode.git
+            dir: Packages/com.cuvara.netcode
+          - name: com.cuvara.dots
+            upstream: https://github.com/Cuvara/UnityDots.git
+            dir: Packages/com.cuvara.dots
+
+    steps:
+      - name: Checkout client
+        uses: actions/checkout@v4
+
+      - name: Compare the vendored package against its upstream tag
+        env:
+          # Public repo — no token needed to read it, and using none keeps this job
+          # runnable from a fork.
+          UPSTREAM: ${{ matrix.pkg.upstream }}
+          VENDOR_DIR: ${{ matrix.pkg.dir }}
+          PKG_NAME: ${{ matrix.pkg.name }}
+        run: |
+          set -uo pipefail
+
+          VERSION=$(python3 -c "import json;print(json.load(open('${VENDOR_DIR}/package.json'))['version'])")
+          TAG="v${VERSION}"
+          echo "Vendored version : ${VERSION}"
+          echo "Upstream tag     : ${TAG}"
+
+          if ! git ls-remote --exit-code --tags "${UPSTREAM}" "refs/tags/${TAG}" >/dev/null 2>&1; then
+            {
+              echo "### ${PKG_NAME} vendor drift — UNRESOLVABLE"
+              echo ""
+              echo "\`${VENDOR_DIR}/package.json\` declares **${VERSION}**, but its upstream repo has no \`${TAG}\` tag."
+              echo ""
+              echo "A vendored copy whose version does not exist upstream cannot be compared to anything."
+              echo "Either the version was invented locally, or the upstream release was never tagged."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Vendored ${PKG_NAME} declares ${VERSION}; upstream has no ${TAG} tag to compare against."
+            exit 1
+          fi
+
+          git clone --quiet --depth 1 --branch "${TAG}" "${UPSTREAM}" /tmp/upstream
+          rm -rf /tmp/upstream/.git
+
+          # Files the client intentionally adds on top of the package. Anything listed
+          # here may exist ONLY in the vendored copy; it may not differ, because a
+          # listed-and-modified file would let a real drift hide behind an exemption.
+          ALLOWLIST_FILE="${VENDOR_DIR}/.vendor-client-only"
+          if [[ -f "${ALLOWLIST_FILE}" ]]; then
+            # `|| true`: an allowlist that is entirely comments is a VALID state — it
+            # means nothing is exempt — but grep exits 1 when it matches nothing, and
+            # under `set -o pipefail` plus the `-e` GitHub adds to `shell: bash` that
+            # kills the job before it compares anything. Measured 2026-08-19: emptying
+            # this file after upstreaming the last exemption turned a clean run into a
+            # bare `exit 1` with no summary and no error line.
+            { grep -vE '^\s*(#|$)' "${ALLOWLIST_FILE}" || true; } | sed 's/[[:space:]]*$//' | sort -u > /tmp/allow.txt
+          else
+            : > /tmp/allow.txt
+          fi
+
+          # The upstream REPO carries things the PACKAGE does not: its own CI, its own
+          # scripts, its own git metadata. Vendoring copies the package, not the repo, so
+          # comparing those would report drift forever and train everyone to ignore this
+          # job. `.vendor-client-only` is ours and has no upstream counterpart by design.
+          EXCLUDES=(-x '.github' -x '.git' -x '.gitignore' -x '.vendor-client-only')
+
+          ONLY_VENDOR=(); ONLY_UPSTREAM=(); MODIFIED=()
+          while IFS= read -r line; do
+            case "${line}" in
+              "Only in ${VENDOR_DIR}"*)
+                p=$(sed -E "s|^Only in ${VENDOR_DIR}/?([^:]*): (.*)$|\1/\2|;s|^/||" <<< "${line}")
+                grep -qxF "${p}" /tmp/allow.txt || ONLY_VENDOR+=("${p}") ;;
+              "Only in /tmp/upstream"*)
+                p=$(sed -E "s|^Only in /tmp/upstream/?([^:]*): (.*)$|\1/\2|;s|^/||" <<< "${line}")
+                ONLY_UPSTREAM+=("${p}") ;;
+              Files*differ)
+                p=$(sed -E "s|^Files /tmp/upstream/(.*) and .*$|\1|" <<< "${line}")
+                MODIFIED+=("${p}") ;;
+            esac
+          done < <(diff -rq "${EXCLUDES[@]}" /tmp/upstream "${VENDOR_DIR}" 2>/dev/null || true)
+
+          TOTAL=$(( ${#ONLY_VENDOR[@]} + ${#ONLY_UPSTREAM[@]} + ${#MODIFIED[@]} ))
+
+          {
+            echo "### ${PKG_NAME} vendor drift"
+            echo ""
+            echo "Vendored \`${VERSION}\` compared against upstream tag \`${TAG}\`."
+            echo ""
+            if (( TOTAL == 0 )); then
+              echo "**Identical.** The vendored copy is byte-for-byte its upstream release."
+            else
+              echo "**${TOTAL} difference(s) at the same version number.**"
+              echo ""
+              if (( ${#MODIFIED[@]} > 0 )); then
+                echo "#### Modified — same path, different content"
+                echo ""
+                echo "These are the ones that matter. Both copies claim ${VERSION}; only one can be right."
+                echo ""
+                for f in "${MODIFIED[@]}"; do echo "- \`${f}\`"; done
+                echo ""
+              fi
+              if (( ${#ONLY_VENDOR[@]} > 0 )); then
+                echo "#### Present only in the client, and not declared"
+                echo ""
+                echo "If these are deliberate client-side additions, list them in \`${ALLOWLIST_FILE}\`."
+                echo ""
+                for f in "${ONLY_VENDOR[@]}"; do echo "- \`${f}\`"; done
+                echo ""
+              fi
+              if (( ${#ONLY_UPSTREAM[@]} > 0 )); then
+                echo "#### Present upstream, missing from the client"
+                echo ""
+                for f in "${ONLY_UPSTREAM[@]}"; do echo "- \`${f}\`"; done
+                echo ""
+              fi
+              echo "---"
+              echo ""
+              echo "Reconcile by hand. **Do not assume upstream wins** — when this check was written the"
+              echo "client copy was ahead, carrying prediction work that had never been pushed back."
+              echo "Decide direction per file, then either bump the vendored version to a new upstream"
+              echo "release, or upstream the client's changes and cut a release from them."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( TOTAL > 0 )); then
+            echo "::error::Vendored ${PKG_NAME} differs from upstream ${TAG} in ${TOTAL} file(s) while claiming the same version. See the job summary."
+            exit 1
+          fi
+          echo "Vendored ${PKG_NAME} matches upstream ${TAG} exactly."
+
+  imported-sample:
+    name: Imported ${{ matrix.pkg }} samples match the package
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [com.cuvara.netcode, com.cuvara.dots]
+
+    # A SECOND question, and the reason it is a separate job: the drift job above
+    # compares Packages/ against the upstream RELEASE. This one compares
+    # Assets/Samples/ against Packages/. Both were green on 2026-08-19 while a built
+    # player ignored every -cuvara-* flag, because the thing that was wrong sat
+    # between them and neither was looking there.
+    #
+    # `Samples~` carries a `~`, so Unity never imports it. The copy Unity compiles
+    # lives in Assets/Samples/, is made ONCE at import time, and does not update when
+    # the package is vendored. So the package can be perfect, the drift check can read
+    # zero, and the player can still be built from a sample that is releases behind.
+    #
+    # Measured: the project held Assets/Samples/Cuvara Netcode/0.15.5 (complete except
+    # BackendCommandLine) and 0.15.0 (two hand-dropped files with their own GUIDs and
+    # no asmdef). EditorBuildSettings pointed scene 0 at the 0.15.5 copy, so the built
+    # player fell back to Nakama's default 7350 and could not be pointed at a backend.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare the imported samples against the package
+        env:
+          PKG_NAME: ${{ matrix.pkg }}
+        run: |
+          set -uo pipefail
+          python3 - <<'PYEOF'
+          import json, os, sys, hashlib
+
+          # A package with no imported samples is a VALID state, not a skip: the job
+          # still has to prove that no stale import is lying around under its
+          # displayName. com.cuvara.dots declares two samples and has none imported.
+          PKG   = f"Packages/{os.environ['PKG_NAME']}"
+          ROOT  = "Assets/Samples"
+
+          pkg   = json.load(open(f"{PKG}/package.json", encoding="utf-8"))
+          ver   = pkg["version"]
+          disp  = pkg.get("displayName", os.environ["PKG_NAME"])
+          # displayName -> Samples~ path, straight out of the manifest rather than
+          # hardcoded, so a new sample is covered the day it is declared.
+          decl  = {s["displayName"]: s["path"] for s in pkg.get("samples", [])}
+          base  = os.path.join(ROOT, disp)
+
+          def digest(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as fh:
+                  for chunk in iter(lambda: fh.read(65536), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          def tree(root):
+              out = {}
+              for dirpath, _, files in os.walk(root):
+                  for f in files:
+                      full = os.path.join(dirpath, f)
+                      out[os.path.relpath(full, root)] = digest(full)
+              return out
+
+          problems, notes = [], []
+
+          if not os.path.isdir(base):
+              notes.append(f"No samples imported under `{base}`. Nothing to check.")
+          else:
+              versions = sorted(d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d)))
+
+              stale = [v for v in versions if v != ver]
+              if stale:
+                  problems.append(
+                      f"**Imported sample versions do not match the package.** Package is `{ver}`; "
+                      f"found {', '.join('`'+v+'`' for v in stale)} under `{base}`. An import does not "
+                      f"update when the package is vendored — delete the stale copies and re-import.")
+
+              if len(versions) > 1:
+                  problems.append(
+                      f"**{len(versions)} imported versions coexist** ({', '.join('`'+v+'`' for v in versions)}). "
+                      f"Two copies of one sample compile two copies of its scripts, and only one is in the build.")
+
+              for v in versions:
+                  for sample in sorted(os.listdir(os.path.join(base, v))):
+                      imp = os.path.join(base, v, sample)
+                      if not os.path.isdir(imp):
+                          continue
+                      rel = decl.get(sample)
+                      if rel is None:
+                          problems.append(f"`{imp}` is not a sample this package declares. Package samples: "
+                                          + ", ".join(f"`{k}`" for k in decl) + ".")
+                          continue
+                      src = os.path.join(PKG, rel)
+                      if not os.path.isdir(src):
+                          problems.append(f"`{imp}` imported from `{rel}`, which no longer exists in the package.")
+                          continue
+                      a, b = tree(src), tree(imp)
+                      only_pkg = sorted(set(a) - set(b))
+                      only_imp = sorted(set(b) - set(a))
+                      differ   = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+                      if only_pkg or only_imp or differ:
+                          lines = [f"**`{imp}` differs from `{src}`.**"]
+                          if only_pkg: lines.append("  Missing from the import: " + ", ".join(f"`{x}`" for x in only_pkg[:10]))
+                          if only_imp: lines.append("  Present only in the import: " + ", ".join(f"`{x}`" for x in only_imp[:10]))
+                          if differ:   lines.append("  Content differs: " + ", ".join(f"`{x}`" for x in differ[:10]))
+                          problems.append("\n".join(lines))
+
+          # The failure that actually shipped: the build scene pointed at a stale copy.
+          ebs = "ProjectSettings/EditorBuildSettings.asset"
+          if os.path.exists(ebs):
+              import re
+              scenes = [m.strip() for m in re.findall(r"path:\s*(.+)", open(ebs, encoding="utf-8", errors="ignore").read())]
+              for sc in scenes:
+                  if sc.startswith(os.path.join(ROOT, disp)) and f"/{ver}/" not in sc:
+                      problems.append(
+                          f"**`EditorBuildSettings` builds a scene from a stale import:** `{sc}`. "
+                          f"The package is `{ver}`. This is exactly the shape that shipped a player "
+                          f"which ignored every backend flag.")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          out = []
+          out.append("### Imported samples vs package")
+          out.append("")
+          out.append(f"Package `{os.environ['PKG_NAME']}` version **{ver}**.")
+          out.append("")
+          if problems:
+              out.append(f"**{len(problems)} problem(s).**")
+              out.append("")
+              for p in problems:
+                  out.append(f"- {p}")
+                  out.append("")
+              out.append("---")
+              out.append("")
+              out.append("`Samples~` is never imported by Unity — the copy under `Assets/Samples/` is what a "
+                         "build compiles, it is made once at import time, and it does **not** follow the package. "
+                         "The netcode drift job cannot see this: it compares `Packages/` against the upstream "
+                         "release and says nothing about whether the import matches the package.")
+          elif notes:
+              out += [f"- {n}" for n in notes]
+          else:
+              out.append("**Every imported sample is byte-for-byte its package source, and the build scenes point at the current version.**")
+          text = "\n".join(out) + "\n"
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write(text)
+          print(text)
+
+          if problems:
+              print(f"::error::{len(problems)} imported-sample problem(s) — see the job summary.")
+              sys.exit(1)
+          PYEOF
