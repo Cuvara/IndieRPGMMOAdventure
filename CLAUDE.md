@@ -68,10 +68,7 @@ full flag set and the `CUVARA_*` environment fallbacks.
 
 **`--nakama-key` is not optional any more.** It defaults to `defaultkey`, which is
 what every backend used until the keys were rotated on 2026-08-20 — each cluster now
-has its own. Omitting it does not fail at launch: the player starts, the window
-opens, and authentication returns **401**, which surfaces as a client that never
-reaches `IN WORLD` rather than as anything naming the key. Read the one for the
-backend you are pointing at:
+has its own. Read the one for the backend you are pointing at:
 
 ```bash
 kubectl --context k3d-rpg-dev get secret nakama -n rpg-k8s-data \
@@ -81,6 +78,20 @@ kubectl --context k3d-rpg-dev get secret nakama -n rpg-k8s-data \
 The verification harness in `rpg-mmo-server` does this for you — `checks_client.sh`
 exports `CUVARA_NAKAMA_SERVER_KEY` from the cluster before it launches a player — so
 this applies to running clients **by hand**.
+
+Getting it wrong is loud, which is worth knowing before you go hunting. Measured
+against staging on 2026-08-20 with the flag omitted:
+
+```
+[DOTSNet] Authenticating device=mc-...-1
+[DOTSNet] FATAL: Cysharp.Threading.Tasks.UnityWebRequestException: HTTP/1.1 401 Unauthorized
+```
+
+The player launches and its window opens, so it *looks* like the silent-failure
+shape described below — but the log names the 401 outright and no `IN WORLD` line
+follows. **Read the log before suspecting area-of-interest**: a client missing from
+the world because it never authenticated and one that authenticated and sees nobody
+are different faults, and only the second one is about AOI.
 
 **Kill the players before rebuilding.** A running player holds
 `lib_burst_generated.dll` open and the build fails on it: `Tools/run-clients.sh --kill`.
