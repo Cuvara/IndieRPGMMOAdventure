@@ -28,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of two vendored packages reads, to anyone glancing at a green run, as if it covers vendoring.
 
 ### Changed
+- **`--nakama-key` is now required when running clients by hand.** The Nakama server keys were
+  rotated on 2026-08-20 and each backend cluster has its own, so the flag's `defaultkey` default
+  no longer authenticates anywhere.
+
+  Documented rather than defaulted differently, because there is no value that would be right for
+  every backend. The failure mode is the reason it is called out: omitting it does not fail at
+  launch — the player starts, the window opens, and authentication returns 401, which shows up as
+  a client that never reaches `IN WORLD` rather than as anything naming the key.
+
+  `Tools/run-clients.sh` already accepted `--nakama-key`; only the documented invocation needed
+  it. The server-side verification harness reads the key from the cluster and exports
+  `CUVARA_NAKAMA_SERVER_KEY` itself, so this applies to manual runs only.
+
 - **`Packages/com.cuvara.dots` re-vendored 0.21.0 -> 0.23.1**, byte-identical to upstream `v0.23.1`.
 
   The substantive change is upstream `0.23.0`: `LocalPredictionSystem` never called

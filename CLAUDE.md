@@ -58,13 +58,29 @@ Then launch the instances:
 ```bash
 Tools/run-clients.sh --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
   --count 3 --gateway-host <host> --gateway-port <port> \
-  --nakama-host <host> --nakama-port <port> \
+  --nakama-host <host> --nakama-port <port> --nakama-key <key> \
   --map map_01 --status-url http://<gs-host>:<gs-port>/status --tile
 ```
 
 No address is baked in. The game server is an Agones pod whose port is assigned at
 scheduling time, so every address is a parameter — see `BackendCommandLine` for the
 full flag set and the `CUVARA_*` environment fallbacks.
+
+**`--nakama-key` is not optional any more.** It defaults to `defaultkey`, which is
+what every backend used until the keys were rotated on 2026-08-20 — each cluster now
+has its own. Omitting it does not fail at launch: the player starts, the window
+opens, and authentication returns **401**, which surfaces as a client that never
+reaches `IN WORLD` rather than as anything naming the key. Read the one for the
+backend you are pointing at:
+
+```bash
+kubectl --context k3d-rpg-dev get secret nakama -n rpg-k8s-data \
+  -o jsonpath='{.data.NAKAMA_SERVER_KEY}' | base64 -d; echo   # k3d-rpg-stg for staging
+```
+
+The verification harness in `rpg-mmo-server` does this for you — `checks_client.sh`
+exports `CUVARA_NAKAMA_SERVER_KEY` from the cluster before it launches a player — so
+this applies to running clients **by hand**.
 
 **Kill the players before rebuilding.** A running player holds
 `lib_burst_generated.dll` open and the build fails on it: `Tools/run-clients.sh --kill`.
