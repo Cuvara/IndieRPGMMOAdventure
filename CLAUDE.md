@@ -58,13 +58,40 @@ Then launch the instances:
 ```bash
 Tools/run-clients.sh --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
   --count 3 --gateway-host <host> --gateway-port <port> \
-  --nakama-host <host> --nakama-port <port> \
+  --nakama-host <host> --nakama-port <port> --nakama-key <key> \
   --map map_01 --status-url http://<gs-host>:<gs-port>/status --tile
 ```
 
 No address is baked in. The game server is an Agones pod whose port is assigned at
 scheduling time, so every address is a parameter — see `BackendCommandLine` for the
 full flag set and the `CUVARA_*` environment fallbacks.
+
+**`--nakama-key` is not optional any more.** It defaults to `defaultkey`, which is
+what every backend used until the keys were rotated on 2026-08-20 — each cluster now
+has its own. Read the one for the backend you are pointing at:
+
+```bash
+kubectl --context k3d-rpg-dev get secret nakama -n rpg-k8s-data \
+  -o jsonpath='{.data.NAKAMA_SERVER_KEY}' | base64 -d; echo   # k3d-rpg-stg for staging
+```
+
+The verification harness in `rpg-mmo-server` does this for you — `checks_client.sh`
+exports `CUVARA_NAKAMA_SERVER_KEY` from the cluster before it launches a player — so
+this applies to running clients **by hand**.
+
+Getting it wrong is loud, which is worth knowing before you go hunting. Measured
+against staging on 2026-08-20 with the flag omitted:
+
+```
+[DOTSNet] Authenticating device=mc-...-1
+[DOTSNet] FATAL: Cysharp.Threading.Tasks.UnityWebRequestException: HTTP/1.1 401 Unauthorized
+```
+
+The player launches and its window opens, so it *looks* like the silent-failure
+shape described below — but the log names the 401 outright and no `IN WORLD` line
+follows. **Read the log before suspecting area-of-interest**: a client missing from
+the world because it never authenticated and one that authenticated and sees nobody
+are different faults, and only the second one is about AOI.
 
 **Kill the players before rebuilding.** A running player holds
 `lib_burst_generated.dll` open and the build fails on it: `Tools/run-clients.sh --kill`.
