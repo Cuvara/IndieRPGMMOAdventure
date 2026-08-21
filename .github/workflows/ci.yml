@@ -10,16 +10,6 @@ permissions:
   contents: read
   checks: write
 
-# There is deliberately NO Unity compile or test job here, and that is not an oversight.
-# This package extends GameFoundation: all 19 runtime files reference com.gdk.core, which
-# is a git submodule of a PRIVATE NightHowlGames repository. Cuvara's Actions have no
-# credentials for it, so a bootstrap-and-test job would fail at package resolution, before
-# compiling a line of this package — always, and for a reason that has nothing to do with
-# the code. A check that can only ever be red trains everyone to ignore it, and then the
-# real breakage arrives to an audience that has already stopped looking.
-#
-# The tests are real and they run in IndieRPGMMOAdventure, where the submodule is present.
-# What would unblock a full run here: Documentation~/CI.md.
 jobs:
   validate:
     name: Validate package
@@ -40,28 +30,35 @@ jobs:
             console.log(pkg.name + '@' + pkg.version + ' — valid');
           "
 
-      # com.gdk.core is NOT resolvable by UPM. If it ever appears under 'dependencies' the
-      # package stops installing for everyone, with an error naming package resolution
-      # rather than the actual mistake. Keep it in x-manualDependencies, where it is
-      # documentation.
-      - name: Unresolvable dependencies stay out of 'dependencies'
+      # Every declared dependency must be resolvable by UPM from a registry. A dependency
+      # that cannot resolve is worse than an absent one: the install fails naming package
+      # resolution rather than the actual mistake, and the person hitting it has no way to
+      # know which entry is at fault.
+      #
+      # com.gdk.core is the specific trap. This package was extracted from GameFoundation
+      # and the natural instinct, when something needs a host type, is to add it back here.
+      # It is a submodule of a private repository and UPM can never resolve it.
+      - name: Every declared dependency is resolvable
         run: |
           node -e "
             const pkg = JSON.parse(require('fs').readFileSync('./package.json','utf8'));
-            const banned = ['com.gdk.core', 'com.gdk.3rd'];
+            const unresolvable = ['com.gdk.core', 'com.gdk.3rd'];
             const deps = Object.keys(pkg.dependencies || {});
-            const bad = banned.filter(b => deps.includes(b));
+            const bad = deps.filter(d => unresolvable.includes(d));
             if (bad.length) {
-              console.error('These cannot be resolved by UPM and must not be declared as dependencies:', bad.join(', '));
-              console.error('They belong in x-manualDependencies. See README.md.');
+              console.error('Not resolvable by UPM, must not be declared:', bad.join(', '));
+              console.error('This package is standalone. If you need a host type, define the');
+              console.error('contract here and have the host adapt to it. See README.md.');
               process.exit(1);
             }
-            if (!pkg['x-manualDependencies'] || !pkg['x-manualDependencies']['com.gdk.core']) {
-              console.error('x-manualDependencies.com.gdk.core is missing. The hard requirement on GameFoundation must stay recorded somewhere, or it stops being discoverable.');
-              process.exit(1);
-            }
-            console.log('dependency declarations are honest');
+            console.log('dependencies: ' + deps.join(', '));
           "
+
+      # The gate that keeps this package standalone. It is the reason the Unity jobs below
+      # can exist at all — a package that reaches into a private submodule cannot be
+      # installed, compiled or tested by its own CI.
+      - name: Standalone — no host-framework references
+        run: python3 .github/scripts/check_standalone.py
 
       - name: Validate CHANGELOG has current version
         run: |
@@ -71,10 +68,10 @@ jobs:
             exit 1
           }
 
-      # A missing .meta does not fail a build here and does not show in any test result --
-      # it fails a CONSUMER'S suite, because Unity logs an Error and the test framework
-      # turns an unexpected log error into an exception. This package's first tranche had
-      # 5 files with no .meta at all and 15 more with no MonoImporter block.
+      # A missing .meta does not fail a build here and does not show in these test results --
+      # it fails a CONSUMER'S suite, because Unity logs an Error and the test framework turns
+      # an unexpected log error into an exception. This package's first tranche shipped 5
+      # assets with no .meta and 15 more with no MonoImporter block.
       - name: Every Unity-visible file has a .meta
         run: python3 .github/scripts/check_metas.py
 
@@ -85,18 +82,216 @@ jobs:
             echo "  $f → $NAME"
           done
 
-      - name: Say plainly what was and was not checked
+  test:
+    name: Unity Tests (${{ matrix.unityVersion }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        unityVersion:
+          - 6000.3.9f1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: package
+
+      # Bootstrap a project from the package's OWN declarations. Nothing is hand-supplied
+      # beyond the OpenUPM scoped registry, which a UPM package is not permitted to declare
+      # for itself and which therefore has to come from the consuming project.
+      - name: Bootstrap test project
+        run: |
+          mkdir -p Assets ProjectSettings Packages
+
+          cat > Packages/manifest.json << 'JSON'
+          {
+            "dependencies": {
+              "com.cuvara.uitoolkit": "file:../package"
+            },
+            "scopedRegistries": [
+              {
+                "name": "OpenUPM",
+                "url": "https://package.openupm.com",
+                "scopes": ["com.cysharp", "jp.hadashikick"]
+              }
+            ],
+            "testables": ["com.cuvara.uitoolkit"]
+          }
+          JSON
+
+          cat > ProjectSettings/ProjectVersion.txt << 'TXT'
+          m_EditorVersion: ${{ matrix.unityVersion }}
+          TXT
+
+          # activeInputHandler: 1 = Input System package ONLY. Deliberately the strictest
+          # setting, because it is where the legacy UnityEngine.Input API throws instead of
+          # returning false, and it is what a Unity 6 project is most likely to be on. The
+          # back-navigation source is built on NavigationCancelEvent precisely so it works
+          # here; this pins that.
+          cat > ProjectSettings/ProjectSettings.asset << 'YAML'
+          %YAML 1.1
+          %TAG !u! tag:unity3d.com,2011:
+          --- !u!129 &1
+          PlayerSettings:
+            companyName: Cuvara
+            productName: UIToolkitTest
+            activeInputHandler: 1
+          YAML
+
+      - name: Run tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: ${{ matrix.unityVersion }}
+          testMode: all
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Test Results
+
+      # The runner is started with USE_EXIT_CODE=false, so Unity exiting 0 says only that
+      # Unity started and stopped. It exits 0 on "No tests were executed" too, and the
+      # published check goes NEUTRAL rather than red. That is how a repository runs green
+      # for its entire history while executing nothing. This step is the actual gate: it
+      # reads what the runner produced and fails on an empty or failing run.
+      - name: Assert tests ran and passed
         if: always()
         run: |
+          python3 - << 'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+
+          files = sorted(glob.glob('artifacts/**/*.xml', recursive=True))
+          if not files:
+              sys.exit('::error::No test result XML was produced. The runner reported '
+                       'nothing, so nothing was verified.')
+
+          total = passed = failed = errors = inconclusive = skipped = 0
+          for path in files:
+              try:
+                  run = ET.parse(path).getroot()
+              except ET.ParseError as exc:
+                  sys.exit(f'::error::{path} is not parseable XML: {exc}')
+              if run.tag != 'test-run':
+                  continue
+              g = lambda k: int(run.get(k) or 0)
+              total += g('total'); passed += g('passed'); failed += g('failed')
+              errors += g('errors'); inconclusive += g('inconclusive'); skipped += g('skipped')
+
+          print(f'total={total} passed={passed} failed={failed} errors={errors} '
+                f'inconclusive={inconclusive} skipped={skipped}')
+
+          if total == 0:
+              sys.exit('::error::Zero tests were executed. A green run that ran nothing is '
+                       'not a passing run — check that the package resolves and that its '
+                       'test assembly loads.')
+          if failed or errors:
+              sys.exit(f'::error::{failed} failed and {errors} errored out of {total}.')
+          print(f'::notice::{passed}/{total} tests passed.')
+          PY
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.unityVersion }}
+          path: artifacts/
+
+  # Does the package install on its own declarations alone? The test job above supplies the
+  # OpenUPM scoped registry, so it cannot answer this by itself — a registry is exactly the
+  # kind of thing whose absence hides an install defect.
+  #
+  # The 'bare' row is expected to FAIL and is informational: with no scoped registry, UniTask
+  # and VContainer cannot resolve. It is here so the failure mode a consumer sees is recorded
+  # rather than guessed at. The 'documented' row is the gate.
+  install-probe:
+    name: Install probe (${{ matrix.probe.name }})
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ !matrix.probe.required }}
+    strategy:
+      fail-fast: false
+      matrix:
+        probe:
+          - name: bare
+            registries: false
+            required: false
+          - name: documented
+            registries: true
+            required: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: package
+
+      - name: Bootstrap probe project
+        run: |
+          mkdir -p Assets ProjectSettings Packages
+
+          REGISTRIES=""
+          if [ "${{ matrix.probe.registries }}" = "true" ]; then
+            REGISTRIES="\"scopedRegistries\": [{\"name\":\"OpenUPM\",\"url\":\"https://package.openupm.com\",\"scopes\":[\"com.cysharp\",\"jp.hadashikick\"]}],"
+          fi
+
+          cat > Packages/manifest.json << JSON
           {
-            echo "### What this run verified"
-            echo ""
-            echo "Packaging only: \`package.json\` shape, honest dependency declarations,"
-            echo "CHANGELOG currency, \`.meta\` coverage, asmdef names."
-            echo ""
-            echo "**No code was compiled and no test was run.** This package requires"
-            echo "\`com.gdk.core\`, a submodule of a private NightHowlGames repository that"
-            echo "this repository's Actions cannot fetch. The tests run in"
-            echo "\`IndieRPGMMOAdventure\`, and that is the real signal for this code."
-            echo "See \`Documentation~/CI.md\`."
-          } >> "$GITHUB_STEP_SUMMARY"
+            "dependencies": {
+              "com.cuvara.uitoolkit": "file:../package"
+            },
+            $REGISTRIES
+            "testables": ["com.cuvara.uitoolkit"]
+          }
+          JSON
+
+          echo "--- manifest under test ---"
+          cat Packages/manifest.json
+
+          cat > ProjectSettings/ProjectVersion.txt << 'TXT'
+          m_EditorVersion: 6000.3.9f1
+          TXT
+
+          cat > ProjectSettings/ProjectSettings.asset << 'YAML'
+          %YAML 1.1
+          %TAG !u! tag:unity3d.com,2011:
+          --- !u!129 &1
+          PlayerSettings:
+            companyName: Cuvara
+            productName: UIToolkitInstallProbe
+            activeInputHandler: 1
+          YAML
+
+      - name: Compile
+        id: compile
+        continue-on-error: true
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.3.9f1
+          testMode: EditMode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Install probe ${{ matrix.probe.name }}
+
+      - name: Documented install must compile
+        if: matrix.probe.required && steps.compile.outcome != 'success'
+        run: |
+          echo "::error::The documented install failed. A consumer following the README" \
+               "cannot compile this package."
+          exit 1
+
+      - name: Report what Unity said
+        if: always()
+        run: |
+          echo "### Install probe: ${{ matrix.probe.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "compile step outcome: ${{ steps.compile.outcome }}" >> $GITHUB_STEP_SUMMARY
+          # Scan ONLY what Unity produced. Scanning '.' also reads the checked-out package,
+          # whose CHANGELOG and docs quote error strings verbatim — a diagnostic that matches
+          # its own documentation is worse than none.
+          SCAN=""
+          for d in artifacts Logs Library/Bee; do [ -d "$d" ] && SCAN="$SCAN $d"; done
+          if [ -z "$SCAN" ]; then
+            echo "no Unity output directories to scan" | tee -a $GITHUB_STEP_SUMMARY
+          else
+            grep -rhoE "Package \[[^]]+\] cannot be found" $SCAN 2>/dev/null | sort -u | tee -a $GITHUB_STEP_SUMMARY || true
+            grep -rhoE "error CS[0-9]+: [^\"]{0,120}" $SCAN 2>/dev/null | sort -u | head -20 | tee -a $GITHUB_STEP_SUMMARY || true
+            grep -rhA3 "An error occurred while resolving packages:" $SCAN 2>/dev/null | head -20 | tee -a $GITHUB_STEP_SUMMARY || true
+          fi
