@@ -64,6 +64,67 @@ def check_sample(sample_dir: Path) -> list[str]:
     return problems
 
 
+# Unity's built-in objects live in these two pseudo-GUIDs. A reference to one is not a
+# reference to a file, so it cannot dangle and must not be flagged.
+BUILTIN_GUIDS = {
+    "0000000000000000e000000000000000",   # built-in extra / editor resources
+    "0000000000000000f000000000000000",   # default resources
+}
+
+GUID_RE = re.compile(r"guid:\s*([0-9a-f]{32})")
+
+
+def check_self_contained(sample_dir: Path) -> list:
+    """Every asset GUID a sample references must be declared by a .meta inside that sample.
+
+    A sample is copied into a consumer's project on import, and nothing outside it comes
+    along. So a reference that points anywhere else — most easily into the developing
+    project's own Assets/ — arrives broken on the other side.
+
+    This is not hypothetical and it is why the check exists. Samples~/ScreenFlow shipped a
+    PanelSettings whose themeUss pointed at
+    Assets/UI Toolkit/UnityThemes/UnityDefaultRuntimeTheme.tss — a file Unity generated in
+    the DEVELOPING project, outside the package, and which git was not even tracking. The
+    sample looked complete, compiled cleanly, and passed every other gate here; the panel
+    would simply have rendered unthemed for whoever imported it, with nothing logged.
+
+    The failure mode is what makes it worth a gate: a missing theme does not throw. UI Toolkit
+    falls back to no theme and carries on, so the only symptom is that the sample looks wrong
+    on somebody else's machine and right on yours.
+    """
+    # Ownership is the PACKAGE, not just the sample directory. A sample legitimately
+    # references the package's own scripts — a scene naming RootUIDocument, say — and those
+    # come along because the package is the dependency being sampled. What must not happen
+    # is a reference reaching OUTSIDE the package, into the developing project's Assets/,
+    # which travels nowhere.
+    #
+    # The first version of this check scoped ownership to the sample folder and immediately
+    # flagged two correct references. Recorded because the narrower rule reads more rigorous
+    # and is simply wrong.
+    package_root = sample_dir.parents[1]
+
+    owned = set()
+    for meta in package_root.rglob("*.meta"):
+        for line in meta.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("guid:"):
+                owned.add(line.split(":", 1)[1].strip())
+                break
+
+    problems = []
+    for path in sorted(sample_dir.rglob("*")):
+        if not path.is_file() or path.suffix in {".meta", ".md", ".cs"}:
+            continue
+        rel = path.relative_to(sample_dir)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for guid in sorted(set(GUID_RE.findall(text))):
+            if guid in owned or guid in BUILTIN_GUIDS:
+                continue
+            problems.append(
+                f"{rel} references guid {guid}, which no .meta in this sample declares — "
+                f"the reference will dangle once the sample is imported elsewhere")
+    return problems
+
+
 def main() -> int:
     root = Path(__file__).resolve().parents[2]
     manifest = json.loads((root / "package.json").read_text(encoding="utf-8"))
@@ -85,7 +146,7 @@ def main() -> int:
             continue
 
         checked += 1
-        problems = check_sample(sample_dir)
+        problems = check_sample(sample_dir) + check_self_contained(sample_dir)
 
         if problems:
             all_problems.append((rel, problems))
@@ -93,7 +154,8 @@ def main() -> int:
     print(f"checked {checked} of {len(declared)} declared sample(s)")
 
     if not all_problems:
-        print("samples: element names resolve, styles resolve, READMEs present")
+        print("samples: element names resolve, styles resolve, READMEs present, "
+              "and every referenced asset ships inside its own sample")
         return 0
 
     total = sum(len(problems) for _, problems in all_problems)
