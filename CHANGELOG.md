@@ -72,7 +72,7 @@ below for what that cost.
 ### Dependencies
 
 - **VContainer is required, not optional.** `jp.hadashikick.vcontainer` is a real dependency
-  and the registration assembly is no longer gated behind a `GDK_VCONTAINER` versionDefine
+  and the registration assembly is no longer gated behind a versionDefine
   plus a matching `defineConstraints`. The project standardises on VContainer for all
   dependency injection, so a host without a container is not a supported configuration — and
   the gate was an assembly-level branch that nothing exercised. `Cuvara.UIToolkit.VContainer`

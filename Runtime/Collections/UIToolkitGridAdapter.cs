@@ -39,10 +39,10 @@ namespace Cuvara.UIToolkit.Collections
         where TPresenter : BaseUIToolkitItemPresenter<TView, TModel>, IDisposable
     {
         /// <summary>USS class put on the row element, so a project can style the row flow.</summary>
-        public const string RowUssClassName = "gdk-grid-row";
+        public const string RowUssClassName = "cuvara-grid-row";
 
         /// <summary>USS class put on each cell wrapper.</summary>
-        public const string CellUssClassName = "gdk-grid-cell";
+        public const string CellUssClassName = "cuvara-grid-cell";
 
         private readonly ListView        listView;
         private readonly VisualTreeAsset cellTemplate;

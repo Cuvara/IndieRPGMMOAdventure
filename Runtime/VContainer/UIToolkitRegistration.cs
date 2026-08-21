@@ -11,11 +11,11 @@ namespace Cuvara.UIToolkit.VContainer
     /// </summary>
     /// <remarks>
     /// <para><b>VContainer is a required dependency of this package, not an optional one.</b>
-    /// It was optional in an earlier draft, gated behind a <c>GDK_VCONTAINER</c> versionDefine
-    /// and a matching <c>defineConstraints</c>. That gating is gone: the project standardised
-    /// on VContainer for all dependency injection, so a host without it is not a case this
-    /// package supports, and pretending otherwise cost an assembly-level branch that nothing
-    /// exercised.</para>
+    /// An earlier draft gated this assembly behind a versionDefine and a matching
+    /// <c>defineConstraints</c> so the package would install without a container. That gating
+    /// is gone: the project standardises on VContainer for all dependency injection, so a host
+    /// without it is not a case this package supports, and pretending otherwise cost an
+    /// assembly-level branch that nothing exercised.</para>
     ///
     /// <para><b>Why this is still its own assembly.</b> Not for gating any more — for
     /// direction. This assembly may reference the view and manager types; they may not

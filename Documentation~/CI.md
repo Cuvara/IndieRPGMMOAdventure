@@ -1,63 +1,66 @@
-# What CI here can and cannot check
+# What CI checks, and what it cannot
 
-## The gap
+## The package is standalone, and that is what makes CI possible
 
-This package extends GameFoundation. All 19 runtime files reference `com.gdk.core`, which
-is a git **submodule** of `git@github.com:NightHowlGames/GameFoundation.git` — a private
-repository in a different organisation.
+An earlier draft of this package extended GameFoundation: every runtime file referenced it,
+and GameFoundation lives in a private repository this org's Actions cannot fetch. A package
+in that shape **cannot be compiled or tested by its own CI at all** — the job dies at package
+resolution, before a line of the package is read, and it dies that way forever.
 
-`com.cuvara.netcode` gets a real Unity CI because everything it needs resolves from a
-public URL or a public registry: it bootstraps a throwaway project, writes a
-`manifest.json`, and runs the tests. The same job here fails at package resolution, before
-a line of this package is compiled, because Cuvara's Actions have no credentials for
-NightHowlGames.
-
-**A job that always fails for a reason unrelated to the code is worse than no job.** It
-trains everyone to ignore a red check, and the day the code genuinely breaks the signal is
-already discarded. So that job is not present, and this file exists so its absence is a
-recorded decision rather than an oversight.
+Severing that dependency is what bought the jobs below. It is worth stating plainly, because
+the cost of the severing was real and this is the return on it.
 
 ## What runs
 
-| Check | Catches |
-|---|---|
-| `package.json` shape | a missing required field |
-| CHANGELOG has the current version | a version bump with no entry |
-| every Unity-visible file has a `.meta` | see below — this one has cost real time |
-| asmdef names are printed | an accidental rename |
+| Job | What it proves | Gates? |
+|---|---|---|
+| `Validate package` | `package.json` shape, no unresolvable dependency declared, CHANGELOG currency, `.meta` coverage, **the standalone gate** | yes |
+| `Unity Tests` | the package compiles and its tests pass in a project built from its own declarations | yes |
+| `Install probe (documented)` | a consumer following the README can compile it | yes |
+| `Install probe (bare)` | what a consumer sees with no scoped registry | no — informational, expected to fail |
 
-The `.meta` gate is the one that earns its place. A missing `.meta` does not fail a build,
-does not throw, and does not appear in this repository's test results — it fails a
-**consumer's** suite, because Unity logs an Error and the test framework turns an
-unexpected log error into an exception. `com.cuvara.dots` hit exactly this with 137/137
-EditMode and 29/29 PlayMode green and not one failing test, which is the state in which
-people conclude the runner is flaky and re-run it.
+## The three checks that exist because something got through
 
-This package shipped its first tranche with 5 missing `.meta` files and 15 more that
-carried only `fileFormatVersion` and `guid` with no `MonoImporter` block. Both were caught
-by hand before the first push; the gate is so the next one is not.
+**The standalone gate** (`.github/scripts/check_standalone.py`) fails on any reference to
+GameFoundation or its logging and resource assemblies under `Runtime/` or `Tests/`, by symbol,
+by namespace, and by substring.
 
-## Where the tests actually run
+The substring list was added after the gate passed a `Runtime/` that still shipped the USS
+class names `gdk-grid-row`, `gdk-grid-cell` and `gdk-multi-template-shell` — `gdk` being
+GameDevelopmentKit, the framework this package came out of. They are string literals, so no
+symbol and no namespace matched, and a green gate reported the severing complete while a
+consumer's stylesheet would have been written against the previous vendor's prefix
+permanently. A person caught it; the script did not. That is the whole reason the third list
+exists.
 
-In `IndieRPGMMOAdventure`, where `com.gdk.core` is checked out as a submodule and the UI
-Toolkit tests run as part of `Unity Tests (All)`. **That is the real test signal for this
-code.** Treat a green check here as "the packaging is well-formed", nothing more.
+**The `.meta` gate.** A missing `.meta` does not fail a build here and shows in no test result
+— it fails a *consumer's* whole suite, because Unity logs an Error and the test framework
+turns an unexpected log error into an exception. This package's first tranche shipped five
+assets with no `.meta` at all and fifteen more carrying only `fileFormatVersion` and `guid`.
 
-## What would unblock a full CI run
+**The assertion that tests actually ran.** The runner is started with `USE_EXIT_CODE=false`,
+so Unity exiting 0 means only that Unity started and stopped. It exits 0 on *"No tests were
+executed"* as well, and the published check goes neutral rather than red. A repository can run
+green for its entire history while executing nothing. The gate parses the result XML and fails
+on `total == 0`.
 
-Exactly one thing: read access to `NightHowlGames/GameFoundation` from this repository's
-Actions — a deploy key or a fine-grained PAT stored as a Cuvara secret. That is a
-cross-organisation credential decision, not a technical one, which is why it has not been
-done unilaterally.
+## What CI still does not prove
 
-With that in place, the netcode-shaped `test` job becomes possible: bootstrap a project,
-add the OpenUPM scoped registry for `com.cysharp` and `com.frostbun`, check out
-GameFoundation into `Packages/com.gdk.core`, and run EditMode + PlayMode. Note the same
-trap netcode documents — the runner is started with `USE_EXIT_CODE=false`, so Unity exiting
-0 means only that Unity started and stopped. It exits 0 on "No tests were executed" too.
-Any test job added here must parse the result XML and fail on `total == 0`.
+Stated because a green run is easy to over-read:
 
-The alternative unblock — severing the dependency on GameFoundation so the package stands
-alone — is not a packaging change. It would mean this package declaring its own screen,
-presenter and DI abstractions and GameFoundation adapting to them, which is a redesign of
-the seam, not a build fix.
+- **No device, no rendering.** No screenshot, no Game View, no notched screen. Every safe-area
+  test injects the rect it is given; nothing verifies what a real device reports.
+- **No real input.** The back-navigation tests synthesise `NavigationCancelEvent`. That a real
+  Android back press, a gamepad B, or Escape produces one at the panel root is Unity dispatch
+  behaviour and is untested here.
+- **No IL2CPP and no stripping.** Nothing is built for Android or WebGL.
+- **`Samples~` is not compiled.** Unity does not import a `Samples~` directory until the
+  Package Manager copies it under `Assets/`, so sample code has never been through a compiler
+  in this repository.
+
+## A note on the bare probe
+
+`Install probe (bare)` is expected to fail and is marked `continue-on-error`. Be careful
+reading its result: a job carrying `continue-on-error` at job level reports **success**
+whatever happens inside it, which makes a green tick there mean nothing at all. Read its
+summary, not its status. Only the `documented` row gates.
