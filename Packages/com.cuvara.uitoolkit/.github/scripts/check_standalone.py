@@ -41,6 +41,19 @@ BANNED_SYMBOLS = [
 ]
 BANNED_NAMESPACES = ["GameFoundation", "UniT.Logging", "UniT.ResourceManagement"]
 
+# Substrings that betray the host in something that is not a type or a namespace, and that
+# the two lists above therefore walk straight past.
+#
+# This was not hypothetical. The gate reported "standalone: no host-framework references"
+# over a Runtime/ that still shipped the USS class names `gdk-grid-row`, `gdk-grid-cell`
+# and `gdk-multi-template-shell` — gdk being GameDevelopmentKit, the framework this package
+# was extracted from. They are string literals, so no symbol and no namespace matched, and
+# a green gate said the severing was complete while a consumer's stylesheet would have been
+# written against the old vendor's prefix forever. A person spotted it, not this script.
+#
+# Case-insensitive, because `GDK_VCONTAINER` and `gdk-grid-row` are the same leak.
+BANNED_SUBSTRINGS = ["gdk", "gamefoundation", "gamedevelopmentkit"]
+
 SCANNED = ["Runtime", "Tests"]
 SUFFIXES = {".cs", ".asmdef", ".uxml", ".uss"}
 
@@ -49,6 +62,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[2]
     symbol_re = re.compile(r"\b(" + "|".join(BANNED_SYMBOLS) + r")\b")
     ns_re = re.compile(r"\b(" + "|".join(re.escape(n) for n in BANNED_NAMESPACES) + r")\b")
+    sub_re = re.compile("|".join(re.escape(x) for x in BANNED_SUBSTRINGS), re.IGNORECASE)
 
     hits = []
     scanned = 0
@@ -62,9 +76,9 @@ def main() -> int:
             scanned += 1
             rel = path.relative_to(root)
             for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-                for match in (symbol_re.search(line), ns_re.search(line)):
+                for match in (symbol_re.search(line), ns_re.search(line), sub_re.search(line)):
                     if match:
-                        hits.append((rel, lineno, match.group(1), line.strip()[:120]))
+                        hits.append((rel, lineno, match.group(0), line.strip()[:120]))
                         break
 
     print(f"scanned {scanned} files under {', '.join(SCANNED)}")

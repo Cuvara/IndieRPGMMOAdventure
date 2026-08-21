@@ -2,7 +2,7 @@
   "name": "com.cuvara.uitoolkit",
   "version": "0.1.0",
   "displayName": "Cuvara UI Toolkit",
-  "description": "A standalone UI Toolkit screen layer: view lifecycle, layer/surface parenting into a UIDocument, list/grid/multi-template collection adapters, safe-area and panel-scale utilities, and a back-navigation event source. It owns its own contracts and depends on no UI framework of its own — a host binds it to whatever screen flow it already has.",
+  "description": "A standalone UI Toolkit screen layer: view lifecycle, layer/surface parenting into a UIDocument, list/grid/multi-template collection adapters, safe-area and panel-scale utilities, a back-navigation event source, and an optional DOTS/ECS presentation adapter. It owns its own contracts and depends on no UI framework of its own — a host binds it to whatever screen flow it already has.",
   "unity": "6000.3",
   "documentationUrl": "https://github.com/Cuvara/UIToolkit",
   "license": "MIT",
@@ -11,7 +11,9 @@
     "uitoolkit",
     "uxml",
     "uielements",
-    "safearea"
+    "safearea",
+    "dots",
+    "ecs"
   ],
   "author": {
     "name": "Cuvara",
@@ -31,9 +33,18 @@
       "displayName": "Notification Popup",
       "description": "A UXML notification popup built on the package's own view base and asset loader, with no host framework involved. The smallest complete example of defining a screen, parenting it into a layer, and closing it.",
       "path": "Samples~/NotificationPopup"
+    },
+    {
+      "displayName": "ECS HUD",
+      "description": "A UXML health bar driven from a DOTS/ECS component through the presentation adapter: an unmanaged component carries the values, a main-thread SystemBase converts them to a ViewModel on change, and a Presenter renders it through an IView. ECS never touches the visual tree. Requires com.unity.entities.",
+      "path": "Samples~/EcsHud"
     }
   ],
   "testables": [
     "com.cuvara.uitoolkit"
-  ]
+  ],
+  "x-optionalDependencies": {
+    "com.unity.entities": "1.4.8 — enables Runtime/Ecs, the ECS-to-ViewModel presentation adapter, via the CUVARA_UITOOLKIT_ENTITIES versionDefine. Absent, that assembly is not compiled and the rest of the package is unaffected. It is optional rather than required because a project with no DOTS simulation has nothing for the adapter to read."
+  },
+  "x-ecsConstraint": "Two separate rules govern Runtime/Ecs, and they constrain different things. ARCHITECTURE: ECS must never manipulate UI Toolkit. The path is ECS -> adapter -> ViewModel -> Presenter -> View -> UI Toolkit. Runtime/Ecs is the ADAPTER half only: it converts component data to a plain ViewModel and pushes it to an IViewModelSink the host implements. It must not reference VisualElement, must not hold a view reference and must not know a Presenter's concrete type — the assembly does not reference UIElements at all, and a test asserts that. THREADING: VisualElement is plain managed C#, not a UnityEngine.Object, so it cannot be touched from ISystem, IJobEntity, Burst or any worker thread. That is a type-system fact, not a performance guideline, and it is why the adapter is a managed SystemBase in PresentationSystemGroup with no [BurstCompile]. PERFORMANCE: the system is disabled while no sink is registered, and its query carries a change-version filter, so pushes happen on data change and never per frame."
 }

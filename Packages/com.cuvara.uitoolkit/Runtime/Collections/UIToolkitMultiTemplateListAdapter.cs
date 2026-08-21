@@ -88,7 +88,7 @@ namespace Cuvara.UIToolkit.Collections
         where TPresenter : BaseUIToolkitItemPresenter<TView, TModel>, IDisposable
     {
         /// <summary>USS class on the shell element each row is swapped inside.</summary>
-        public const string ShellUssClassName = "gdk-multi-template-shell";
+        public const string ShellUssClassName = "cuvara-multi-template-shell";
 
         private sealed class Slot
         {

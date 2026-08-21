@@ -1,0 +1,28 @@
+{
+  "name": "Cuvara.UIToolkit.Ecs",
+  "rootNamespace": "Cuvara.UIToolkit.Ecs",
+  "references": [
+    "Cuvara.UIToolkit",
+    "Unity.Entities",
+    "Unity.Collections",
+    "Unity.Burst",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "CUVARA_UITOOLKIT_ENTITIES"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.entities",
+      "expression": "",
+      "define": "CUVARA_UITOOLKIT_ENTITIES"
+    }
+  ],
+  "noEngineReferences": false
+}

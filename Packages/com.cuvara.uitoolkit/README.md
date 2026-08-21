@@ -55,7 +55,7 @@ through `IVisualTreeAssetLoader`, which you implement over Addressables, `Resour
 whatever you already use.
 
 **VContainer is required, not optional.** An earlier draft gated the registration assembly
-behind a `GDK_VCONTAINER` versionDefine so the package would install without it. That gating is
+behind a versionDefine so the package would install without it. That gating is
 gone — this project standardises on VContainer for all dependency injection, so "no container"
 is not a supported configuration and the branch existed without anything exercising it.
 
@@ -123,8 +123,89 @@ public sealed class AddressablesVisualTreeAssetLoader : IVisualTreeAssetLoader
 | `Runtime/Collections/` | list, grid and multi-template adapters + item view/presenter bases |
 | `Runtime/Utilities/` | `SafeAreaElement`, `SafeAreaCalculator`, `PanelScaleRatio` |
 | `Runtime/Input/` | back-navigation event source |
+| `Runtime/Ecs/` | DOTS/ECS presentation adapter — optional, needs `com.unity.entities` |
 | `Samples~/NotificationPopup/` | the smallest complete screen, host-free |
+| `Samples~/EcsHud/` | a HUD driven from ECS, through the adapter |
 | `Tests/` | PlayMode tests (113) — they need a live panel, which EditMode has not got |
+
+## DOTS / ECS
+
+Optional. Install `com.unity.entities` and `Runtime/Ecs/` compiles; leave it out and that
+assembly is skipped and nothing else changes.
+
+**ECS does not touch UI Toolkit here, and the package will not let it.** The path is:
+
+```
+ECS world  ->  adapter  ->  ViewModel  ->  Presenter  ->  View  ->  UI Toolkit
+```
+
+`Runtime/Ecs/` is the **adapter half only**. It reads an unmanaged component, converts it to
+a plain ViewModel, and pushes that to an `IViewModelSink<T>` the host implements — usually a
+Presenter. It holds no view reference, names no Presenter type, and the assembly does not
+reference UIElements at all. There is a test asserting that last point, because it is the
+kind of boundary that erodes one convenient edit at a time.
+
+```csharp
+// 1. What the simulation writes. Unmanaged, Burst-friendly, knows nothing about UI.
+public struct PlayerVitals : IComponentData { public int Health; public int MaxHealth; }
+
+// 2. What crosses the boundary. Plain values — no VisualElement, no UIDocument.
+public readonly struct VitalsViewModel { public readonly string Caption; /* ... */ }
+
+// 3. The adapter. Convert() is usually the whole of a host bridge.
+[UpdateInGroup(typeof(PresentationSystemGroup))]
+public partial class VitalsBridge : EcsViewModelBridge<PlayerVitals, VitalsViewModel>
+{
+    protected override VitalsViewModel Convert(in PlayerVitals c) => new($"{c.Health}/{c.MaxHealth}");
+}
+
+// 4. Your Presenter is the sink. It knows an IView, never a VisualElement.
+public sealed class VitalsPresenter : IViewModelSink<VitalsViewModel>
+{
+    public void Push(in VitalsViewModel vm) => this.view.Render(vm.Caption);
+}
+
+// 5. Bind for the screen's lifetime; dispose with its scope.
+var registration = EcsSinkRegistration.Bind(bridge, presenter);
+```
+
+### Two rules, constraining different things
+
+Keep them apart — satisfying one does not satisfy the other.
+
+**Architecture.** ECS must never manipulate UI Toolkit. That constrains *what the adapter may
+talk to*: a ViewModel, never a view.
+
+**Threading.** `VisualElement` is plain managed C#, **not** a `UnityEngine.Object`. It cannot
+be touched from `ISystem`, `IJobEntity`, Burst, or any worker thread — there is no attribute,
+no unsafe cast and no `NativeContainer` that makes it work. This is a type-system fact, not a
+performance guideline, and any design that wants to write the visual tree from a job is
+impossible rather than merely slow. It constrains *where the adapter runs*: `SystemBase`,
+main thread, `PresentationSystemGroup`, never `[BurstCompile]`.
+
+### It stays quiet when nothing changes
+
+Two mechanisms, both cheap:
+
+- `Enabled` is false while no sink is registered, so a world with no screen open does not
+  even evaluate the query.
+- The query carries `SetChangedVersionFilter`, so chunks nothing has written since the last
+  run are skipped.
+
+That filter is chunk-granular and conservative — it reports a chunk changed if anything wrote
+the component, including writing an identical value. Override `HasChanged` for value-level
+deduplication when a sink is expensive enough to be worth it.
+
+Pushing every frame would defeat all of this, and it is the specific thing this design exists
+to prevent: rebuilding a subtree at 60fps on the main thread is how UI Toolkit gets a
+reputation for being slow when the fault is the caller's.
+
+### Entity-to-sink mapping is by value
+
+An `IComponentData` is unmanaged and cannot hold a `VisualElement`, a Presenter, or anything
+else managed. Route by a value key — an entity index/version pair, or a stable game id — and
+keep the key-to-sink map on the managed side. Reaching for a managed component to dodge that
+is the wrong answer.
 
 ## Known limits of UI Toolkit itself
 

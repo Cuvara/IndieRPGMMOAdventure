@@ -101,10 +101,16 @@ jobs:
         run: |
           mkdir -p Assets ProjectSettings Packages
 
+          # com.unity.test-framework is declared explicitly. Nothing in this package's
+          # dependency graph pulls it in, so a hand-written manifest does not have it, and
+          # every [Test] and [UnityTest] attribute becomes a CS0246 on NUnit. That failure
+          # reads as "the package is broken" when it means "the harness is incomplete", and
+          # it cost a full CI round to tell those apart.
           cat > Packages/manifest.json << 'JSON'
           {
             "dependencies": {
-              "com.cuvara.uitoolkit": "file:../package"
+              "com.cuvara.uitoolkit": "file:../package",
+              "com.unity.test-framework": "1.6.0"
             },
             "scopedRegistries": [
               {
@@ -205,11 +211,17 @@ jobs:
   install-probe:
     name: Install probe (${{ matrix.probe.name }})
     runs-on: ubuntu-latest
-    continue-on-error: ${{ !matrix.probe.required }}
+    # NOTE: no job-level continue-on-error. It was here, and it made the informational row
+    # report SUCCESS regardless of what happened inside it — a green tick on a job that had
+    # just failed to resolve two packages. The compile step carries continue-on-error
+    # instead, so the informational row records its outcome honestly and only the required
+    # row can fail the build.
     strategy:
       fail-fast: false
       matrix:
         probe:
+          # Expected to FAIL to resolve: with no scoped registry, UniTask and VContainer
+          # cannot be found. It is here to record what that looks like, not to gate.
           - name: bare
             registries: false
             required: false
@@ -230,15 +242,22 @@ jobs:
             REGISTRIES="\"scopedRegistries\": [{\"name\":\"OpenUPM\",\"url\":\"https://package.openupm.com\",\"scopes\":[\"com.cysharp\",\"jp.hadashikick\"]}],"
           fi
 
+          # Deliberately no "testables": this probe asks whether the package installs and
+          # compiles, not whether its test assembly builds. Including it pulls in the tests
+          # and the test framework, and a failure there says nothing about installing.
+          # Registries first, dependencies last, so the optional block never leaves a
+          # trailing comma behind when it is empty.
           cat > Packages/manifest.json << JSON
           {
+            $REGISTRIES
             "dependencies": {
               "com.cuvara.uitoolkit": "file:../package"
-            },
-            $REGISTRIES
-            "testables": ["com.cuvara.uitoolkit"]
+            }
           }
           JSON
+
+          python3 -c "import json;json.load(open('Packages/manifest.json'))" \
+            || { echo "::error::the probe wrote invalid JSON — the probe is broken, not the package"; exit 1; }
 
           echo "--- manifest under test ---"
           cat Packages/manifest.json
