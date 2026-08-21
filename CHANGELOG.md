@@ -107,6 +107,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and exits 1, and reports clean on the fixed project.
 
 ### Fixed
+- **The Addressables watchdog now leaves with code 0 instead of killing the process.** The previous
+  revision turned a 120-minute hang into an 8.5-minute *failure*; a build that succeeded must not
+  report failure.
+
+  **The experiment it was built for returned a result.** Measured 2026-08-21, job
+  `03:03:57 → 03:12:26`:
+
+  ```
+  [AddressableBuilder] Addressables build succeeded   ← the build finished
+  WATCHDOG FIRED                                      ← EditorApplication.Exit(0) then stalled
+  ```
+
+  So the deadlock **is** in managed shutdown — that was the open question, and it is now answered
+  rather than assumed. `Process.Kill()` on yourself yields 137, which GameCI reads as a failed
+  step, hence the wrong colour on a good build.
+
+  `Environment.Exit` is not the fix either: it runs finalizers and AppDomain unload, which is
+  precisely the machinery that is stuck. libc `_exit` returns to the kernel without touching any of
+  it. The lane builds `StandaloneLinux64` inside the GameCI container, so libc is there; the
+  `Process.Kill()` fallback covers anything else and is no worse than what shipped before.
+
+  The warning is logged, then the thread sleeps two seconds before exiting: `_exit` flushes
+  nothing, and without that pause the one piece of evidence that this path was taken can be lost
+  with the buffer.
+
 - **The Addressables CI job hung for the full 120-minute timeout after a build that took eight
   minutes.** Bounded to 30 seconds by a watchdog, and instrumented so the next run says which half
   of the problem it is.
