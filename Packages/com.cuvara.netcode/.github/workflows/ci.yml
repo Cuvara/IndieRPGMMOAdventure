@@ -38,6 +38,14 @@ jobs:
             exit 1
           }
 
+      # A missing .meta does not fail a build here and does not show in these test
+      # results -- it fails a CONSUMER'S suite, because Unity logs an Error and the
+      # test framework turns unexpected log errors into exceptions. v0.14.0 and
+      # v0.15.0 shipped HeldMovementParityTests.cs without one: the test never ran
+      # anywhere, and downstream saw a red run with zero failing tests.
+      - name: Every Unity-visible file has a .meta
+        run: python3 .github/scripts/check_metas.py
+
       - name: Check asmdef names
         run: |
           find . -name "*.asmdef" -not -path "./.github/*" | while read f; do
@@ -86,7 +94,7 @@ jobs:
               "com.cuvara.netcode": "file:../package",
               "com.cysharp.unitask": "2.5.10",
               "jp.hadashikick.vcontainer": "1.16.8",
-              "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.8",
+              "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.9",
               "com.unity.entities": "1.4.8",
               "com.unity.entities.graphics": "1.4.21",
               "com.unity.burst": "1.8.30",
@@ -173,7 +181,7 @@ jobs:
               "com.cuvara.netcode": "file:../package",
               "com.cysharp.unitask": "2.5.10",
               "jp.hadashikick.vcontainer": "1.16.8",
-              "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.8"
+              "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.9"
             },
             "scopedRegistries": [
               {
@@ -328,7 +336,7 @@ jobs:
 
           SGL=""
           if [ "${{ matrix.probe.sharedGameLogic }}" = "true" ]; then
-            SGL='"com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.8",'
+            SGL='"com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.9",'
           fi
 
           cat > Packages/manifest.json << JSON

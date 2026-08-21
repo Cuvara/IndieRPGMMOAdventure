@@ -5,7 +5,352 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.4.2] — 2026-08-21
+
+### Fixed
+- **`MainScene` was missing from every build, and the player booted the netcode sample.**
+  `EditorBuildSettings` had been reduced to a single enabled scene — the vendored DOTS
+  sample — when `MainScene` was dropped in f57117e alongside an unrelated sample reimport.
+  Index 0 decides what the player boots, so every artifact built since then started in the
+  netcode sample, and `MainScene` was not merely misordered but absent from the build
+  entirely. Both scenes are enabled again, with `MainScene` at index 0.
+
+- **Three test-harness display settings were shipping in `ProjectSettings`.** f57117e set
+  them for tiling three player windows on one desktop and they were never reverted:
+  `defaultScreenWidth`/`defaultScreenHeight` 800x600 -> 1024x768, `defaultIsNativeResolution`
+  0 -> 1, `fullscreenMode` 3 (windowed) -> 1 (fullscreen window), `runInBackground` 1 -> 0.
+  Every value is restored to what it was immediately before that commit. The web defaults
+  (`defaultScreenWidthWeb`/`Height` 960x600) were not touched by f57117e and are unchanged.
+
+- **`bundleVersion` was still `0.1.0` after two tagged releases.** It had never tracked the
+  `v0.4.x` tags. Set to `0.4.2`, matching this release.
+
+### Added
+- **`PlayerBuilder` accepts `-bootScene <path>`**, which moves the named enabled scene to
+  index 0 for that build only. Restoring `MainScene` to index 0 was correct for the release
+  but would have broken the three-client multiplayer harness in `CLAUDE.md`, which needs a
+  player that boots the DOTS sample. The flag resolves that without either scene leaving the
+  build and without a committed `EditorBuildSettings` edit per harness run. An unmatched path
+  fails the build rather than silently falling back to index 0. The documented harness
+  command now passes it.
+
+- **The vendor drift check now covers `com.cuvara.dots` as well as `com.cuvara.netcode`.** Both jobs
+  became a two-leg matrix and the workflow was renamed `netcode-vendor-drift.yml` ->
+  `vendor-drift.yml`, since it is no longer about one package. `fail-fast` is off: one package
+  drifting says nothing about the other, and cancelling the second leg would hide an independent
+  divergence behind the first one found.
+
+  `com.cuvara.dots` is vendored on exactly the same terms as netcode — copied content, no shared git
+  history, no submodule — and it had been uncovered for as long as it existed. Two consequences were
+  already sitting in the tree when the check was extended, and neither was visible from inside the
+  client:
+
+  1. the vendored copy declared **0.21.0** while upstream had reached **0.23.0**; and
+  2. at its *own* declared version it did not match upstream `v0.21.0` either — two folder `.meta`
+     files had been repaired here and the repair never went back, so the copy silently differed from
+     the tag it claimed to be.
+
+  The second is the failure the check exists to catch, and it was found by hand. A check covering one
+  of two vendored packages reads, to anyone glancing at a green run, as if it covers vendoring.
+
+### Changed
+- **`unity-build-workflows` submodule bumped `43229d2` -> `f5616af`** (9 commits).
+
+  **This is hygiene, not delivery.** The three toolkit workflows this repo calls are referenced
+  `@main` — `unity-pipeline.yml@main`, `unity-generate-license.yml@main`,
+  `unity-license-check.yml@main` — so toolkit changes reach CI the moment they merge, with or
+  without this pointer. The submodule is a local reference; `update-submodule.yml` is supposed to
+  keep it current and has been failing since 2026-08-10 (the bot App has no `contents` permission,
+  so it cannot push the branch its PR needs).
+
+  Of the 9 commits, only one touches a workflow this repo runs: the `Library` cache gaining a bare
+  `Library-` restore-key fallback. The rest are docs and `com.company.build-pipeline` sources —
+  and that package reaches the client through a **UPM git tag** (`#v1.1.3`), not through this
+  pointer, so the bump does not move it.
+
+- **`com.cuvara.netcode` re-vendored 0.16.1 -> 0.16.3**, byte-identical to upstream `v0.16.3`.
+
+  Test-only upstream: `0.16.2` fixed `PredictionSurfaceContractTests` resolving the prediction
+  surface by name, which threw the moment a second overload existed; `0.16.3` taught
+  `PredictionLatencyMeasurement` to measure the **unseeded** base tick, which it could not do
+  before — it drives the predictor through `WorldViewBinder`, and the binder seeds on every
+  snapshot, so every run it had ever produced was already the "after".
+
+  That measurement is why this is worth vendoring rather than skipping. Against staging, medians
+  of 3 interleaved runs, 20/20 usable samples, 60 Hz advertised and 60.0 Hz measured off the wire:
+  **max correction 0.0833 world units unseeded, 0.0000 seeded**. `0.0833` is speed 5 ÷ 60 Hz —
+  *exactly one base tick of movement*, which is what a one-tick phase misalignment produces, so
+  the number and the documented mechanism corroborate each other. The reconcile count (140 vs 162)
+  is inside the unseeded arm's own spread and is **not** a result.
+
+  No runtime assembly changed between 0.16.1 and 0.16.3, so nothing about transport, codec,
+  handshake, snapshots or prediction moves for the player.
+
+  `Assets/Samples/Cuvara Netcode/0.16.1` was renamed to `0.16.3` and `EditorBuildSettings`
+  repointed. `Samples~` is byte-identical across the two releases, so this is a rename rather than
+  a re-import — but the directory name still had to move, because the imported-sample check
+  compares it against the package version and a stale name is exactly the lag that once shipped a
+  player ignoring every backend flag.
+
+  `packages-lock.json` needs no edit: the package is `embedded` (`file:`), so the lock carries no
+  version, only the dependency set, which is unchanged (verified).
+
+- **`--nakama-key` is now required when running clients by hand.** The Nakama server keys were
+  rotated on 2026-08-20 and each backend cluster has its own, so the flag's `defaultkey` default
+  no longer authenticates anywhere.
+
+  Documented rather than defaulted differently, because there is no value that would be right for
+  every backend.
+
+  **Correction to the first version of this entry.** It claimed omitting the flag "shows up as a
+  client that never reaches `IN WORLD` rather than as anything naming the key". Measured against
+  staging afterwards, that is wrong in the half that matters: the player does launch and never
+  reaches `IN WORLD`, but the log names the cause outright —
+  `[DOTSNet] FATAL: UnityWebRequestException: HTTP/1.1 401 Unauthorized`. The diagnosis is one
+  line away, not hidden. Overstating how opaque a failure is sends the next person looking in the
+  wrong place, which is the same cost as understating it.
+
+  `Tools/run-clients.sh` already accepted `--nakama-key`; only the documented invocation needed
+  it. The server-side verification harness reads the key from the cluster and exports
+  `CUVARA_NAKAMA_SERVER_KEY` itself, so this applies to manual runs only.
+
+- **`Packages/com.cuvara.dots` re-vendored 0.21.0 -> 0.23.1**, byte-identical to upstream `v0.23.1`.
+
+  The substantive change is upstream `0.23.0`: `LocalPredictionSystem` never called
+  `SeedBaseTick`, so netcode's #13 fix had no effect on the DOTS path — the only path the DOTS
+  sample actually runs. netcode v0.16.0 added that call and wired its own `WorldViewBinder`; its
+  CHANGELOG states that a consumer binding views itself must call it "or the feature is inert and you
+  keep the defect". This system was that consumer.
+
+  Upstream `0.23.1` is the `.meta` repair described above, which is what makes the vendored copy
+  byte-identical rather than merely current.
+
+  `packages-lock.json` needs no edit: both packages are `embedded` (`file:`), so the lock carries no
+  version to bump — only the dependency set, which is unchanged. The `versionDefines` expression
+  gating `CUVARA_NETCODE` moved `0.8.0` -> `0.15.0` with upstream; the vendored netcode is `0.16.1`,
+  so the define still fires.
+
+  **Not measured.** The prediction improvement is a mechanism documented by netcode plus a missing
+  call that is a matter of fact, not a before/after run against a live backend.
+
+### Added
+- **`netcode-vendor-drift` gains a second job: the imported samples must match the package.** The
+  existing job compares `Packages/` against the upstream *release*; this one compares
+  `Assets/Samples/` against `Packages/`. Both were green while a built player ignored every
+  `-cuvara-*` flag, because the fault sat between them and neither was looking there.
+  It fails on any of: an imported version that is not the package's, two imported versions
+  coexisting, an import whose content differs from its `Samples~` source, an import of a sample the
+  package no longer declares, or an `EditorBuildSettings` scene under a stale import — that last
+  being the one that actually shipped. Samples are read from `package.json`'s `samples[]` rather
+  than hardcoded, so a new sample is covered the day it is declared.
+  Verified by reconstructing the exact defect in a scratch tree: it reports all three faces of it
+  and exits 1, and reports clean on the fixed project.
+
+### Fixed
+- **The Addressables watchdog now leaves with code 0 instead of killing the process.** The previous
+  revision turned a 120-minute hang into an 8.5-minute *failure*; a build that succeeded must not
+  report failure.
+
+  **The experiment it was built for returned a result.** Measured 2026-08-21, job
+  `03:03:57 → 03:12:26`:
+
+  ```
+  [AddressableBuilder] Addressables build succeeded   ← the build finished
+  WATCHDOG FIRED                                      ← EditorApplication.Exit(0) then stalled
+  ```
+
+  So the deadlock **is** in managed shutdown — that was the open question, and it is now answered
+  rather than assumed. `Process.Kill()` on yourself yields 137, which GameCI reads as a failed
+  step, hence the wrong colour on a good build.
+
+  `Environment.Exit` is not the fix either: it runs finalizers and AppDomain unload, which is
+  precisely the machinery that is stuck. libc `_exit` returns to the kernel without touching any of
+  it. The lane builds `StandaloneLinux64` inside the GameCI container, so libc is there; the
+  `Process.Kill()` fallback covers anything else and is no worse than what shipped before.
+
+  The warning is logged, then the thread sleeps two seconds before exiting: `_exit` flushes
+  nothing, and without that pause the one piece of evidence that this path was taken can be lost
+  with the buffer.
+
+- **The Addressables CI job hung for the full 120-minute timeout after a build that took eight
+  minutes.** Bounded to 30 seconds by a watchdog, and instrumented so the next run says which half
+  of the problem it is.
+
+  Measured from the cancelled 2026-08-20 staging run:
+
+  | | |
+  |---|---|
+  | `11:28:21` | `[AddressableBuilder] Addressables build succeeded` |
+  | `11:28:25` | `Cleanup mono` — teardown ran, and ran far |
+  | `11:28:58` | `[AI] BufferedFileLogStorage Flush called but already disposed` |
+  | `13:20:04` | cancelled by the timeout |
+
+  **111 minutes of total silence.** The build was not slow — the process would not terminate.
+  Raising `BUILD_TIMEOUT_MINUTES` would only have bought a longer wait for a dead process, and the
+  job takes every platform build down with it when it is cancelled.
+
+  `EditorApplication.Exit(0)`, added on 2026-08-12 for this exact symptom, **did help and did not
+  fix it**: the 08-12 hang stopped at "Batchmode quit successfully invoked", this one reached
+  "Cleanup mono", which is very late in Unity's teardown.
+
+  **The obvious suspect does not survive contact with the evidence.** `com.ivanmurzak.unity.mcp`
+  is the last thing to speak, but the Android build on the same day logs the *identical* warning
+  one second after its own `Cleanup mono` and exits cleanly. Both paths run
+  `-batchmode -quit -executeMethod` with the same flags. Why this one stalls is **not established**,
+  and is not claimed here.
+
+  The watchdog is a background thread, so it costs nothing when the exit works — it dies with the
+  process. It is also the experiment: if a future log carries its warning line, the graceful
+  shutdown stalled and the deadlock is in managed teardown; if it never appears,
+  `EditorApplication.Exit` was fine and the stall is somewhere that line cannot see.
+
+- **The built player ignored every `-cuvara-*` backend flag, because the imported sample lagged the
+  package.** `Samples~` carries a `~`, so Unity never imports it; the copy Unity actually compiles
+  lives in `Assets/Samples/`, is made once at import time, and **does not update when the package
+  is vendored**. The project held two stale imports: `0.15.5` (complete except `BackendCommandLine`)
+  and `0.15.0` (two hand-dropped files with their own GUIDs, no asmdef, landing in
+  `Assembly-CSharp`). `EditorBuildSettings` pointed scene 0 at the `0.15.5` copy, so a built player
+  fell back to Nakama's default `7350` and could never be pointed at a backend.
+  Replaced both with a single `0.16.1` import taken from the package. GUIDs are identical between
+  package and import (verified per file), so scene references survive the swap untouched — and the
+  scene itself was byte-identical to the package's, so no project-local customisation was lost.
+  **This is the vendoring problem one level deeper**, and the netcode drift check cannot see it:
+  that check compares `Packages/` against the upstream release and says nothing about whether
+  `Assets/Samples/` matches `Packages/`.
+  Verified end to end against a live backend: three players, three distinct Nakama users, full
+  ADR-3 flow — device auth, gateway auth, `map_01` assigned to the Agones-assigned port, direct
+  dial, `IN WORLD`, prediction on — and zero references to the default port in any client log.
+
+### Changed
+- **Vendored `com.cuvara.netcode` bumped to upstream `v0.16.1`; the drift check now reports zero.**
+  `BackendCommandLine` and the DOTS sample's use of it were the last client-only difference. They
+  are upstream now, so the vendored copy is **byte-for-byte its upstream release** — 13 differing
+  paths at the start of the day, 1 after v0.16.0, **0** now.
+  `.vendor-client-only` is kept but empty, with a comment saying why: an empty allowlist is a
+  statement, and the drift check reads the file. Anything added back to it needs a reason written
+  next to it.
+  Upstreaming rather than exempting was the right call because the allowlist deliberately cannot
+  exempt a file that *differs* — only one that is *absent* — so the alternative was a check that
+  reported the same known difference every week, which is how a check gets ignored.
+  EditMode: **391/391**, unchanged from v0.16.0.
+- **`netcode-vendor-drift` died on an allowlist containing only comments.** Emptying
+  `.vendor-client-only` after upstreaming the last exemption turned a clean run into a bare
+  `exit 1` with no summary and no error line. `grep` exits 1 when it matches nothing, and under
+  `set -o pipefail` plus the `-e` GitHub adds to `shell: bash` that killed the job before it
+  compared anything. An all-comments allowlist is a **valid** state — it means nothing is exempt —
+  so the grep is now guarded. Reproduced under `bash -e` with `pipefail` before and after.
+- **Vendored `com.cuvara.netcode` bumped to upstream `v0.16.0`, with no local renumbering.** The
+  drift the `netcode-vendor-drift` check found is now reconciled: **13 differing paths down to 1**.
+  Root cause of the original divergence was commit `31f7beb`, which vendored upstream **0.15.4** and
+  **relabelled it 0.15.5** locally; upstream then released its own, different 0.15.5. The two never
+  held the same content from the moment both existed, and 16 commits of client-side prediction work
+  accumulated on top with no route back. **Never renumber a vendored copy** — the version field is
+  the only handle the drift check has, and a local relabel makes it lie.
+  The prediction work (`heldFrom` idle guard, `SeedBaseTick`, the estimator's two-observation rule)
+  is now upstream in `Cuvara/Netcode` v0.16.0 rather than living only here, so a fresh install of
+  the package no longer silently desyncs against the current server.
+  EditMode suite before the bump: **388/388**. After: **391/391** — the three added tests are the
+  public-surface contract tests that came with v0.16.0.
+- **`Samples~/DOTSSample/DOTSNetworkBridge.cs` remains a declared client-only difference.** It wires
+  `BackendCommandLine` into the sample, and that file is client-only harness, so the bridge cannot
+  go upstream without it. The drift check reports it and will keep reporting it: `.vendor-client-only`
+  exempts files that are *absent* upstream, never files that *differ*, because an exemption covering
+  modifications would let real drift hide behind it.
+
+### Added
+- **`sgl-pin-check` CI: the Shared.GameLogic pin in `manifest.json` and `packages-lock.json` must
+  agree.** UPM resolves the **lock**, so a manifest-only bump is silently ignored: the diff looks
+  like the upgrade happened, the build stays green, and the client keeps running the old
+  simulation. It also blinds the golden-vector tests, which replay fixtures read from the *pinned*
+  package — bump the server's fixtures, forget the lock, and the one cross-language check that
+  exists keeps passing against the stale ones. The job also verifies the pinned tag exists
+  upstream and that its own `package.json` version matches the tag name (nothing on the server
+  side re-verifies a tag after creation). Being *behind* the newest release is reported as
+  informational, never a failure — sitting on an older release is a valid choice.
+  Runs on PRs touching either file, weekly, and on `workflow_dispatch` so `rpg-mmo-server` can
+  fire it when a new `sgl-v*` tag is published.
+- **`netcode-vendor-drift` CI: fail when the vendored `com.cuvara.netcode` differs from its
+  upstream release.** The package is vendored, not a submodule and not a subtree — it shares no
+  git history with `Cuvara/Netcode`, so nothing about git can tell you the copies have diverged.
+  The job reads the version from the vendored `package.json` and compares against **that tag**,
+  not `main`: comparing to `main` flags every legitimate lag and stays silent on the failure that
+  matters, which is two copies claiming the same version and holding different code.
+  Measured on introduction: **11 files differ at `0.15.5`**, including `LocalMovePredictor.cs`,
+  `TickRateEstimator.cs` and `WorldViewBinder.cs` — the prediction path that has to agree with the
+  server — plus a `package.json` pinning a different `Shared.GameLogic` (`sgl-v0.1.8` upstream vs
+  `sgl-v0.1.9` here). The job deliberately does **not** open a sync PR: the client copy is the one
+  that is ahead, so an automated sync from upstream would delete real work. Client-only additions
+  are declared in `Packages/com.cuvara.netcode/.vendor-client-only`; a declared file may be absent
+  upstream but may not differ, so an exemption cannot hide a real drift.
+- **`.gitignore`: ignore `/.verify/`.** The post-deploy verify suite
+  (`rpg-mmo-server/backend/deploy/k8s/verify`) writes Unity test logs and NUnit XML there
+  when it is pointed at this project. `*.log` already caught the logs, so only the XML
+  surfaced — 5.5 MB across 16 files showing as untracked, which is noise in every
+  `git status` and a standing invitation to commit run output by accident.
+- **Run several built clients at once against a chosen backend.** A built player had
+  no way to be told where the backend is: the DOTS sample scene carries only
+  `DOTSSceneSetup`, which adds `DOTSNetworkBridge` at runtime, so the component could
+  never hold anything but its own field initializers — gateway `127.0.0.1:8000`,
+  Nakama `127.0.0.1:7350`, and a `SampleNakamaAuth` constructed with no arguments at
+  all. Pointing a player anywhere else meant editing source and rebuilding, which is
+  untenable now that the game server is an Agones pod whose port is assigned at
+  scheduling time.
+  - `BackendCommandLine` (DOTS sample, mirrored in the package's `Samples~` copy)
+    resolves gateway host/port, Nakama scheme/host/port/server key, map id, the
+    `/status` URL and the device id from the player's command line, falling back to the
+    `CUVARA_*` environment variables the Editor live-backend tests already use, then to
+    the previous defaults. Read once in `Start`, before anything connects; nothing runs
+    per frame and no netcode behaviour changes.
+  - Passing `-cuvara-map` also collapses the offered map set to that one map. With the
+    scene's two maps the bridge draws a selector and waits for a click, which an
+    unattended launcher cannot supply.
+  - The device id is now per-process (`-cuvara-device`, else tag+pid+clock). Two
+    instances sharing one Nakama identity is the failure that reads as success: the
+    second login evicts the first and the survivor sits alone in a world of one.
+  - `Tools/run-clients.sh` starts N players, each with its own log file, device
+    identity and window, all pointed at a backend given as parameters. `--kill` stops
+    them, which is required before a rebuild — a running player holds
+    `lib_burst_generated.dll` open.
+- `PlayerBuilder` accepts `-buildOutput <path>` in addition to `BUILD_OUTPUT_DIR`.
+  Exporting the variable in a WSL shell does not put it in the environment of a Windows
+  `Unity.exe`, so the build silently landed in the default `build/`; a command-line flag
+  crosses that boundary.
+
+### Fixed
+- **Client and server base ticks free-run at arbitrary phase (#13).** The predictor's
+  `_baseTick` started at 1 and free-ran via wall-clock accumulation, while the server's
+  `current_tick` was in the hundreds of thousands. The absolute values did not matter —
+  `StepDeltaTime` and `ApplyHeld` use differences — but the phase did: the hold window
+  is `HoldTicks` base ticks, and where each clock's tick boundary fell relative to an
+  input changed how many held steps got applied between inputs. On localhost with
+  matched rates and no loss, 17 of 20 samples needed a correction of exactly 2 steps.
+  Fixed by seeding `_baseTick` from the server's world tick (`WorldState.Tick`, already
+  on the wire) on the first snapshot, via a new `SeedBaseTick(long)` method called from
+  `WorldViewBinder` before `Reconcile`. The accumulator-driven clock in `Advance` owns
+  the counter after seeding; re-seeding on every snapshot would fight it.
+- `packages-lock.json` still resolved `shared-gamelogic` to `sgl-v0.1.8`. The v0.4.1
+  bump changed only `manifest.json`, so the two disagreed about which version the
+  project uses and the lock decides. Now pinned to `sgl-v0.1.9`
+  (`514d454192355943a24b822c1441ab25b5e770e1`, the tag's actual commit).
+
+### Removed
+- `Assets/AddressableAssetsData/link.xml` is no longer tracked, and is now ignored.
+  Addressables regenerates it on build and deletes it in between, so every unrelated
+  commit had the chance to carry its churn — which is how it was committed in the
+  first place.
+
+## [v0.4.1] — 2026-08-15
+
+### Changed
+- Bump `shared-gamelogic` to `sgl-v0.1.9` — single-rate deadzone fix from server v1.4.1
+
+## [v0.4.0] — 2026-08-15
+
+### Changed
+- Netcode updated v0.11.0 → v0.15.5 (tick rate from wire, held movement predictor,
+  elapsed-time step, per-frame prediction fix)
+- DOTS updated to v0.21.0 (per-system parallel thresholds)
+- `shared-gamelogic` updated to `sgl-v0.1.8`
 
 ### Fixed
 

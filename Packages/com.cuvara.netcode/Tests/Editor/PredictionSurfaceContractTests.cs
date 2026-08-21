@@ -35,17 +35,31 @@ namespace Cuvara.Netcode.Tests.Editor
     [TestFixture]
     public sealed class PredictionSurfaceContractTests
     {
-        private static MethodInfo Method(string name) =>
+        // Matched on name AND parameter types, not on name alone.
+        //
+        // What these tests guard is that a given SIGNATURE still exists. The remarks above
+        // tell callers to extend this surface by adding rather than changing -- and an
+        // overload is the sanctioned way to add. Selecting on the name alone made that
+        // sanctioned move fail: SingleOrDefault throws "Sequence contains more than one
+        // matching element" the moment a second overload appears, so the fixture reports an
+        // ADDITION as a broken contract, with an exception rather than an assertion message.
+        //
+        // The failure is also misdirected. Adding an overload to LocalMovePredictor breaks
+        // AdvanceKeepsItsSignature and every other case that shares the fixture, none of
+        // which the author touched. Found while prototyping a three-argument Reconcile.
+        private static MethodInfo Method(string name, params Type[] parameters) =>
             typeof(LocalMovePredictor)
                 .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .SingleOrDefault(m => m.Name == name);
+                .SingleOrDefault(m => m.Name == name &&
+                    m.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters));
 
         private static void AssertSignature(string name, Type returnType, params Type[] parameters)
         {
-            var method = Method(name);
+            var method = Method(name, parameters);
             Assert.That(method, Is.Not.Null,
                 $"LocalMovePredictor.{name} is part of the contract com.cuvara.dots drives. " +
-                "Removing or renaming it breaks a consumer that is not compiled by this repo.");
+                "Removing or renaming it -- or changing its parameters rather than adding " +
+                "an overload -- breaks a consumer that is not compiled by this repo.");
 
             Assert.That(method.ReturnType, Is.EqualTo(returnType),
                 $"LocalMovePredictor.{name}'s return type is part of the cross-package contract.");
@@ -79,6 +93,17 @@ namespace Cuvara.Netcode.Tests.Editor
         public void ResetKeepsItsSignature() =>
             AssertSignature(nameof(LocalMovePredictor.Reset), typeof(void));
 
+        /// <remarks>
+        /// Added in 0.16.0. A consumer that binds views itself — rather than through
+        /// <c>WorldViewBinder</c> — must call this with the snapshot's world tick, or the
+        /// hold window's phase never aligns with the server's and the correction never
+        /// goes away. Pinned so that "nobody in this repo calls it" can never be read as
+        /// "nothing calls it".
+        /// </remarks>
+        [Test]
+        public void SeedBaseTickKeepsItsSignature() =>
+            AssertSignature(nameof(LocalMovePredictor.SeedBaseTick), typeof(void), typeof(long));
+
         [Test]
         public void PositionIsAReadableVec2()
         {
@@ -100,6 +125,81 @@ namespace Cuvara.Netcode.Tests.Editor
                 "The DOTS side gates adding the PredictedTransform marker on this. Without " +
                 "it, a refusing predictor would still claim LocalTransform and nothing would " +
                 "write the transform at all — the avatar freezes, in a build, not in CI.");
+        }
+
+        /// <summary>
+        /// Pins the diagnostic surface a consumer reads when its own game rubber-bands.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>These are contract, not scaffolding.</b> The distinction the package draws is
+        /// simple: <c>Runtime/</c> may expose a member because a <i>consumer</i> needs it,
+        /// never because a test does. Everything named here answers a question a developer
+        /// building gameplay on this package will actually ask — "is my avatar's rendered
+        /// position keeping up with its simulated one, and if not, on which of the six
+        /// possible reasons is the hold declining?" — and the pre-existing correction
+        /// counters (<c>Snaps</c>, <c>ReplayedSteps</c>, <c>Reconciles</c>…) provably cannot
+        /// answer it: in the 0.16.0 freeze the simulated position was right the whole time
+        /// and every correction counter stayed clean.
+        /// </para>
+        /// <para>
+        /// <c>Tests/Runtime/PredictionLatencyMeasurement.cs</c> reads them too, but it is a
+        /// reporting rig, not an assertion: it prints them for a human. Nothing in
+        /// <c>Runtime/</c> depends on it, and removing the rig would not make any member
+        /// here unnecessary.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void TheDiagnosticSurfaceIsPinnedDeliberately()
+        {
+            AssertReadable<float>(nameof(LocalMovePredictor.IntegrationTimestep));
+            AssertReadable<float>(nameof(LocalMovePredictor.EffectiveSmoothingSpan));
+            AssertReadable<float>(nameof(LocalMovePredictor.RenderStepProgress));
+            AssertReadable<float>(nameof(LocalMovePredictor.ObservedStepInterval));
+            AssertReadable<bool>(nameof(LocalMovePredictor.HoldIsActive));
+            AssertReadable<long>(nameof(LocalMovePredictor.BaseTick));
+            AssertReadable<int>(nameof(LocalMovePredictor.BaseTicksAdvanced));
+            AssertReadable<int>(nameof(LocalMovePredictor.HeldStepsApplied));
+            AssertReadable<int>(nameof(LocalMovePredictor.StepIntervalSamples));
+            AssertReadable<int>(nameof(LocalMovePredictor.StepIntervalResets));
+            AssertReadable<int>(nameof(LocalMovePredictor.SkipNoHoldWindow));
+            AssertReadable<int>(nameof(LocalMovePredictor.SkipNothingHeld));
+            AssertReadable<int>(nameof(LocalMovePredictor.SkipInputAlreadyStepped));
+            AssertReadable<int>(nameof(LocalMovePredictor.SkipExpired));
+            AssertReadable<int>(nameof(LocalMovePredictor.SkipRefusedByMovementModel));
+            AssertReadable<int>(nameof(LocalMovePredictor.SkipNoDisplacement));
+        }
+
+        /// <summary>
+        /// The reason code behind the six <c>Skip*</c> counters stays private: it is how
+        /// the class talks to itself, and publishing it would invite a consumer to switch
+        /// on values this package expects to be free to extend.
+        /// </summary>
+        [Test]
+        public void TheHoldSkipReasonCodeIsNotPublic()
+        {
+            var leaked = typeof(LocalMovePredictor)
+                .GetNestedTypes(BindingFlags.Public)
+                .Select(t => t.Name)
+                .ToArray();
+
+            Assert.That(leaked, Is.Empty,
+                "LocalMovePredictor should expose no public nested type. Offenders: " +
+                string.Join(", ", leaked));
+        }
+
+        private static void AssertReadable<T>(string name)
+        {
+            var property = typeof(LocalMovePredictor).GetProperty(name);
+            Assert.That(property, Is.Not.Null,
+                $"LocalMovePredictor.{name} is a documented diagnostic. Removing it takes " +
+                "away the only way a consumer can see a render-side freeze, which no " +
+                "correction counter reports.");
+            Assert.That(property.PropertyType, Is.EqualTo(typeof(T)),
+                $"LocalMovePredictor.{name}'s type is documented in NETCODE.md.");
+            Assert.That(property.CanRead, Is.True);
+            Assert.That(property.GetSetMethod(), Is.Null,
+                $"LocalMovePredictor.{name} is observation, not configuration.");
         }
 
         /// <summary>

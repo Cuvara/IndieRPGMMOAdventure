@@ -39,7 +39,10 @@ public static class PlayerBuilder
                 "Add at least one scene under File > Build Settings.");
         }
 
-        string outputRoot = Environment.GetEnvironmentVariable("BUILD_OUTPUT_DIR");
+        scenes = ApplyBootSceneOverride(scenes, ReadArg("-bootScene"));
+
+        string outputRoot = ReadArg("-buildOutput")
+                            ?? Environment.GetEnvironmentVariable("BUILD_OUTPUT_DIR");
         if (string.IsNullOrEmpty(outputRoot))
         {
             outputRoot = "build";
@@ -77,6 +80,86 @@ public static class PlayerBuilder
         }
 
         Debug.Log($"[PlayerBuilder] Build succeeded: {summary.totalSize} bytes -> {locationPath}");
+    }
+
+    /// <summary>
+    /// Moves <paramref name="bootScene"/> to index 0 of <paramref name="scenes"/>, leaving the
+    /// relative order of everything else intact. Returns <paramref name="scenes"/> unchanged when
+    /// no override was given.
+    /// </summary>
+    /// <remarks>
+    /// Index 0 is the scene the player boots, so the build-settings order alone decides it. The
+    /// release build must boot <c>Assets/Scenes/MainScene.unity</c>, while the three-client
+    /// multiplayer harness documented in CLAUDE.md needs a player that boots the netcode DOTS
+    /// sample. Both scenes stay enabled and shipped; this flag picks which one starts, so the
+    /// harness no longer needs the build settings edited (and committed) to work.
+    ///
+    /// The value is matched against the exact scene path as it appears in Build Settings.
+    /// A path that is not in the enabled set is a hard error rather than a silent no-op:
+    /// silently building the wrong boot scene is the failure this flag exists to prevent.
+    /// </remarks>
+    private static string[] ApplyBootSceneOverride(string[] scenes, string bootScene)
+    {
+        if (string.IsNullOrEmpty(bootScene))
+        {
+            return scenes;
+        }
+
+        string normalized = bootScene.Replace('\\', '/');
+        int index = Array.FindIndex(scenes,
+            s => string.Equals(s, normalized, StringComparison.OrdinalIgnoreCase));
+
+        if (index < 0)
+        {
+            throw new Exception(
+                $"[PlayerBuilder] -bootScene '{bootScene}' is not an enabled scene in Build " +
+                $"Settings. Enabled scenes: {string.Join(", ", scenes)}");
+        }
+
+        if (index == 0)
+        {
+            Debug.Log($"[PlayerBuilder] -bootScene '{normalized}' is already index 0.");
+            return scenes;
+        }
+
+        var reordered = new string[scenes.Length];
+        reordered[0] = scenes[index];
+        int write = 1;
+        for (int i = 0; i < scenes.Length; i++)
+        {
+            if (i != index)
+            {
+                reordered[write++] = scenes[i];
+            }
+        }
+
+        Debug.Log($"[PlayerBuilder] -bootScene '{normalized}' moved to index 0 " +
+                  $"(was index {index}).");
+        return reordered;
+    }
+
+    /// <summary>Reads <c>&lt;flag&gt; &lt;value&gt;</c> off the Editor's command line; null when absent.</summary>
+    /// <remarks>
+    /// <c>BUILD_OUTPUT_DIR</c> alone is not enough when the build is driven from WSL:
+    /// exporting a variable in a WSL shell does not put it in the environment of a
+    /// Windows <c>Unity.exe</c>, so the output silently landed in the default
+    /// <c>build/</c> instead of where the caller asked. A command-line flag crosses that
+    /// boundary. The environment variable still works and still wins nothing — the flag
+    /// takes precedence, everything else is unchanged.
+    /// </remarks>
+    private static string ReadArg(string flag)
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], flag, StringComparison.Ordinal) &&
+                !string.IsNullOrEmpty(args[i + 1]))
+            {
+                return args[i + 1];
+            }
+        }
+
+        return null;
     }
 
     // Optional env-driven Android configuration, used by the release-signing lane
