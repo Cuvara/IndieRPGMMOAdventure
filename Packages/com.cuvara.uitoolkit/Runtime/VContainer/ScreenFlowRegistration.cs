@@ -30,6 +30,26 @@ namespace Cuvara.UIToolkit.VContainer
             builder.Register<ScreenRegistry>(Lifetime.Singleton);
             builder.Register<IScreenScopeFactory, VContainerScreenScopeFactory>(Lifetime.Singleton);
 
+            // The navigator takes ViewLayers, and nothing else registers it. Missing this line
+            // made RegisterScreenFlow() produce a container that could not resolve the navigator
+            // at all — every screen dead, with "No such registration of type: ViewLayers" as the
+            // only clue. Sixty-five navigator tests missed it because they all construct
+            // ScreenNavigator directly with layers built by hand; only wiring a real container
+            // exercises this line, which is why there is now a test that does.
+            //
+            // Resolved through a factory rather than an instance because RootUIDocument fills its
+            // layers in Awake, and this registration runs while the scope is still building.
+            // Reading Layers lazily, at first resolve, is what makes the order work.
+            // A Func, not a value. Registering ViewLayers as a singleton INSTANCE captured
+            // whatever the layers were the first time anything resolved them — which, if that
+            // preceded UIDocument.OnEnable, was three nulls, cached for the session. The
+            // navigator now asks the document each  time it parents something.
+            builder.Register<Func<ViewLayers>>(container =>
+            {
+                var document = container.Resolve<RootUIDocument>();
+                return () => document.Layers;
+            }, Lifetime.Singleton);
+
             builder.Register<ScreenNavigator>(Lifetime.Singleton)
                 .As<IScreenNavigator>()
                 .AsSelf();

@@ -3,6 +3,8 @@
   "rootNamespace": "Cuvara.UIToolkit.Flow.Tests",
   "references": [
     "Cuvara.UIToolkit",
+    "VContainer",
+    "Cuvara.UIToolkit.VContainer",
     "Cuvara.UIToolkit.TestSupport",
     "UniTask",
     "UnityEngine.TestRunner",
