@@ -12,15 +12,7 @@
   "overrideReferences": false,
   "precompiledReferences": [],
   "autoReferenced": true,
-  "defineConstraints": [
-    "GDK_VCONTAINER"
-  ],
-  "versionDefines": [
-    {
-      "name": "jp.hadashikick.vcontainer",
-      "expression": "",
-      "define": "GDK_VCONTAINER"
-    }
-  ],
+  "defineConstraints": [],
+  "versionDefines": [],
   "noEngineReferences": false
 }

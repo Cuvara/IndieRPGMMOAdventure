@@ -39,7 +39,7 @@ suite. That is only possible because nothing here needs a private submodule to r
 ```jsonc
 {
   "scopedRegistries": [
-    { "name": "OpenUPM", "url": "https://package.openupm.com", "scopes": ["com.cysharp"] }
+    { "name": "OpenUPM", "url": "https://package.openupm.com", "scopes": ["com.cysharp", "jp.hadashikick"] }
   ],
   "dependencies": {
     "com.cuvara.uitoolkit": "https://github.com/Cuvara/UIToolkit.git#v0.1.0"
@@ -48,14 +48,38 @@ suite. That is only possible because nothing here needs a private submodule to r
 }
 ```
 
-The OpenUPM scoped registry is for UniTask. **A UPM package cannot declare a scoped registry
-of its own**, so this belongs to the consuming project and there is no way to ship it from
-here. That is also why `com.frostbun.*` is not a dependency: asset loading goes through
-`IVisualTreeAssetLoader`, which you implement over Addressables, `Resources`, or whatever you
-already use.
+The OpenUPM scoped registry covers UniTask and VContainer. **A UPM package cannot declare a
+scoped registry of its own**, so this belongs to the consuming project and there is no way to
+ship it from here. That is also why `com.frostbun.*` is not a dependency: asset loading goes
+through `IVisualTreeAssetLoader`, which you implement over Addressables, `Resources`, or
+whatever you already use.
 
-VContainer is optional. Present, `GDK_VCONTAINER` is defined and the registration extension
-compiles; absent, that one file compiles out.
+**VContainer is required, not optional.** An earlier draft gated the registration assembly
+behind a `GDK_VCONTAINER` versionDefine so the package would install without it. That gating is
+gone — this project standardises on VContainer for all dependency injection, so "no container"
+is not a supported configuration and the branch existed without anything exercising it.
+
+### A screen's lifetime is a child scope
+
+This is the whole lifecycle story, and it is worth stating because getting it wrong is the
+usual source of UI leaks.
+
+```csharp
+// open
+var scope = container.CreateScope(b =>
+{
+    b.Register<InventoryView>(Lifetime.Scoped).As<IInventoryView>();
+    b.RegisterEntryPoint<InventoryPresenter>();   // IStartable + IDisposable
+});
+
+// close
+scope.Dispose();
+```
+
+One `Dispose()` unsubscribes the presenter's handlers, releases screen-scoped services and
+tears down the view — together, structurally, rather than each being something a person has to
+remember. The presenter stays a plain C# class with no `UIDocument` and no `VisualElement`, so
+it is testable against mocked view and service interfaces with no scene involved.
 
 ## Using it
 
@@ -93,14 +117,14 @@ public sealed class AddressablesVisualTreeAssetLoader : IVisualTreeAssetLoader
 
 | Path | Contents |
 |---|---|
-| `Runtime/Core/` | `IViewLayer`, `IViewSurface`, `IUIToolkitView`, `IVisualTreeAssetLoader` |
+| `Runtime/Core/` | `IViewLayer`, `IViewSurface`, `IUIToolkitView`, `IVisualTreeAssetLoader`, `IPresenterInstantiator` |
 | `Runtime/View/` | `BaseUIToolkitView`, `UIToolkitViewFactory`, `VisualElementViewLayer` |
-| `Runtime/Managers/` | `RootUIDocument` |
+| `Runtime/Managers/` | `RootUIDocument` and the default three-layer `RootUIDocument.uxml` |
 | `Runtime/Collections/` | list, grid and multi-template adapters + item view/presenter bases |
 | `Runtime/Utilities/` | `SafeAreaElement`, `SafeAreaCalculator`, `PanelScaleRatio` |
 | `Runtime/Input/` | back-navigation event source |
 | `Samples~/NotificationPopup/` | the smallest complete screen, host-free |
-| `Tests/` | EditMode and PlayMode tests |
+| `Tests/` | PlayMode tests (113) — they need a live panel, which EditMode has not got |
 
 ## Known limits of UI Toolkit itself
 
