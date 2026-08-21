@@ -101,6 +101,129 @@ jobs:
             echo "  $f → $NAME"
           done
 
+  # ---------------------------------------------------------------------------
+  # Compile the samples.
+  #
+  # Samples~/ is excluded from Unity's import by design, so NOTHING else in this
+  # workflow builds a line of it — the test job's suites pass around files that are
+  # read and never compiled. Both samples declared in package.json had never been
+  # through a compiler at all until this job existed, and every other gate stayed
+  # green throughout, because none of them can see the directory.
+  #
+  # The sibling package com.cuvara.netcode shipped exactly that gap into a user's
+  # hands: a DOTS sample calling the legacy UnityEngine.Input API in a project on the
+  # Input System package, where it throws every frame out of Update() and takes the
+  # whole bridge down. It arrived as "nothing works".
+  #
+  # Be precise about what this job proves. It COMPILES the samples; it does not run
+  # them, so it would not have caught that throw either. What it closes is the
+  # structural hole that let sample code ship unexamined — every compile-time break
+  # from here on, and nothing beyond that. The runtime half of the same problem is
+  # covered as far as static checking can reach by check_samples.py in the validate
+  # job, which verifies a sample's Q<T>("name") lookups resolve against its UXML.
+  #
+  # Copying Samples~/<name> to Assets/Samples/<name> is not an approximation of a
+  # sample import — it is exactly what the Package Manager does on "Import".
+  # ---------------------------------------------------------------------------
+  samples:
+    name: Compile samples (${{ matrix.unityVersion }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        unityVersion:
+          - 6000.3.9f1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: package
+
+      - name: Bootstrap a project with the samples imported
+        run: |
+          mkdir -p Assets ProjectSettings Packages
+
+          mkdir -p "Assets/Samples"
+          cp -r "package/Samples~/NotificationPopup" "Assets/Samples/NotificationPopup"
+          cp -r "package/Samples~/EcsHud" "Assets/Samples/EcsHud"
+
+          # com.unity.entities is an OPTIONAL dependency of this package, so it is not in
+          # package.json's dependencies and nothing resolves it on our behalf. Without it
+          # the Cuvara.UIToolkit.Ecs assembly is correctly gated out — and the ECS sample
+          # then fails with a wall of CS0246 that looks like a broken sample rather than a
+          # missing manifest entry. Its companions are declared explicitly for the same
+          # reason: expressing the intent beats relying on a transitive resolve.
+          #
+          # com.unity.test-framework is here because this job drives unity-test-runner, and
+          # nothing in the dependency graph pulls the framework in. A hand-written manifest
+          # simply does not have it, and every NUnit attribute becomes a CS0246.
+          cat > Packages/manifest.json << 'JSON'
+          {
+            "dependencies": {
+              "com.cuvara.uitoolkit": "file:../package",
+              "com.unity.test-framework": "1.6.0",
+              "com.unity.entities": "1.4.8",
+              "com.unity.burst": "1.8.30",
+              "com.unity.collections": "2.6.8",
+              "com.unity.mathematics": "1.3.2"
+            },
+            "scopedRegistries": [
+              {
+                "name": "OpenUPM",
+                "url": "https://package.openupm.com",
+                "scopes": ["com.cysharp", "jp.hadashikick"]
+              }
+            ]
+          }
+          JSON
+
+          python3 -c "import json;json.load(open('Packages/manifest.json'))" \
+            || { echo "::error::the bootstrap wrote invalid JSON — the job is broken, not the samples"; exit 1; }
+
+          cat > ProjectSettings/ProjectVersion.txt << 'TXT'
+          m_EditorVersion: ${{ matrix.unityVersion }}
+          TXT
+
+          # activeInputHandler: 1 = Input System package ONLY. Deliberately the strictest
+          # setting: it is where the legacy UnityEngine.Input API throws instead of
+          # returning false, and it is what a Unity 6 project is most likely to be on. A
+          # sample that only compiles under "Both" is a sample that breaks for most
+          # consumers.
+          cat > ProjectSettings/ProjectSettings.asset << 'YAML'
+          %YAML 1.1
+          %TAG !u! tag:unity3d.com,2011:
+          --- !u!129 &1
+          PlayerSettings:
+            companyName: Cuvara
+            productName: UIToolkitSampleCompile
+            activeInputHandler: 1
+          YAML
+
+      - name: Compile
+        id: compile
+        continue-on-error: true
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: ${{ matrix.unityVersion }}
+          testMode: EditMode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Sample compile results
+
+      - name: Samples must compile
+        run: |
+          if [ "${{ steps.compile.outcome }}" != "success" ]; then
+            echo "::error::The samples did not compile. Samples~/ is not built by any" \
+                 "other job, so this is the only thing standing between a broken sample" \
+                 "and a consumer importing it."
+            for d in artifacts Logs; do
+              [ -d "$d" ] && grep -rhoE "error CS[0-9]+: [^\"]{0,160}" "$d" 2>/dev/null | sort -u | head -20
+            done
+            exit 1
+          fi
+          echo "samples compiled"
+
   test:
     name: Unity Tests (${{ matrix.unityVersion }})
     runs-on: ubuntu-latest
