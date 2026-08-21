@@ -59,45 +59,80 @@ namespace Cuvara.UIToolkit.Managers
 
         public UIDocument UIDocument => this.uiDocument;
 
-        public VisualElement RootUIShowElement    { get; private set; }
-        public VisualElement RootUIClosedElement  { get; private set; }
-        public VisualElement RootUIOverlayElement { get; private set; }
+        public VisualElement RootUIShowElement    { get { this.EnsureResolved(); return this.showElement; } }
+
+        public VisualElement RootUIClosedElement  { get { this.EnsureResolved(); return this.closedElement; } }
+
+        public VisualElement RootUIOverlayElement { get { this.EnsureResolved(); return this.overlayElement; } }
 
         /// <summary>The three roots as layers, cached — never allocated per reparent.</summary>
-        public VisualElementViewLayer ShowLayer    { get; private set; }
+        public VisualElementViewLayer ShowLayer    { get { this.EnsureResolved(); return this.showLayer; } }
 
-        public VisualElementViewLayer ClosedLayer  { get; private set; }
+        public VisualElementViewLayer ClosedLayer  { get { this.EnsureResolved(); return this.closedLayer; } }
 
-        public VisualElementViewLayer OverlayLayer { get; private set; }
+        public VisualElementViewLayer OverlayLayer { get { this.EnsureResolved(); return this.overlayLayer; } }
 
         /// <summary>The same three, as one value.</summary>
         public ViewLayers Layers => new(this.ShowLayer, this.ClosedLayer, this.OverlayLayer);
 
-        /// <summary>The panel root, or null before <c>Awake</c> or with no source asset assigned.</summary>
-        public VisualElement RootVisualElement => this.uiDocument == null ? null : this.uiDocument.rootVisualElement;
-
-        private void Awake()
+        /// <summary>The panel root, or null if the UIDocument has no source asset.</summary>
+        public VisualElement RootVisualElement
         {
+            get
+            {
+                if (this.uiDocument == null) this.uiDocument = this.GetComponent<UIDocument>();
+
+                return this.uiDocument == null ? null : this.uiDocument.rootVisualElement;
+            }
+        }
+
+        private VisualElement showElement, closedElement, overlayElement;
+
+        private VisualElementViewLayer showLayer, closedLayer, overlayLayer;
+
+        private bool resolved;
+
+        private void Awake() { this.EnsureResolved(); }
+
+        /// <summary>
+        /// Resolves the three layers on first use, and only once.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Lazy rather than only in <c>Awake</c>, and this is not a micro-optimisation
+        /// — it is a correctness fix found by putting the package in a scene.</b>
+        /// <see cref="UIDocument"/> builds its <c>rootVisualElement</c> in its own
+        /// <c>OnEnable</c>, and the relative order of two components' <c>Awake</c>/<c>OnEnable</c>
+        /// across two GameObjects is undefined. A host whose composition root initialises first
+        /// therefore saw null layers, and the symptom was an ArgumentNullException from deep
+        /// inside the flow with nothing pointing at ordering as the cause.</para>
+        ///
+        /// <para>Resolving on first access removes the ordering question entirely: whoever asks
+        /// first pays for it, and by then the document is necessarily built, because asking
+        /// means the panel is in use. <c>Awake</c> still tries, so the common case is resolved
+        /// early and the error below is reported at the earliest honest moment.</para>
+        /// </remarks>
+        private void EnsureResolved()
+        {
+            if (this.resolved) return;
+
             if (this.uiDocument == null) this.uiDocument = this.GetComponent<UIDocument>();
 
-            var root = this.uiDocument.rootVisualElement;
+            var root = this.uiDocument == null ? null : this.uiDocument.rootVisualElement;
 
-            if (root == null)
-            {
-                // Nothing to resolve against, and constructing layers over a null element
-                // would throw out of Awake. Report it and leave the layers null; the
-                // failure is already in the log by the time anything tries to use them.
-                Debug.LogError($"{nameof(RootUIDocument)} on {this.gameObject.name} has no rootVisualElement; is a source asset assigned to the UIDocument?", this);
-                return;
-            }
+            // Not an error yet: Awake may simply have run before the document was built, and the
+            // next caller will resolve successfully. Only a caller that actually needs the layers
+            // and still finds nothing gets a complaint, from the property it asked for.
+            if (root == null) return;
 
-            this.RootUIShowElement    = this.Resolve(root, this.rootUIShowElementName);
-            this.RootUIClosedElement  = this.Resolve(root, this.rootUIClosedElementName);
-            this.RootUIOverlayElement = this.Resolve(root, this.rootUIOverlayElementName);
+            this.showElement    = this.Resolve(root, this.rootUIShowElementName);
+            this.closedElement  = this.Resolve(root, this.rootUIClosedElementName);
+            this.overlayElement = this.Resolve(root, this.rootUIOverlayElementName);
 
-            this.ShowLayer    = new(this.RootUIShowElement);
-            this.ClosedLayer  = new(this.RootUIClosedElement);
-            this.OverlayLayer = new(this.RootUIOverlayElement);
+            this.showLayer    = new(this.showElement);
+            this.closedLayer  = new(this.closedElement);
+            this.overlayLayer = new(this.overlayElement);
+
+            this.resolved = true;
         }
 
         private VisualElement Resolve(VisualElement root, string elementName)

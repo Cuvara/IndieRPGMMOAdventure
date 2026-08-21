@@ -1,0 +1,73 @@
+/* Every class name is cuvara- prefixed, which the package's check_uss_prefix.py gate
+   requires of Runtime/ and which a sample should honour anyway — a consumer who copies this
+   sample inherits its class names into their own project. */
+
+.cuvara-sample-screen {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.cuvara-sample-screen--root   { background-color: rgb(28, 42, 58); }
+.cuvara-sample-screen--second { background-color: rgb(30, 58, 44); }
+
+.cuvara-sample-title {
+    color: rgb(240, 240, 240);
+    font-size: 26px;
+    -unity-font-style: bold;
+    margin-bottom: 6px;
+}
+
+.cuvara-sample-hint {
+    color: rgb(190, 195, 200);
+    font-size: 13px;
+    white-space: normal;
+    max-width: 420px;
+    margin-bottom: 16px;
+}
+
+.cuvara-sample-button {
+    min-width: 260px;
+    height: 34px;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.cuvara-sample-modal {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.cuvara-sample-dimmer {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.65);
+}
+
+.cuvara-sample-panel {
+    padding: 24px;
+    background-color: rgb(46, 46, 52);
+    border-radius: 6px;
+    align-items: center;
+}
+
+/* The HUD sits above the three layers and is never suspended, so suspend/resume is
+   observable rather than inferred. */
+.cuvara-sample-hud {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    padding: 8px 12px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 4px;
+}
+
+.cuvara-sample-hud-line {
+    color: rgb(120, 230, 160);
+    font-size: 12px;
+    -unity-font-definition: initial;
+}

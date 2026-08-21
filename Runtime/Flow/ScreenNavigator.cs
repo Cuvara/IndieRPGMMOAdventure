@@ -52,24 +52,50 @@ namespace Cuvara.UIToolkit.Flow
         private readonly ScreenRegistry         registry;
         private readonly IScreenScopeFactory    scopeFactory;
         private readonly UIToolkitViewFactory   viewFactory;
-        private readonly ViewLayers             layers;
+        private readonly Func<ViewLayers>       layersProvider;
 
         private readonly List<ScreenEntry> stack = new();
 
         private bool busy;
         private bool disposed;
 
+        /// <summary>Builds a navigator over layers that are read fresh on every use.</summary>
+        /// <remarks>
+        /// <para><b>A provider rather than a value, and this was a real bug rather than a
+        /// precaution.</b> Taking <see cref="ViewLayers"/> by value captures whatever the layers
+        /// were at construction time — and the navigator is a container singleton, so
+        /// construction happens once, at whatever moment something first resolves it. If that
+        /// moment precedes <c>UIDocument.OnEnable</c>, the navigator holds three null layers for
+        /// the rest of the session and every push dies inside <c>SetParent</c> with a
+        /// NullReferenceException naming neither the document nor the ordering.</para>
+        ///
+        /// <para>Reading through a delegate costs one indirection per reparent and removes the
+        /// entire class of problem. Found by running the sample scene; no headless test could
+        /// see it, because they all construct the navigator with layers that already exist.</para>
+        /// </remarks>
+        public ScreenNavigator(
+            ScreenRegistry       registry,
+            IScreenScopeFactory  scopeFactory,
+            UIToolkitViewFactory viewFactory,
+            Func<ViewLayers>     layersProvider)
+        {
+            this.registry       = registry ?? throw new ArgumentNullException(nameof(registry));
+            this.scopeFactory   = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+            this.viewFactory    = viewFactory ?? throw new ArgumentNullException(nameof(viewFactory));
+            this.layersProvider = layersProvider ?? throw new ArgumentNullException(nameof(layersProvider));
+        }
+
+        /// <summary>Builds a navigator over layers that already exist. For tests.</summary>
         public ScreenNavigator(
             ScreenRegistry       registry,
             IScreenScopeFactory  scopeFactory,
             UIToolkitViewFactory viewFactory,
             ViewLayers           layers)
+            : this(registry, scopeFactory, viewFactory, () => layers)
         {
-            this.registry     = registry ?? throw new ArgumentNullException(nameof(registry));
-            this.scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-            this.viewFactory  = viewFactory ?? throw new ArgumentNullException(nameof(viewFactory));
-            this.layers       = layers;
         }
+
+        private ViewLayers Layers => this.layersProvider();
 
         public int Depth => this.stack.Count;
 
@@ -224,7 +250,7 @@ namespace Cuvara.UIToolkit.Flow
 
         private async UniTask OpenEntryAsync(ScreenEntry entry)
         {
-            var layer = entry.IsModal ? this.layers.Overlay : this.layers.Screen;
+            var layer = entry.IsModal ? this.Layers.Overlay : this.Layers.Screen;
 
             entry.View.ViewSurface.SetParent(layer);
 
@@ -360,7 +386,7 @@ namespace Cuvara.UIToolkit.Flow
 
         private void Suspend(ScreenEntry entry)
         {
-            entry.View.ViewSurface.SetParent(this.layers.Hidden);
+            entry.View.ViewSurface.SetParent(this.Layers.Hidden);
             entry.View.Hide();
 
             SetState(entry.Presenter, ScreenLifecycleState.Suspended);
@@ -369,7 +395,7 @@ namespace Cuvara.UIToolkit.Flow
 
         private void Resume(ScreenEntry entry)
         {
-            entry.View.ViewSurface.SetParent(entry.IsModal ? this.layers.Overlay : this.layers.Screen);
+            entry.View.ViewSurface.SetParent(entry.IsModal ? this.Layers.Overlay : this.Layers.Screen);
             entry.View.Show();
 
             SetState(entry.Presenter, ScreenLifecycleState.Active);

@@ -30,6 +30,11 @@
   },
   "samples": [
     {
+      "displayName": "Screen Flow (scene)",
+      "description": "A playable scene exercising the whole screen flow: push, pop, replace, pop-to-root, a modal that dims rather than suspends, and Back through the navigator's root policy. A HUD reports Depth and the top screen's ScreenLifecycleState live, so suspend and resume are watched rather than inferred. Import it, open ScreenFlowSample.unity, press Play.",
+      "path": "Samples~/ScreenFlow"
+    },
+    {
       "displayName": "Notification Popup",
       "description": "A UXML notification popup built on the package's own view base and asset loader, with no host framework involved. The smallest complete example of defining a screen, parenting it into a layer, and closing it.",
       "path": "Samples~/NotificationPopup"
