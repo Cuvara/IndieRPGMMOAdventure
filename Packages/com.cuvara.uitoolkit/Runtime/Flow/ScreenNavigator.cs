@@ -56,6 +56,27 @@ namespace Cuvara.UIToolkit.Flow
 
         private readonly List<ScreenEntry> stack = new();
 
+        /// <summary>
+        /// The entry currently being built, which is NOT yet in <see cref="stack"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Without this, disposing mid-bind cancelled nothing.</b> <c>BuildAsync</c> creates
+        /// the entry and its <see cref="CancellationTokenSource"/> and then awaits the
+        /// presenter's <c>OnBindAsync</c>; the entry only reaches <see cref="stack"/> after
+        /// that await returns. So for the whole duration of a bind — which is exactly the
+        /// window a slow one occupies — the entry was reachable from nothing, and
+        /// <see cref="Dispose"/>, which walks the stack, walked an empty list.
+        ///
+        /// <para>The screen therefore kept binding after the navigator was gone, and wrote
+        /// into a view that had been destroyed. Nothing threw at the point of the mistake;
+        /// the exception arrived later and from somewhere else entirely.</para>
+        ///
+        /// <para>Found by a test, not by reading: every other test in the suite binds
+        /// synchronously with <c>UniTask.CompletedTask</c>, so the window had never existed
+        /// in a test and the cancellation code had never once executed.</para>
+        /// </remarks>
+        private ScreenEntry building;
+
         private bool busy;
         private bool disposed;
 
@@ -211,6 +232,9 @@ namespace Cuvara.UIToolkit.Flow
                 Options      = registration.Options,
             };
 
+            // Reachable from the navigator BEFORE the first await, so Dispose can find it.
+            this.building = entry;
+
             try
             {
                 var view = await this.viewFactory.CreateAsync(registration.ViewType, registration.AssetKey);
@@ -236,10 +260,14 @@ namespace Cuvara.UIToolkit.Flow
 
                 await Bind(screenPresenter, entry.Subscriptions, cancellation.Token);
 
+                this.building = null;
+
                 return entry;
             }
             catch
             {
+                this.building = null;
+
                 // A half-built screen never reaches the stack. Everything created so far is
                 // released here, in the order that leaves nothing holding anything, and the
                 // exception continues to the caller untouched.
@@ -607,6 +635,15 @@ namespace Cuvara.UIToolkit.Flow
         {
             if (this.disposed) return;
             this.disposed = true;
+
+            // The in-flight entry first: it is not in the stack, and it is the one holding a
+            // live token that something is still awaiting.
+            if (this.building != null)
+            {
+                var inFlight  = this.building;
+                this.building = null;
+                this.DisposeEntry(inFlight);
+            }
 
             for (var i = this.stack.Count - 1; i >= 0; --i) this.DisposeEntry(this.stack[i]);
 

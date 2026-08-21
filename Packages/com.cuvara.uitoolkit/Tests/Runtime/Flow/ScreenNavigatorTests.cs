@@ -90,6 +90,39 @@ namespace Cuvara.UIToolkit.Flow.Tests
         public TestScreenView(VisualTreeAsset asset) : base(asset) { this.StretchToParent(); }
     }
 
+    /// <summary>
+    /// A presenter whose <c>OnBindAsync</c> can be held open, so a test can close the screen
+    /// while its bind is still awaiting.
+    /// </summary>
+    /// <remarks>
+    /// Every other presenter here binds synchronously — <c>UniTask.CompletedTask</c> — so the
+    /// window between "bind started" and "bind finished" has never existed in a test. The
+    /// cancellation path is real code that nothing has ever executed.
+    /// </remarks>
+    internal sealed class SlowBindPresenter : BaseUIToolkitScreenPresenter<ITestScreenView>
+    {
+        private readonly UniTaskCompletionSource gate = new();
+
+        public bool              BindEntered;
+        public bool              BindReturned;
+        public bool              TokenWasCancelledDuringBind;
+        public CancellationToken TokenSeen;
+
+        /// <summary>Lets the held bind finish.</summary>
+        public void Release() => this.gate.TrySetResult();
+
+        protected override async UniTask OnBindAsync(ScreenSubscriptions subscriptions, CancellationToken cancellationToken)
+        {
+            this.BindEntered = true;
+            this.TokenSeen   = cancellationToken;
+
+            await this.gate.Task;
+
+            this.TokenWasCancelledDuringBind = cancellationToken.IsCancellationRequested;
+            this.BindReturned                = true;
+        }
+    }
+
     internal class TestScreenPresenter : BaseUIToolkitScreenPresenter<ITestScreenView>
     {
         public int BindCount, ActivateCount, DeactivateCount, SuspendCount, ResumeCount;
@@ -178,9 +211,15 @@ namespace Cuvara.UIToolkit.Flow.Tests
         private OneAssetLoader   loader;
         private ScreenNavigator  nav;
 
+        /// <summary>Captured as the scope factory creates it, so a test can reach the instance
+        /// the navigator is using without the fake growing a lookup API it has no other use for.</summary>
+        private SlowBindPresenter lastSlowBind;
+
         [SetUp]
         public void SetUp()
         {
+            this.lastSlowBind = null;
+
             this.showLayer    = new();
             this.hiddenLayer  = new();
             this.overlayLayer = new();
@@ -194,12 +233,14 @@ namespace Cuvara.UIToolkit.Flow.Tests
             this.registry.Register(typeof(ModalPresenter), typeof(TestScreenView), ModalKey, ScreenOptions.Modal);
             this.registry.Register(typeof(FailingPresenter), typeof(TestScreenView), ScreenKey);
             this.registry.Register(typeof(ModelPresenter), typeof(TestScreenView), ScreenKey);
+            this.registry.Register(typeof(SlowBindPresenter), typeof(TestScreenView), ScreenKey);
 
             this.scopes.Bind<TestScreenPresenter>(() => new TestScreenPresenter());
             this.scopes.Bind<SecondScreenPresenter>(() => new SecondScreenPresenter());
             this.scopes.Bind<ModalPresenter>(() => new ModalPresenter());
             this.scopes.Bind<FailingPresenter>(() => new FailingPresenter());
             this.scopes.Bind<ModelPresenter>(() => new ModelPresenter());
+            this.scopes.Bind<SlowBindPresenter>(() => this.lastSlowBind = new SlowBindPresenter());
 
             this.nav = new(
                 this.registry,
@@ -227,6 +268,51 @@ namespace Cuvara.UIToolkit.Flow.Tests
             Assert.That(presenter.ActivateCount, Is.EqualTo(1));
             Assert.That(this.showLayer.childCount, Is.EqualTo(1));
         });
+
+        #region Cancellation while a bind is still in flight
+
+        /// <summary>
+        /// Disposing the navigator while a bind is awaiting must cancel that bind's token.
+        /// </summary>
+        /// <remarks>
+        /// This path was designed and never demonstrated. Every other test in this file binds
+        /// synchronously, so the window between "bind started" and "bind finished" has never
+        /// existed, and the CancellationTokenSource the navigator creates per screen has never
+        /// been observed doing anything.
+        ///
+        /// <para>It matters because the token is the only thing a screen author can honour. A
+        /// long OnBindAsync — a server call, a large asset — that keeps running after its
+        /// screen is gone will write into a disposed view when it returns, and the exception
+        /// surfaces far from the navigation that caused it.</para>
+        /// </remarks>
+        [UnityTest]
+        public IEnumerator DisposingWhileABindIsInFlightCancelsThatBindsToken() => UniTask.ToCoroutine(async () =>
+        {
+            SlowBindPresenter presenter = null;
+
+            // Do NOT await: the push is deliberately left hanging inside OnBindAsync.
+            var pushing = this.nav.PushAsync<SlowBindPresenter>();
+
+            await UniTask.Yield();
+
+            presenter = this.lastSlowBind;
+            Assert.That(presenter, Is.Not.Null, "the presenter was never constructed");
+            Assert.That(presenter.BindEntered, Is.True, "OnBindAsync was never entered, so nothing is in flight and this test proves nothing");
+            Assert.That(presenter.BindReturned, Is.False, "the bind completed synchronously — the gate did not hold it");
+
+            Assert.That(presenter.TokenSeen.IsCancellationRequested, Is.False,
+                "the token was already cancelled before anything cancelled it");
+
+            this.nav.Dispose();
+
+            Assert.That(presenter.TokenSeen.IsCancellationRequested, Is.True,
+                "disposing the navigator did not cancel the in-flight bind's token — a screen closed mid-bind keeps running and writes into a view that is gone");
+
+            presenter.Release();
+            try { await pushing; } catch { /* the push may fault; the token is what is under test */ }
+        });
+
+        #endregion
 
         [UnityTest]
         public IEnumerator PushingASecondScreenSuspendsTheFirst() => UniTask.ToCoroutine(async () =>
