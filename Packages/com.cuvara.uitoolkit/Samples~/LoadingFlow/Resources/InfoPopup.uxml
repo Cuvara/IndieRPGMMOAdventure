@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Popup.uss" />
+    <ui:VisualElement class="popup-overlay">
+        <ui:VisualElement class="popup-card">
+            <ui:Label text="Information" class="popup-title" />
+            <ui:Label text="This is a UI Toolkit popup rendered through the ScreenNavigator. The screen below is suspended while this popup is open." class="popup-body" />
+            <ui:Button name="btn-close" text="Got it" class="popup-button popup-button-blue" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

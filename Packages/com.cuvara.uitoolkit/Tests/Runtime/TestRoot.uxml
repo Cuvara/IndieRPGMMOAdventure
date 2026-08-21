@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        The three layers RootUIDocument resolves by name. Deliberately the same names as its
+        serialized defaults, so this fixture exercises the default path rather than a
+        configuration only the test uses.
+    -->
+    <ui:VisualElement name="root" style="flex-grow: 1;">
+        <ui:VisualElement name="root-ui-closed" style="display: none;" />
+        <ui:VisualElement name="root-ui-show" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0;" />
+        <ui:VisualElement name="root-ui-overlay" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0;" />
+    </ui:VisualElement>
+</ui:UXML>

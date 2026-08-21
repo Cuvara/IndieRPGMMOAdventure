@@ -1,0 +1,29 @@
+{
+  "name": "Cuvara.UIToolkit.Samples.EcsHud",
+  "rootNamespace": "Cuvara.UIToolkit.Samples.EcsHud",
+  "references": [
+    "Cuvara.UIToolkit",
+    "Cuvara.UIToolkit.Ecs",
+    "Unity.Entities",
+    "Unity.Collections",
+    "Unity.Burst",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "CUVARA_UITOOLKIT_ENTITIES"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.entities",
+      "expression": "",
+      "define": "CUVARA_UITOOLKIT_ENTITIES"
+    }
+  ],
+  "noEngineReferences": false
+}

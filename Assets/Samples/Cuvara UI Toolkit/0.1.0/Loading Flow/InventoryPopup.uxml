@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Popup.uss" />
+    <Style src="Inventory.uss" />
+    <ui:VisualElement class="popup-overlay">
+        <ui:VisualElement class="popup-card popup-card-wide" style="height: 500px;">
+            <ui:Label text="Inventory" class="popup-title" />
+            <ui:ListView name="item-list" class="inventory-list" />
+            <ui:Button name="btn-close" text="Close" class="popup-button popup-button-blue" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

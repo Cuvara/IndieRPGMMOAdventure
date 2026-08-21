@@ -1,0 +1,71 @@
+/*
+    Deliberately plain. This port exists to prove the view-surface seam, not to match a
+    visual design: the uGUI prefab's look lives in serialized sprites and TMP settings
+    that have no USS equivalent, and inventing one here would make the diff about styling
+    rather than about the seam.
+*/
+
+.notification-popup {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.notification-popup__dimmer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.notification-popup__panel {
+    min-width: 420px;
+    max-width: 720px;
+    padding: 24px;
+    background-color: rgb(32, 34, 42);
+    border-radius: 12px;
+    align-items: center;
+}
+
+.notification-popup__title {
+    font-size: 32px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    margin-bottom: 12px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.notification-popup__content {
+    font-size: 22px;
+    color: rgb(214, 216, 224);
+    margin-bottom: 24px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.notification-popup__buttons {
+    flex-direction: row;
+    justify-content: center;
+}
+
+.notification-popup__button {
+    min-width: 140px;
+    height: 56px;
+    font-size: 22px;
+    margin-left: 8px;
+    margin-right: 8px;
+    border-radius: 8px;
+    background-color: rgb(64, 120, 220);
+    color: rgb(255, 255, 255);
+}
+
+.notification-popup__button--secondary {
+    background-color: rgb(76, 80, 92);
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Cuvara.UIToolkit.Samples.ScreenFlowScene",
+  "rootNamespace": "Cuvara.UIToolkit.Samples.ScreenFlowScene",
+  "references": [
+    "Cuvara.UIToolkit",
+    "Cuvara.UIToolkit.VContainer",
+    "UniTask",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

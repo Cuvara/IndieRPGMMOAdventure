@@ -30,6 +30,16 @@
         "com.unity.modules.physics": "1.0.0"
       }
     },
+    "com.cuvara.uitoolkit": {
+      "version": "file:com.cuvara.uitoolkit",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.cysharp.unitask": "2.5.10",
+        "com.unity.modules.uielements": "1.0.0",
+        "jp.hadashikick.vcontainer": "1.16.9"
+      }
+    },
     "com.cysharp.messagepipe": {
       "version": "1.8.1",
       "depth": 0,

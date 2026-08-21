@@ -1,0 +1,18 @@
+{
+  "name": "Cuvara.UIToolkit.VContainer",
+  "rootNamespace": "Cuvara.UIToolkit.VContainer",
+  "references": [
+    "Cuvara.UIToolkit",
+    "UniTask",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

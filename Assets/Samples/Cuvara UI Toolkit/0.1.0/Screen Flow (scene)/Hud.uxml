@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="ScreenFlow.uss" />
+    <!-- Not a screen. Parented straight into the document root by the bootstrap so it sits
+         above every layer and is never suspended — its whole job is to report what the flow
+         is doing while the flow does it. -->
+    <ui:VisualElement name="hud" class="cuvara-sample-hud" picking-mode="Ignore">
+        <ui:Label name="depth" class="cuvara-sample-hud-line" text="Depth: 0" />
+        <ui:Label name="top" class="cuvara-sample-hud-line" text="Top: (none)" />
+        <ui:Label name="states" class="cuvara-sample-hud-line" text="Stack:" />
+        <ui:Label name="back" class="cuvara-sample-hud-line" text="Back: (none yet)" />
+    </ui:VisualElement>
+</ui:UXML>

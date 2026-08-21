@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:gf="Cuvara.UIToolkit.Utilities" editor-extension-mode="False">
+    <!--
+        A fixture, not a screen. It exists to prove that [UxmlElement] really does register
+        SafeAreaElement under its namespace and that its attributes really do deserialise —
+        the claim every consumer's UXML depends on, and one that no amount of C#-side
+        testing can establish. If the source generator or the attribute names ever drift,
+        this breaks here rather than in somebody's new screen.
+    -->
+    <ui:VisualElement name="safe-area-screen" style="flex-grow: 1;">
+        <gf:SafeAreaElement name="safe-area" conform-x="false" apply-mode="Inset" style="flex-grow: 1;">
+            <ui:Label name="title" text="Safe area" />
+        </gf:SafeAreaElement>
+    </ui:VisualElement>
+</ui:UXML>

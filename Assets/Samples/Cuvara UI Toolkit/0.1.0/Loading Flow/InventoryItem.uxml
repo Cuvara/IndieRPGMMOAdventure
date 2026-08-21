@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Inventory.uss" />
+    <ui:VisualElement class="inv-item-row">
+        <ui:Label name="item-icon" text="🗡" class="inv-item-icon" />
+        <ui:VisualElement class="inv-item-info">
+            <ui:Label name="item-name" text="Item Name" class="inv-item-name" />
+            <ui:Label name="item-desc" text="Description" class="inv-item-desc" />
+        </ui:VisualElement>
+        <ui:Label name="item-qty" text="x1" class="inv-item-qty" />
+    </ui:VisualElement>
+</ui:UXML>

@@ -82,6 +82,7 @@
   },
   "testables": [
     "com.cuvara.dots",
-    "com.cuvara.netcode"
+    "com.cuvara.netcode",
+    "com.cuvara.uitoolkit"
   ]
 }
