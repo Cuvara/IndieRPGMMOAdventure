@@ -1,0 +1,41 @@
+{
+  "name": "com.cuvara.uitoolkit",
+  "version": "0.1.0",
+  "displayName": "Cuvara UI Toolkit",
+  "description": "A standalone UI Toolkit screen layer: view lifecycle, layer/surface parenting into a UIDocument, list/grid/multi-template collection adapters, safe-area and panel-scale utilities, and a back-navigation event source. It owns its own contracts and depends on no UI framework of its own — a host binds it to whatever screen flow it already has.",
+  "unity": "6000.3",
+  "documentationUrl": "https://github.com/Cuvara/UIToolkit",
+  "license": "MIT",
+  "keywords": [
+    "ui",
+    "uitoolkit",
+    "uxml",
+    "uielements",
+    "safearea"
+  ],
+  "author": {
+    "name": "Cuvara",
+    "email": "duycuong2k3@gmail.com"
+  },
+  "dependencies": {
+    "com.cysharp.unitask": "2.5.10",
+    "com.unity.modules.uielements": "1.0.0"
+  },
+  "x-optionalDependencies": {
+    "jp.hadashikick.vcontainer": "1.16.8 — enables the container registration extension via the GDK_VCONTAINER versionDefine. Absent, that one file compiles out and nothing else changes."
+  },
+  "x-nonDependencies": {
+    "com.gdk.core": "DELIBERATELY ABSENT. This package must not reference GameFoundation. The screen-flow adapter — the IScreenViewBackend implementation, the presenter bases, the back-navigation policy — lives in com.gdk.core and references THIS package, not the other way round. If a com.gdk.core type ever appears in Runtime/, the inversion has been broken and the package stops being installable on its own.",
+    "com.frostbun.*": "DELIBERATELY ABSENT. UniT.Logging and UniT.ResourceManagement come from an OpenUPM scoped registry, and a UPM package cannot declare a scoped registry of its own — so it could never be a real dependency. Asset loading goes through IVisualTreeAssetLoader, which the host implements."
+  },
+  "samples": [
+    {
+      "displayName": "Notification Popup",
+      "description": "A UXML notification popup built on the package's own view base and asset loader, with no host framework involved. The smallest complete example of defining a screen, parenting it into a layer, and closing it.",
+      "path": "Samples~/NotificationPopup"
+    }
+  ],
+  "testables": [
+    "com.cuvara.uitoolkit"
+  ]
+}

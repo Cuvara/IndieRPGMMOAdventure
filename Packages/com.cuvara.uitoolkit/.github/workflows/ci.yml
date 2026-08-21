@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  checks: write
+
+# There is deliberately NO Unity compile or test job here, and that is not an oversight.
+# This package extends GameFoundation: all 19 runtime files reference com.gdk.core, which
+# is a git submodule of a PRIVATE NightHowlGames repository. Cuvara's Actions have no
+# credentials for it, so a bootstrap-and-test job would fail at package resolution, before
+# compiling a line of this package — always, and for a reason that has nothing to do with
+# the code. A check that can only ever be red trains everyone to ignore it, and then the
+# real breakage arrives to an audience that has already stopped looking.
+#
+# The tests are real and they run in IndieRPGMMOAdventure, where the submodule is present.
+# What would unblock a full run here: Documentation~/CI.md.
+jobs:
+  validate:
+    name: Validate package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate package.json
+        run: |
+          node -e "
+            const pkg = JSON.parse(require('fs').readFileSync('./package.json','utf8'));
+            const required = ['name', 'version', 'displayName', 'description', 'unity'];
+            const missing = required.filter(k => !pkg[k]);
+            if (missing.length) {
+              console.error('Missing fields:', missing.join(', '));
+              process.exit(1);
+            }
+            console.log(pkg.name + '@' + pkg.version + ' — valid');
+          "
+
+      # com.gdk.core is NOT resolvable by UPM. If it ever appears under 'dependencies' the
+      # package stops installing for everyone, with an error naming package resolution
+      # rather than the actual mistake. Keep it in x-manualDependencies, where it is
+      # documentation.
+      - name: Unresolvable dependencies stay out of 'dependencies'
+        run: |
+          node -e "
+            const pkg = JSON.parse(require('fs').readFileSync('./package.json','utf8'));
+            const banned = ['com.gdk.core', 'com.gdk.3rd'];
+            const deps = Object.keys(pkg.dependencies || {});
+            const bad = banned.filter(b => deps.includes(b));
+            if (bad.length) {
+              console.error('These cannot be resolved by UPM and must not be declared as dependencies:', bad.join(', '));
+              console.error('They belong in x-manualDependencies. See README.md.');
+              process.exit(1);
+            }
+            if (!pkg['x-manualDependencies'] || !pkg['x-manualDependencies']['com.gdk.core']) {
+              console.error('x-manualDependencies.com.gdk.core is missing. The hard requirement on GameFoundation must stay recorded somewhere, or it stops being discoverable.');
+              process.exit(1);
+            }
+            console.log('dependency declarations are honest');
+          "
+
+      - name: Validate CHANGELOG has current version
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./package.json','utf8')).version")
+          grep -q "\[$VERSION\]" CHANGELOG.md || {
+            echo "::error::CHANGELOG.md missing entry for v$VERSION"
+            exit 1
+          }
+
+      # A missing .meta does not fail a build here and does not show in any test result --
+      # it fails a CONSUMER'S suite, because Unity logs an Error and the test framework
+      # turns an unexpected log error into an exception. This package's first tranche had
+      # 5 files with no .meta at all and 15 more with no MonoImporter block.
+      - name: Every Unity-visible file has a .meta
+        run: python3 .github/scripts/check_metas.py
+
+      - name: Check asmdef names
+        run: |
+          find . -name "*.asmdef" -not -path "./.github/*" | while read f; do
+            NAME=$(node -p "JSON.parse(require('fs').readFileSync('$f','utf8')).name")
+            echo "  $f → $NAME"
+          done
+
+      - name: Say plainly what was and was not checked
+        if: always()
+        run: |
+          {
+            echo "### What this run verified"
+            echo ""
+            echo "Packaging only: \`package.json\` shape, honest dependency declarations,"
+            echo "CHANGELOG currency, \`.meta\` coverage, asmdef names."
+            echo ""
+            echo "**No code was compiled and no test was run.** This package requires"
+            echo "\`com.gdk.core\`, a submodule of a private NightHowlGames repository that"
+            echo "this repository's Actions cannot fetch. The tests run in"
+            echo "\`IndieRPGMMOAdventure\`, and that is the real signal for this code."
+            echo "See \`Documentation~/CI.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
