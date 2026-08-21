@@ -1,0 +1,26 @@
+{
+  "name": "Cuvara.UIToolkit.VContainer",
+  "rootNamespace": "Cuvara.UIToolkit.VContainer",
+  "references": [
+    "Cuvara.UIToolkit",
+    "UniTask",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "GDK_VCONTAINER"
+  ],
+  "versionDefines": [
+    {
+      "name": "jp.hadashikick.vcontainer",
+      "expression": "",
+      "define": "GDK_VCONTAINER"
+    }
+  ],
+  "noEngineReferences": false
+}
