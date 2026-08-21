@@ -150,6 +150,37 @@ One navigation abstraction, centralised — open, close, replace, push, pop, scr
 modals. **Do not scatter `SetActive(true/false)` through gameplay code, and do not introduce
 a second navigation system** beside the one that already exists. Follow the existing API.
 
+## The one navigation system is the package's
+
+`com.cuvara.uitoolkit` owns screen navigation. `IScreenNavigator` is the single abstraction;
+there is no second one and there must not be.
+
+This needs saying explicitly, because the reading depends on a fact that is true today and is
+written in no file: **GameFoundation's screen flow is never wired in this project.** `Assets/`
+has zero references to `GameFoundationVContainer`, `RegisterGameFoundation`,
+`RegisterScreenManager` or `IScreenManager` — measured on 2026-08-21, not assumed. The fork
+`Packages/com.gdk.core` is frozen and read-only to us; its `ScreenManager`,
+`BaseUIToolkitScreenPresenter`, `UIToolkitScreenViewBackend` and `UIToolkitBackNavigation` are
+orphaned and must stay that way.
+
+So:
+
+- **Do not call `RegisterScreenManager()`**, or otherwise install GameFoundation's screen flow,
+  in this project. It would be a perfectly reasonable thing to do — the code is right there in
+  `Packages/` and it works — which is exactly why it is written down here. Doing it makes the
+  count two, and this section is the only thing standing between a contributor and that.
+- New screens derive from the package's `BaseUIToolkitScreenPresenter`, are registered with
+  `RegisterScreen<TPresenter, TView>(key)`, and are opened through `IScreenNavigator`.
+- Nothing in the package may reference GameFoundation. `check_standalone.py` enforces that
+  direction in CI; nothing enforces the direction described here, so it is a review
+  responsibility.
+
+**Why the asymmetry matters:** the package cannot depend on GameFoundation and a gate proves it.
+The reverse — this project quietly acquiring a second navigation system — has no gate at all,
+because it is a fact about what the game *registers* at runtime rather than about what any file
+references. A grep for `RegisterScreenManager` in `Assets/` returning nothing is the check, and
+it is a human one.
+
 ## Testability
 
 A Presenter must be testable as a plain C# class, with no scene, no `UIDocument`, no
