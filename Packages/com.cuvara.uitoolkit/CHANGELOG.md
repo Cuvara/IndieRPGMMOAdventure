@@ -7,94 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **A test that `[UpdateInGroup]` inherits onto a host's bridge subclass.** The attribute is
-  declared on the abstract `EcsViewModelBridge<,>`, and whether it reaches a concrete subclass
-  that does not repeat it was assumed, not known. It does — verified through
-  `DefaultWorldInitialization.AddSystemsToRootLevelSystemGroups`, the function Unity's own
-  bootstrap uses to read it, with a subclass carrying no attribute of its own. Had it not
-  inherited, a host bridge would be created and never updated: the screen stays blank, nothing
-  throws, and no log says why.
-- **A samples compile job** in CI. `Samples~` is excluded from Unity's import, so no other
-  job builds a line of it — both declared samples had never been through a compiler at all,
-  and every other gate stayed green regardless. The job bootstraps a throwaway project,
-  copies `Samples~/<name>` to `Assets/Samples/<name>` exactly as the Package Manager does on
-  import, and compiles. It pins `activeInputHandler: 1` — Input System package only, the
-  strictest setting and the one where the legacy `UnityEngine.Input` API throws rather than
-  returning false. It compiles the samples; it does not run them, and the comment says so
-  rather than overselling it.
-- **A samples gate** (`.github/scripts/check_samples.py`, wired into CI). `Samples~` is
-  invisible to the asset database — no import, no compile, no missing-reference warning —
-  so a sample declared in `package.json` can rot indefinitely with every other gate green.
-  The script checks that every `Q<T>("name")` in a sample resolves to a name some sibling
-  `.uxml` defines, that every `<Style src>` points at a real file, and that each declared
-  sample exists and has a README. A `Q<Label>("titel")` compiles, returns null, and throws
-  in code somebody has already copied into their own project believing it worked; that is a
-  worse outcome than a sample which fails to build.
+## [0.2.0] - 2026-08-21
 
 ### Added
 
-- **A DOTS/ECS presentation adapter** (`Runtime/Ecs/`), optional behind
-  `com.unity.entities` and the `CUVARA_UITOOLKIT_ENTITIES` versionDefine.
-  - `IViewModelSink<TViewModel>` — the contract a host's Presenter implements. This is the
-    package's entire coupling to MVP: it knows a sink, not a Presenter, not a View.
-  - `EcsViewModelBridge<TComponent, TViewModel>` — a managed `SystemBase` in
-    `PresentationSystemGroup` that converts component data to a plain ViewModel and pushes it.
+- **Screen flow system** (`Runtime/Flow/`). A stack-based screen navigator with full lifecycle:
+  `PushAsync`, `PopAsync`, `ReplaceAsync`, `PopToRootAsync`, `PopAllAsync`. Screens are UXML
+  documents managed by presenters with lifecycle hooks: `OnBindAsync`, `OnActivate`,
+  `OnDeactivate`, `OnSuspend`, `OnResume`, `OnBackRequested`. Model-parameterized variants
+  (`PushAsync<TPresenter, TModel>(model)`) pass data to a screen at open time.
+  - `ScreenNavigator` — the stack, per-scene scoped via VContainer.
+  - `BaseUIToolkitScreenPresenter<TView>` / `<TView, TModel>` — presenter bases.
+  - `BaseUIToolkitPopupPresenter<TView>` / `<TView, TModel>` — popup convenience with `Close()`.
+  - `ScreenOptions` — `None` (full screen), `Modal` (overlay layer), `DimsBelow` (dims without
+    suspending the screen below).
+  - `ScreenSubscriptions` — scoped cleanup for button clicks and events.
+  - `ScreenRegistry` — maps presenter type to view type, asset key, and options.
+  - `ScreenLifecycleState` — 9 states from `Registered` to `Disposed`.
+  - `IScreenScopeFactory` / `VContainerScreenScopeFactory` — one VContainer child scope per screen.
+  - `ScreenFlowRegistration` — `RegisterUIToolkit()`, `RegisterScreenFlow()`,
+    `RegisterScreen<T,V>()`, `RegisterPopup<T,V>()` extension methods for VContainer.
+- **Back navigation** (`Runtime/Input/BackNavigationSource`). Wires Escape, gamepad B, and
+  Android back to the navigator. One-line setup: `source.BackHandler = navigator.HandleBack`.
+  `RootBackPolicy` controls what happens at the bottom of the stack: `NotHandled` (platform
+  default), `Consume` (swallow), or `Raise` (event).
+- **Assembly definitions for all samples.** Samples could not compile when imported via Package
+  Manager because they had no `.asmdef`. Each sample now ships its own.
+- **Loading Flow sample** (`Samples~/LoadingFlow`). Two-scene flow demonstrating every package
+  feature: LoadingScene (MonoBehaviour-driven progress bar with tips and spinner) transitions to
+  MainScene (ScreenNavigator with Push, Pop, Replace, PopToRoot, Modal+DimsBelow overlay, model
+  parameters, lifecycle hooks, OnBackRequested override, BackNavigationSource,
+  UIToolkitListAdapter collection adapter, and per-scene navigator scoping).
+- **A DOTS/ECS presentation adapter** (`Runtime/Ecs/`), optional behind `com.unity.entities`
+  and the `CUVARA_UITOOLKIT_ENTITIES` versionDefine.
+  - `IViewModelSink<TViewModel>` — the contract a host's Presenter implements.
+  - `EcsViewModelBridge<TComponent, TViewModel>` — managed `SystemBase` in
+    `PresentationSystemGroup` that converts component data to a plain ViewModel.
   - `EcsSinkRegistration` — binds a sink for a screen's lifetime and unbinds on `Dispose`.
   - `Samples~/EcsHud` — the five layers end to end.
-
-  **ECS does not touch UI Toolkit here.** The path is
-  `ECS -> adapter -> ViewModel -> Presenter -> View -> UI Toolkit`, per the project's UI
-  architecture contract, and `Runtime/Ecs/` is the adapter arrow only. The assembly does not
-  reference UIElements at all and a test asserts that, because this is the kind of boundary
-  that erodes one convenient edit at a time.
-
-  Two separate rules produce that shape and it is worth keeping them apart. The *architecture*
-  rule constrains what the adapter may talk to — a ViewModel, never a view. A *type-system*
-  fact constrains where it runs: `VisualElement` is plain managed C#, not a
-  `UnityEngine.Object`, so it cannot be touched from `ISystem`, `IJobEntity`, Burst or any
-  worker thread at all. Hence `SystemBase`, main thread, no `[BurstCompile]`. Satisfying one
-  rule does not satisfy the other.
-
-  It stays quiet when nothing changes: `Enabled` is false while no sink is registered, and the
-  query carries `SetChangedVersionFilter`. Pushing every frame is what the contract's
-  performance section forbids.
+- **CI improvements**: samples compile job, samples gate (`check_samples.py`), real Unity test
+  job, install probes, `check_standalone.py` wired into CI.
+- **A test that `[UpdateInGroup]` inherits onto a host's bridge subclass.**
 
 ### Fixed
 
-- A sink registered mid-session received nothing until the simulation next wrote the
-  component. Both quiet-keeping mechanisms were working correctly and combining into a bug: the
-  change filter skipped the untouched chunk, so a screen opened while the simulation was idle
-  stayed blank. The next pass after a registration now runs unfiltered exactly once. Found by a
-  test, not in review.
-
-### Fixed
-
-- **CI failed on its own dependency check.** The step required
-  `x-manualDependencies["com.gdk.core"]` to be present — correct while the package still
-  depended on GameFoundation, wrong from the moment it became standalone and that field was
-  removed. It now asserts only what still holds: no unresolvable package may appear in
-  `dependencies`.
-- **`check_standalone.py` was never wired into CI.** The gate that keeps this package
-  standalone existed in `.github/scripts/` and nothing ran it, which is the shape of defect
-  it exists to catch — present, plausible, and inert.
-
-### Added
-
-- **A real Unity test job.** The package bootstraps a throwaway project from its own
-  `package.json` — the only thing hand-supplied is the OpenUPM scoped registry, which a UPM
-  package is not permitted to declare for itself — and runs EditMode and PlayMode. This is
-  only possible because the package is standalone; a package reaching into a private
-  submodule cannot be tested by its own CI.
-  The job asserts on the result XML rather than the exit code: the runner sets
-  `USE_EXIT_CODE=false`, so Unity exits 0 on "No tests were executed" and the published
-  check goes neutral rather than red. A run that executed nothing fails here.
-  `activeInputHandler: 1` is pinned in the bootstrap — the strictest setting, where the
-  legacy `UnityEngine.Input` API throws rather than returning false.
-- **Install probes.** `documented` gates: a consumer following the README must be able to
-  compile the package. `bare` is informational and expected to fail, recording what a
-  consumer sees with no scoped registry rather than leaving it to be guessed at.
+- A sink registered mid-session received nothing until the simulation next wrote the component.
+  The next pass after a registration now runs unfiltered exactly once.
+- CI failed on its own dependency check after the `com.gdk.core` dependency was removed.
+- `check_standalone.py` was never wired into CI.
 
 ## [0.1.0] - 2026-08-21
 
