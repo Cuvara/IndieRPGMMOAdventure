@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI failed on its own dependency check.** The step required
+  `x-manualDependencies["com.gdk.core"]` to be present — correct while the package still
+  depended on GameFoundation, wrong from the moment it became standalone and that field was
+  removed. It now asserts only what still holds: no unresolvable package may appear in
+  `dependencies`.
+- **`check_standalone.py` was never wired into CI.** The gate that keeps this package
+  standalone existed in `.github/scripts/` and nothing ran it, which is the shape of defect
+  it exists to catch — present, plausible, and inert.
+
+### Added
+
+- **A real Unity test job.** The package bootstraps a throwaway project from its own
+  `package.json` — the only thing hand-supplied is the OpenUPM scoped registry, which a UPM
+  package is not permitted to declare for itself — and runs EditMode and PlayMode. This is
+  only possible because the package is standalone; a package reaching into a private
+  submodule cannot be tested by its own CI.
+  The job asserts on the result XML rather than the exit code: the runner sets
+  `USE_EXIT_CODE=false`, so Unity exits 0 on "No tests were executed" and the published
+  check goes neutral rather than red. A run that executed nothing fails here.
+  `activeInputHandler: 1` is pinned in the bootstrap — the strictest setting, where the
+  legacy `UnityEngine.Input` API throws rather than returning false.
+- **Install probes.** `documented` gates: a consumer following the README must be able to
+  compile the package. `bare` is informational and expected to fail, recording what a
+  consumer sees with no scoped registry rather than leaving it to be guessed at.
+
 ## [0.1.0] - 2026-08-21
 
 First release. The code was developed inside `com.gdk.core` on the `feat/uitk-migration`
