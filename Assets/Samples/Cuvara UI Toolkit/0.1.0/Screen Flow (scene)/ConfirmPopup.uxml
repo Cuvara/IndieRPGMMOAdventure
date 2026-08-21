@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="ScreenFlow.uss" />
+    <ui:VisualElement name="confirm-popup" class="cuvara-sample-modal">
+        <ui:VisualElement name="dimmer" class="cuvara-sample-dimmer" />
+        <ui:VisualElement name="panel" class="cuvara-sample-panel">
+            <ui:Label name="title" class="cuvara-sample-title" text="A modal" />
+            <ui:Label name="message" class="cuvara-sample-hint" text="The screen below is still Active — it is dimmed and non-interactive, not suspended. Try clicking its buttons." />
+            <ui:Button name="btn-close" class="cuvara-sample-button" text="Close" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

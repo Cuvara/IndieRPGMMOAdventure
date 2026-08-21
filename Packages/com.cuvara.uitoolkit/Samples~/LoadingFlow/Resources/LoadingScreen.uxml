@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="LoadingScreen.uss" />
+    <ui:VisualElement class="loading-root">
+        <!-- Top spacer -->
+        <ui:VisualElement class="loading-top-spacer" />
+
+        <!-- Logo / Game title -->
+        <ui:VisualElement class="loading-logo-area">
+            <ui:Label text="⚔" class="loading-logo-icon" />
+            <ui:Label text="Indie RPG MMO" class="loading-game-title" />
+            <ui:Label text="Adventure" class="loading-game-subtitle" />
+        </ui:VisualElement>
+
+        <!-- Center spacer -->
+        <ui:VisualElement style="flex-grow: 1;" />
+
+        <!-- Loading spinner + status -->
+        <ui:VisualElement class="loading-center">
+            <ui:Label name="title" text="Loading..." class="loading-title" />
+            <ui:VisualElement class="spinner-row">
+                <ui:VisualElement name="spinner" class="loading-spinner" />
+                <ui:Label name="status" text="Preparing..." class="loading-status" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Progress bar -->
+        <ui:VisualElement class="progress-section">
+            <ui:VisualElement class="progress-container">
+                <ui:VisualElement name="progress-fill" class="progress-fill" />
+            </ui:VisualElement>
+            <ui:Label name="progress-percent" text="0%" class="progress-percent" />
+        </ui:VisualElement>
+
+        <!-- Tips area -->
+        <ui:VisualElement class="tips-area">
+            <ui:Label name="tip" text="💡 Tip: Press ESC to open the menu during gameplay." class="loading-tip" />
+        </ui:VisualElement>
+
+        <!-- Bottom version -->
+        <ui:Label text="v0.1.0 alpha" class="loading-version" />
+    </ui:VisualElement>
+</ui:UXML>

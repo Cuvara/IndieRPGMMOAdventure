@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="MainScreen.uss" />
+    <ui:VisualElement class="main-root" style="background-color: rgb(35, 30, 50);">
+        <ui:Label name="lifecycle-label" text="" class="lifecycle-label" />
+        <ui:Label text="Second Screen" class="main-title" />
+        <ui:Label name="state-label" text="" style="font-size: 16px; color: rgb(180, 180, 200); margin-bottom: 30px;" />
+        <ui:VisualElement class="button-group">
+            <ui:Button name="btn-push" text="Push Another" class="main-button info-button" />
+            <ui:Button name="btn-modal" text="Modal Popup" class="main-button confirm-button" />
+            <ui:Button name="btn-pop" text="Pop (Back)" class="main-button settings-button" />
+            <ui:Button name="btn-pop-to-root" text="Pop to Root" class="main-button replace-button" />
+        </ui:VisualElement>
+        <ui:Label name="nav-depth" text="" class="nav-depth-label" />
+    </ui:VisualElement>
+</ui:UXML>

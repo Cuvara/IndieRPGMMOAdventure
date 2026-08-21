@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="MainScreen.uss" />
+    <ui:VisualElement class="main-root">
+        <ui:Label name="lifecycle-label" text="" class="lifecycle-label" />
+        <ui:Label text="Main Menu" class="main-title" />
+        <ui:VisualElement class="button-group">
+            <ui:Button name="btn-info" text="Info Popup" class="main-button info-button" />
+            <ui:Button name="btn-confirm" text="Confirm (Model)" class="main-button confirm-button" />
+            <ui:Button name="btn-settings" text="Settings" class="main-button settings-button" />
+            <ui:Button name="btn-inventory" text="Inventory (List)" class="main-button inventory-button" />
+            <ui:Button name="btn-replace" text="Replace → Second" class="main-button replace-button" />
+        </ui:VisualElement>
+        <ui:Label name="nav-depth" text="" class="nav-depth-label" />
+    </ui:VisualElement>
+</ui:UXML>

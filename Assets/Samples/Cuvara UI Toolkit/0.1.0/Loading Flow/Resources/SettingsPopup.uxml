@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Popup.uss" />
+    <ui:VisualElement class="popup-overlay">
+        <ui:VisualElement class="popup-card popup-card-wide">
+            <ui:Label text="Settings" class="popup-title" />
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="Music Volume" class="setting-label" />
+                <ui:Slider name="slider-music" low-value="0" high-value="100" value="80" class="setting-slider" />
+            </ui:VisualElement>
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="SFX Volume" class="setting-label" />
+                <ui:Slider name="slider-sfx" low-value="0" high-value="100" value="100" class="setting-slider" />
+            </ui:VisualElement>
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="Fullscreen" class="setting-label" />
+                <ui:Toggle name="toggle-fullscreen" value="true" />
+            </ui:VisualElement>
+            <ui:Button name="btn-close" text="Close" class="popup-button popup-button-green" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

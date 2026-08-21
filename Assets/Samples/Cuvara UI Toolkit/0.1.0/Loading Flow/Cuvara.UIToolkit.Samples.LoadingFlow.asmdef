@@ -1,0 +1,19 @@
+{
+  "name": "Cuvara.UIToolkit.Samples.LoadingFlow",
+  "rootNamespace": "Cuvara.UIToolkit.Samples.LoadingFlow",
+  "references": [
+    "Cuvara.UIToolkit",
+    "Cuvara.UIToolkit.VContainer",
+    "UniTask",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,126 @@
+.loading-root {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgb(12, 14, 24);
+    align-items: center;
+    justify-content: flex-start;
+    padding: 40px;
+}
+
+/* --- Logo area --- */
+.loading-top-spacer {
+    height: 60px;
+}
+
+.loading-logo-area {
+    align-items: center;
+}
+
+.loading-logo-icon {
+    font-size: 80px;
+    color: rgb(200, 160, 60);
+    margin-bottom: 10px;
+}
+
+.loading-game-title {
+    font-size: 56px;
+    color: rgb(230, 220, 200);
+    -unity-font-style: bold;
+    letter-spacing: 6px;
+}
+
+.loading-game-subtitle {
+    font-size: 28px;
+    color: rgb(140, 130, 110);
+    letter-spacing: 12px;
+    margin-top: -4px;
+}
+
+/* --- Center loading indicator --- */
+.loading-center {
+    align-items: center;
+    margin-bottom: 40px;
+}
+
+.loading-title {
+    font-size: 32px;
+    color: rgb(180, 190, 220);
+    margin-bottom: 16px;
+    -unity-font-style: bold;
+}
+
+.spinner-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.loading-spinner {
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    background-color: rgb(80, 160, 255);
+    margin-right: 12px;
+    transition-property: opacity;
+    transition-duration: 0.5s;
+}
+
+.loading-status {
+    font-size: 18px;
+    color: rgb(130, 140, 170);
+}
+
+/* --- Progress bar --- */
+.progress-section {
+    width: 70%;
+    align-items: center;
+    margin-bottom: 40px;
+}
+
+.progress-container {
+    width: 100%;
+    height: 8px;
+    background-color: rgb(35, 40, 55);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background-color: rgb(80, 160, 255);
+    border-radius: 4px;
+    transition-property: width;
+    transition-duration: 0.3s;
+    transition-timing-function: ease-out;
+}
+
+.progress-percent {
+    font-size: 16px;
+    color: rgb(100, 110, 140);
+    margin-top: 8px;
+}
+
+/* --- Tips --- */
+.tips-area {
+    width: 60%;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.loading-tip {
+    font-size: 16px;
+    color: rgb(100, 110, 140);
+    -unity-text-align: middle-center;
+    white-space: normal;
+    transition-property: opacity;
+    transition-duration: 0.5s;
+}
+
+/* --- Version --- */
+.loading-version {
+    font-size: 14px;
+    color: rgb(60, 65, 80);
+    position: absolute;
+    right: 20px;
+    bottom: 15px;
+}
