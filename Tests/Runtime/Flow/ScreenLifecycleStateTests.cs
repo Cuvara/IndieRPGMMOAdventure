@@ -249,12 +249,10 @@ namespace Cuvara.UIToolkit.Flow.Tests
         [Test]
         public void ScreenOptionsCombineAsFlags()
         {
-            var options = ScreenOptions.Modal | ScreenOptions.DimsBelow | ScreenOptions.CloseOnTapOutside;
+            var options = ScreenOptions.Modal | ScreenOptions.DimsBelow;
 
             Assert.That(options.HasFlag(ScreenOptions.Modal), Is.True);
             Assert.That(options.HasFlag(ScreenOptions.DimsBelow), Is.True);
-            Assert.That(options.HasFlag(ScreenOptions.CloseOnTapOutside), Is.True);
-            Assert.That(options.HasFlag(ScreenOptions.Retain), Is.False);
         }
 
         [Test]
@@ -272,6 +270,26 @@ namespace Cuvara.UIToolkit.Flow.Tests
                 // not need one: a power of two ANDed with its predecessor is zero.
                 var raw = (int)value;
                 Assert.That(raw & (raw - 1), Is.Zero, $"{value} is not a single bit");
+            }
+        }
+
+        [Test]
+        public void EveryDeclaredOptionIsReadSomewhereInTheRuntime()
+        {
+            // Rule 5, made mechanical: a member of this enum that no runtime code reads is an
+            // inert flag, and an author who sets it gets no behaviour and no diagnostic. The
+            // check is deliberately crude — it looks for the member's NAME in the flow's source
+            // — because the alternative is trusting that someone noticed.
+            var runtimeSource = string.Concat(System.IO.Directory.GetFiles(
+                System.IO.Path.Combine(UnityEngine.Application.dataPath, "..", "Packages", "com.cuvara.uitoolkit", "Runtime", "Flow"),
+                "*.cs", System.IO.SearchOption.AllDirectories).Select(System.IO.File.ReadAllText));
+
+            foreach (var value in Enum.GetValues(typeof(ScreenOptions)).Cast<ScreenOptions>())
+            {
+                if (value == ScreenOptions.None) continue;
+
+                Assert.That(runtimeSource, Does.Contain($"ScreenOptions.{value}"),
+                    $"{value} is declared but no runtime code reads it — an inert flag looks configured and does nothing.");
             }
         }
 
