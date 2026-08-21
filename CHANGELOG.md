@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A samples compile job** in CI. `Samples~` is excluded from Unity's import, so no other
+  job builds a line of it — both declared samples had never been through a compiler at all,
+  and every other gate stayed green regardless. The job bootstraps a throwaway project,
+  copies `Samples~/<name>` to `Assets/Samples/<name>` exactly as the Package Manager does on
+  import, and compiles. It pins `activeInputHandler: 1` — Input System package only, the
+  strictest setting and the one where the legacy `UnityEngine.Input` API throws rather than
+  returning false. It compiles the samples; it does not run them, and the comment says so
+  rather than overselling it.
 - **A samples gate** (`.github/scripts/check_samples.py`, wired into CI). `Samples~` is
   invisible to the asset database — no import, no compile, no missing-reference warning —
   so a sample declared in `package.json` can rot indefinitely with every other gate green.
