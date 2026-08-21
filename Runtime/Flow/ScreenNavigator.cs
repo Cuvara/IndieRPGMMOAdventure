@@ -77,6 +77,26 @@ namespace Cuvara.UIToolkit.Flow
 
         public bool IsBusy => this.busy;
 
+        /// <summary>
+        /// How many exceptions teardown caught and continued past.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Teardown never aborts, and never propagates.</b> A throw halfway through
+        /// leaves the stack, the scope and the layer in a state nobody designed — and the screen
+        /// that failed to release is the least of it, because every screen after it in the
+        /// teardown loop is then skipped. One leaked handler is a far better outcome than a
+        /// half-torn-down stack.</para>
+        ///
+        /// <para>But swallowing silently is the failure mode on the other side, so every caught
+        /// exception is logged with the screen that produced it and counted here. "Teardown
+        /// swallowed three exceptions" is then observable in a test rather than invisible.</para>
+        ///
+        /// <para><see cref="ScreenSubscriptions"/> still aggregates and rethrows to ITS caller —
+        /// that type reporting the truth is right. This is the layer that decides not to let it
+        /// escape.</para>
+        /// </remarks>
+        public int TeardownFailureCount { get; private set; }
+
         public RootBackPolicy RootBackPolicy { get; set; } = RootBackPolicy.NotHandled;
 
         public event Action RootBackRequested;
@@ -197,7 +217,7 @@ namespace Cuvara.UIToolkit.Flow
                 // A half-built screen never reaches the stack. Everything created so far is
                 // released here, in the order that leaves nothing holding anything, and the
                 // exception continues to the caller untouched.
-                DisposeEntry(entry);
+                this.DisposeEntry(entry);
                 throw;
             }
         }
@@ -317,7 +337,7 @@ namespace Cuvara.UIToolkit.Flow
             {
                 // Teardown never aborts. A failing outro must not leave a screen on screen with
                 // its scope disposed, so the detach and the disposal happen regardless.
-                DisposeEntry(entry);
+                this.DisposeEntry(entry);
             }
 
             if (this.stack.Count == 0) return;
@@ -480,7 +500,7 @@ namespace Cuvara.UIToolkit.Flow
 
         #region Teardown
 
-        private static void DisposeEntry(ScreenEntry entry)
+        private void DisposeEntry(ScreenEntry entry)
         {
             // Order matters and is not arbitrary: cancel first so anything awaiting the token
             // unwinds, then release subscriptions, then detach the view, then dispose the scope
@@ -490,10 +510,11 @@ namespace Cuvara.UIToolkit.Flow
             {
                 entry.Cancellation?.Cancel();
             }
-            catch
+            catch (Exception exception)
             {
-                // A cancellation callback threw. It is not this method's job to care, and letting
-                // it escape would abandon the rest of the teardown.
+                // A cancellation callback threw. Letting it escape would abandon the rest of the
+                // teardown, so it is recorded and stepped over.
+                this.RecordTeardownFailure(entry, "cancelling", exception);
             }
 
             entry.Cancellation?.Dispose();
@@ -503,23 +524,52 @@ namespace Cuvara.UIToolkit.Flow
             {
                 entry.Subscriptions?.Dispose();
             }
-            catch
+            catch (Exception exception)
             {
-                // Subscriptions aggregate their own failures and rethrow after releasing
-                // everything. Teardown continues regardless — §3's rule is that it never aborts.
+                // ScreenSubscriptions releases everything and THEN rethrows an aggregate, so by
+                // the time this runs nothing is still held. Recording and continuing is what
+                // stops one screen's bad handler skipping every screen below it.
+                this.RecordTeardownFailure(entry, "releasing subscriptions", exception);
             }
 
             entry.Subscriptions = null;
 
-            entry.View?.DestroySelf();
+            try
+            {
+                entry.View?.DestroySelf();
+            }
+            catch (Exception exception)
+            {
+                this.RecordTeardownFailure(entry, "destroying the view", exception);
+            }
+
             entry.View = null;
 
-            entry.Scope?.Dispose();
+            try
+            {
+                entry.Scope?.Dispose();
+            }
+            catch (Exception exception)
+            {
+                this.RecordTeardownFailure(entry, "disposing the scope", exception);
+            }
+
             entry.Scope = null;
 
             if (entry.Presenter != null) SetState(entry.Presenter, ScreenLifecycleState.Disposed);
 
             entry.Presenter = null;
+        }
+
+        private void RecordTeardownFailure(ScreenEntry entry, string stage, Exception exception)
+        {
+            ++this.TeardownFailureCount;
+
+            // Named screen, named stage. "An exception during teardown" is not actionable; "X
+            // threw while releasing subscriptions" is.
+            UnityEngine.Debug.LogError(
+                $"{nameof(ScreenNavigator)}: {entry.Presenter?.GetType().Name ?? "a screen"} threw while {stage}. "
+                + $"Teardown continued. {exception}");
         }
 
         /// <summary>Closes everything, synchronously, without running outro transitions.</summary>
@@ -532,7 +582,7 @@ namespace Cuvara.UIToolkit.Flow
             if (this.disposed) return;
             this.disposed = true;
 
-            for (var i = this.stack.Count - 1; i >= 0; --i) DisposeEntry(this.stack[i]);
+            for (var i = this.stack.Count - 1; i >= 0; --i) this.DisposeEntry(this.stack[i]);
 
             this.stack.Clear();
         }

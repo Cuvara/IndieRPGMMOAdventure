@@ -120,6 +120,16 @@ namespace Cuvara.UIToolkit.Flow.Tests
     {
     }
 
+    /// <summary>Registers a subscription that throws when released.</summary>
+    internal sealed class BadTeardownPresenter : BaseUIToolkitScreenPresenter<ITestScreenView>
+    {
+        protected override UniTask OnBindAsync(ScreenSubscriptions subscriptions, CancellationToken cancellationToken)
+        {
+            subscriptions.AddAction(() => throw new InvalidOperationException("teardown boom"));
+            return UniTask.CompletedTask;
+        }
+    }
+
     internal sealed class ModalPresenter : TestScreenPresenter
     {
     }
@@ -561,6 +571,83 @@ namespace Cuvara.UIToolkit.Flow.Tests
         #endregion
 
         #region Teardown
+
+        [UnityTest]
+        public IEnumerator AThrowingSubscriptionDoesNotAbortTeardown() => UniTask.ToCoroutine(async () =>
+        {
+            // A throw halfway leaves the stack, the scope and the layer in a state nobody
+            // designed. One leaked handler beats a half-torn-down stack.
+            this.registry.Register(typeof(BadTeardownPresenter), typeof(TestScreenView), ScreenKey);
+            this.scopes.Bind<BadTeardownPresenter>(() => new BadTeardownPresenter());
+
+            LogAssert.ignoreFailingMessages = true;
+
+            try
+            {
+                await this.nav.PushAsync<BadTeardownPresenter>();
+
+                await this.nav.PopAsync();
+
+                Assert.That(this.nav.Depth, Is.Zero, "the screen must still have left the stack");
+                Assert.That(this.scopes.Disposed, Is.EqualTo(1), "the scope must still have been disposed");
+                Assert.That(this.showLayer.childCount, Is.Zero, "the view must still have been detached");
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+        });
+
+        [UnityTest]
+        public IEnumerator ASwallowedTeardownExceptionIsCounted() => UniTask.ToCoroutine(async () =>
+        {
+            // Continuing past a failure is right; doing it invisibly is not. The count is what
+            // makes "teardown swallowed something" observable instead of silent.
+            this.registry.Register(typeof(BadTeardownPresenter), typeof(TestScreenView), ScreenKey);
+            this.scopes.Bind<BadTeardownPresenter>(() => new BadTeardownPresenter());
+
+            LogAssert.ignoreFailingMessages = true;
+
+            try
+            {
+                Assert.That(this.nav.TeardownFailureCount, Is.Zero, "precondition");
+
+                await this.nav.PushAsync<BadTeardownPresenter>();
+                await this.nav.PopAsync();
+
+                Assert.That(this.nav.TeardownFailureCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+        });
+
+        [UnityTest]
+        public IEnumerator OneBadScreenDoesNotSkipTheScreensBelowItOnDispose() => UniTask.ToCoroutine(async () =>
+        {
+            // The reason teardown must not propagate: an exception on the way out would abandon
+            // every screen after it in the loop.
+            this.registry.Register(typeof(BadTeardownPresenter), typeof(TestScreenView), ScreenKey);
+            this.scopes.Bind<BadTeardownPresenter>(() => new BadTeardownPresenter());
+
+            LogAssert.ignoreFailingMessages = true;
+
+            try
+            {
+                await this.nav.PushAsync<TestScreenPresenter>();
+                await this.nav.PushAsync<BadTeardownPresenter>();
+
+                this.nav.Dispose();
+
+                Assert.That(this.scopes.Disposed, Is.EqualTo(2), "the screen below the failing one must still be released");
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+        });
+
 
         [UnityTest]
         public IEnumerator DisposingTheNavigatorReleasesEveryScope() => UniTask.ToCoroutine(async () =>
