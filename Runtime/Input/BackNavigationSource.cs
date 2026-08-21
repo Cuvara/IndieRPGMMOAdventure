@@ -39,8 +39,37 @@ namespace Cuvara.UIToolkit.Input
 
         private bool disposed;
 
-        /// <summary>Raised once per Back press, while <see cref="Enabled"/> is true.</summary>
+        /// <summary>
+        /// Raised once per Back press, while <see cref="Enabled"/> is true. Legacy path.
+        /// </summary>
+        /// <remarks>
+        /// <b>An <c>Action</c> cannot report whether it did anything</b>, so a source driven
+        /// only through this event has to assume every press was handled and consume it. At
+        /// the root screen that means the press is swallowed and the application never sees
+        /// it — on Android, Back stops exiting the app.
+        ///
+        /// <para>Prefer <see cref="BackHandler"/>, which returns a bool and lets the source
+        /// decline to consume what the host did not handle. This event is kept because
+        /// removing it would be a source-breaking change to a published package for the sake
+        /// of tidiness; when both are set, <see cref="BackHandler"/> wins and this is not
+        /// raised.</para>
+        /// </remarks>
         public event Action BackRequested;
+
+        /// <summary>
+        /// Set by a host that can report whether Back was actually handled. Preferred.
+        /// </summary>
+        /// <remarks>
+        /// Return true when something was closed, false when nothing was. The source consumes
+        /// the event only on true, so an unhandled press keeps propagating and reaches the
+        /// application — which is what makes Back exit at the root instead of being eaten by
+        /// a UI layer that had nothing to close.
+        ///
+        /// <para><see cref="IScreenNavigator.HandleBack"/> already has this shape, so wiring
+        /// is one line and needs no lambda:
+        /// <code>source.BackHandler = navigator.HandleBack;</code></para>
+        /// </remarks>
+        public Func<bool> BackHandler { get; set; }
 
         /// <summary>
         /// Gate for this source, defaulting to true.
@@ -77,8 +106,23 @@ namespace Cuvara.UIToolkit.Input
         {
             if (this.disposed || !this.Enabled) return;
 
-            // Nothing subscribed means nothing wants the press. Consuming it anyway would
-            // silently swallow Back for whatever is underneath.
+            // The handler path, when a host supplied one. It is the only path that can tell
+            // "I closed something" from "there was nothing to close", which is the whole
+            // difference between Back working and Back being swallowed at the root.
+            if (this.BackHandler != null)
+            {
+                if (!this.BackHandler.Invoke()) return;   // unhandled: do not consume
+
+                ++this.HandledCount;
+
+                if (this.ConsumeEvent) evt.StopPropagation();
+
+                return;
+            }
+
+            // Legacy event path. Nothing subscribed means nothing wants the press; consuming
+            // it anyway would silently swallow Back for whatever is underneath. With a
+            // subscriber we must assume it handled the press, because an Action cannot say.
             if (this.BackRequested == null) return;
 
             ++this.HandledCount;
@@ -95,6 +139,7 @@ namespace Cuvara.UIToolkit.Input
 
             this.root.UnregisterCallback<NavigationCancelEvent>(this.OnNavigationCancel, TrickleDown.TrickleDown);
             this.BackRequested = null;
+            this.BackHandler   = null;
         }
     }
 }
