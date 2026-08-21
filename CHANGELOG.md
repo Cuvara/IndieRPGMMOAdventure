@@ -28,6 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of two vendored packages reads, to anyone glancing at a green run, as if it covers vendoring.
 
 ### Changed
+- **`unity-build-workflows` submodule bumped `43229d2` -> `f5616af`** (9 commits).
+
+  **This is hygiene, not delivery.** The three toolkit workflows this repo calls are referenced
+  `@main` — `unity-pipeline.yml@main`, `unity-generate-license.yml@main`,
+  `unity-license-check.yml@main` — so toolkit changes reach CI the moment they merge, with or
+  without this pointer. The submodule is a local reference; `update-submodule.yml` is supposed to
+  keep it current and has been failing since 2026-08-10 (the bot App has no `contents` permission,
+  so it cannot push the branch its PR needs).
+
+  Of the 9 commits, only one touches a workflow this repo runs: the `Library` cache gaining a bare
+  `Library-` restore-key fallback. The rest are docs and `com.company.build-pipeline` sources —
+  and that package reaches the client through a **UPM git tag** (`#v1.1.3`), not through this
+  pointer, so the bump does not move it.
+
 - **`com.cuvara.netcode` re-vendored 0.16.1 -> 0.16.3**, byte-identical to upstream `v0.16.3`.
 
   Test-only upstream: `0.16.2` fixed `PredictionSurfaceContractTests` resolving the prediction
