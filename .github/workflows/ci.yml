@@ -75,6 +75,15 @@ jobs:
       - name: Every Unity-visible file has a .meta
         run: python3 .github/scripts/check_metas.py
 
+      # Samples~ is invisible to the asset database, so no import, no compile and no
+      # missing-reference warning ever touches it -- a declared sample can rot for months
+      # with every other gate green. This covers the half a compiler would not catch even
+      # if it ran: Q<T>("name") lookups that no sibling .uxml defines. Such a lookup
+      # compiles, returns null, and throws in code someone has already copied into their
+      # own project believing it was a working reference.
+      - name: Declared samples resolve their elements
+        run: python3 .github/scripts/check_samples.py
+
       - name: Check asmdef names
         run: |
           find . -name "*.asmdef" -not -path "./.github/*" | while read f; do

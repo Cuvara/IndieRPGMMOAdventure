@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A samples gate** (`.github/scripts/check_samples.py`, wired into CI). `Samples~` is
+  invisible to the asset database — no import, no compile, no missing-reference warning —
+  so a sample declared in `package.json` can rot indefinitely with every other gate green.
+  The script checks that every `Q<T>("name")` in a sample resolves to a name some sibling
+  `.uxml` defines, that every `<Style src>` points at a real file, and that each declared
+  sample exists and has a README. A `Q<Label>("titel")` compiles, returns null, and throws
+  in code somebody has already copied into their own project believing it worked; that is a
+  worse outcome than a sample which fails to build.
+
+### Added
+
 - **A DOTS/ECS presentation adapter** (`Runtime/Ecs/`), optional behind
   `com.unity.entities` and the `CUVARA_UITOOLKIT_ENTITIES` versionDefine.
   - `IViewModelSink<TViewModel>` — the contract a host's Presenter implements. This is the
