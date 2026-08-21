@@ -92,6 +92,7 @@ namespace Cuvara.UIToolkit.Ecs
 
         private TViewModel lastPushed;
         private bool       hasPushedBefore;
+        private bool       catchUpPending;
 
         /// <summary>Starts sending ViewModels to <paramref name="sink"/>.</summary>
         /// <remarks>
@@ -106,10 +107,17 @@ namespace Cuvara.UIToolkit.Ecs
             this.sinks.Add(sink);
             this.UpdateEnabledState();
 
-            // A sink that arrives mid-session has missed every push so far, and the change
-            // filter will not re-report a chunk that has not been written since. Without
-            // this, a screen opened while the data is idle shows nothing until the
-            // simulation happens to touch the component again.
+            // A sink that arrives mid-session has missed every push so far, and neither of
+            // the two quiet-keeping mechanisms will correct that on its own: the chunk has
+            // not been written since this system last ran, so the change filter skips it,
+            // and HasChanged would compare against a value this sink has never seen. A
+            // screen opened while the simulation is idle would show nothing at all until
+            // something happened to touch the component.
+            //
+            // So the next pass runs unfiltered and unconditionally, once. Already-registered
+            // sinks get one repeat push of a value they already have, which is idempotent
+            // for any sane Presenter and is much the lesser problem.
+            this.catchUpPending  = true;
             this.hasPushedBefore = false;
         }
 
@@ -145,6 +153,32 @@ namespace Cuvara.UIToolkit.Ecs
             // subclass that drives Update() by hand, as the tests do.
             if (this.sinks.Count == 0) return;
 
+            if (!this.catchUpPending)
+            {
+                this.RunPass(false);
+                return;
+            }
+
+            this.catchUpPending = false;
+
+            // Drop the change filter for exactly one pass so a newly-registered sink sees
+            // the current state, then put it straight back. Resetting rather than rebuilding
+            // the query keeps this off the allocation path — it runs whenever a screen opens.
+            this.query.ResetFilter();
+
+            try
+            {
+                this.RunPass(true);
+            }
+            finally
+            {
+                this.query.SetChangedVersionFilter(ComponentType.ReadOnly<TComponent>());
+            }
+        }
+
+        /// <param name="force">Push regardless of <see cref="HasChanged"/> — the catch-up pass.</param>
+        private void RunPass(bool force)
+        {
             using var components = this.query.ToComponentDataArray<TComponent>(Allocator.Temp);
 
             if (components.Length == 0) return;
@@ -153,7 +187,7 @@ namespace Cuvara.UIToolkit.Ecs
             {
                 var viewModel = this.Convert(components[i]);
 
-                if (this.hasPushedBefore && !this.HasChanged(this.lastPushed, viewModel)) continue;
+                if (!force && this.hasPushedBefore && !this.HasChanged(this.lastPushed, viewModel)) continue;
 
                 this.lastPushed      = viewModel;
                 this.hasPushedBefore = true;

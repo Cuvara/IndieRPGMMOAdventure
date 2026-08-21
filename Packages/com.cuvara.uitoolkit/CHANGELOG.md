@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A DOTS/ECS presentation adapter** (`Runtime/Ecs/`), optional behind
+  `com.unity.entities` and the `CUVARA_UITOOLKIT_ENTITIES` versionDefine.
+  - `IViewModelSink<TViewModel>` — the contract a host's Presenter implements. This is the
+    package's entire coupling to MVP: it knows a sink, not a Presenter, not a View.
+  - `EcsViewModelBridge<TComponent, TViewModel>` — a managed `SystemBase` in
+    `PresentationSystemGroup` that converts component data to a plain ViewModel and pushes it.
+  - `EcsSinkRegistration` — binds a sink for a screen's lifetime and unbinds on `Dispose`.
+  - `Samples~/EcsHud` — the five layers end to end.
+
+  **ECS does not touch UI Toolkit here.** The path is
+  `ECS -> adapter -> ViewModel -> Presenter -> View -> UI Toolkit`, per the project's UI
+  architecture contract, and `Runtime/Ecs/` is the adapter arrow only. The assembly does not
+  reference UIElements at all and a test asserts that, because this is the kind of boundary
+  that erodes one convenient edit at a time.
+
+  Two separate rules produce that shape and it is worth keeping them apart. The *architecture*
+  rule constrains what the adapter may talk to — a ViewModel, never a view. A *type-system*
+  fact constrains where it runs: `VisualElement` is plain managed C#, not a
+  `UnityEngine.Object`, so it cannot be touched from `ISystem`, `IJobEntity`, Burst or any
+  worker thread at all. Hence `SystemBase`, main thread, no `[BurstCompile]`. Satisfying one
+  rule does not satisfy the other.
+
+  It stays quiet when nothing changes: `Enabled` is false while no sink is registered, and the
+  query carries `SetChangedVersionFilter`. Pushing every frame is what the contract's
+  performance section forbids.
+
+### Fixed
+
+- A sink registered mid-session received nothing until the simulation next wrote the
+  component. Both quiet-keeping mechanisms were working correctly and combining into a bug: the
+  change filter skipped the untouched chunk, so a screen opened while the simulation was idle
+  stayed blank. The next pass after a registration now runs unfiltered exactly once. Found by a
+  test, not in review.
+
 ### Fixed
 
 - **CI failed on its own dependency check.** The step required
