@@ -412,6 +412,113 @@ namespace Cuvara.UIToolkit.Tests
             Assert.That(source.HandledCount, Is.EqualTo(1));
         }
 
+        #region BackHandler — the path that can decline
+
+        /// <summary>
+        /// A handler that returns false must NOT consume the press.
+        /// </summary>
+        /// <remarks>
+        /// This is the whole reason <c>BackHandler</c> exists. An <c>Action</c> cannot report
+        /// whether it did anything, so the legacy path has to assume every press was handled
+        /// and consume it — which at the root screen swallows Back and stops an Android app
+        /// exiting. A source that eats a press it did not act on is indistinguishable, from
+        /// the outside, from a broken Back button.
+        /// </remarks>
+        [Test]
+        public void BackHandlerReturningFalse_DoesNotConsumeAndDoesNotCount()
+        {
+            // Every test in this region needs the panel: BackNavigationSource takes the
+            // document's root, and SendCancel dispatches through it.
+            this.BuildDocument();
+
+            using var source = new BackNavigationSource(this.rootUIDocument.RootVisualElement);
+            source.BackHandler = () => false;
+
+            this.SendCancel();
+
+            Assert.That(source.HandledCount, Is.EqualTo(0),
+                "an unhandled press was counted as handled");
+        }
+
+        [Test]
+        public void BackHandlerReturningTrue_ConsumesAndCounts()
+        {
+            // Every test in this region needs the panel: BackNavigationSource takes the
+            // document's root, and SendCancel dispatches through it.
+            this.BuildDocument();
+
+            using var source = new BackNavigationSource(this.rootUIDocument.RootVisualElement);
+            var calls = 0;
+            source.BackHandler = () => { ++calls; return true; };
+
+            this.SendCancel();
+
+            Assert.That(calls, Is.EqualTo(1));
+            Assert.That(source.HandledCount, Is.EqualTo(1));
+        }
+
+        /// <summary>
+        /// With both set, the handler wins and the event is not raised.
+        /// </summary>
+        /// <remarks>
+        /// Raising both would double-handle one press — the navigator pops, and whatever is
+        /// still on the legacy event pops again. Stated as a test because "which one wins"
+        /// is exactly the kind of thing a later refactor reasonably guesses wrong.
+        /// </remarks>
+        [Test]
+        public void WhenBothAreSet_TheHandlerWinsAndTheEventIsNotRaised()
+        {
+            // Every test in this region needs the panel: BackNavigationSource takes the
+            // document's root, and SendCancel dispatches through it.
+            this.BuildDocument();
+
+            using var source = new BackNavigationSource(this.rootUIDocument.RootVisualElement);
+            var eventRaised = 0;
+            source.BackRequested += () => ++eventRaised;
+            source.BackHandler   = () => true;
+
+            this.SendCancel();
+
+            Assert.That(eventRaised, Is.EqualTo(0),
+                "both paths ran, so one Back press would be handled twice");
+            Assert.That(source.HandledCount, Is.EqualTo(1));
+        }
+
+        /// <summary>
+        /// With no handler, behaviour is byte-identical to before BackHandler existed.
+        /// </summary>
+        /// <remarks>
+        /// This is the regression guard for the frozen host framework this package came out
+        /// of. That repository is read-only to us, and a file in it subscribes to
+        /// <see cref="BackNavigationSource.BackRequested"/> with a <c>void</c> method.
+        /// Changing the event's signature would have broken it with CS0407 and there would
+        /// have been no way to fix it, which is why <c>BackHandler</c> was added ALONGSIDE
+        /// the event rather than replacing it. If someone later "tidies up" by deleting the
+        /// legacy path, this test is what says no.
+        ///
+        /// <para>The host is deliberately not named here: this package must not mention it,
+        /// and the gate that enforces that caught this very comment on its first draft.</para>
+        /// </remarks>
+        [Test]
+        public void WithNoHandler_TheLegacyEventPathIsUnchanged()
+        {
+            // Every test in this region needs the panel: BackNavigationSource takes the
+            // document's root, and SendCancel dispatches through it.
+            this.BuildDocument();
+
+            using var source = new BackNavigationSource(this.rootUIDocument.RootVisualElement);
+            var requested = 0;
+            source.BackRequested += () => ++requested;
+
+            this.SendCancel();
+            this.SendCancel();
+
+            Assert.That(requested, Is.EqualTo(2));
+            Assert.That(source.HandledCount, Is.EqualTo(2));
+        }
+
+        #endregion
+
         [Test]
         public void ItRaisesOncePerPress()
         {
