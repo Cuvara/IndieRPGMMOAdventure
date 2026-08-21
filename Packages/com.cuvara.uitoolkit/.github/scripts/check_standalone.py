@@ -52,7 +52,13 @@ BANNED_NAMESPACES = ["GameFoundation", "UniT.Logging", "UniT.ResourceManagement"
 # written against the old vendor's prefix forever. A person spotted it, not this script.
 #
 # Case-insensitive, because `GDK_VCONTAINER` and `gdk-grid-row` are the same leak.
-BANNED_SUBSTRINGS = ["gdk", "gamefoundation", "gamedevelopmentkit"]
+BANNED_SUBSTRINGS = ["gdk", "gamefoundation", "gamedevelopmentkit", "gf-", "nhg", "nighthowl"]
+
+# "gf-" is here because "gamefoundation" was not enough. After the gdk-* rename the gate
+# reported clean over a Runtime/ that still shipped the USS class name `gf-safe-area`.
+# Third time a green gate has been wrong about this exact thing, and each time the
+# escape was a SHORTER abbreviation than the one on the list. The hyphen is deliberate:
+# bare "gf" would match inside ordinary words and make the gate useless by crying wolf.
 
 SCANNED = ["Runtime", "Tests"]
 SUFFIXES = {".cs", ".asmdef", ".uxml", ".uss"}

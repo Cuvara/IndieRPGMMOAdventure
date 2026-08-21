@@ -64,7 +64,7 @@ namespace Cuvara.UIToolkit.Utilities
         public const long PollIntervalMilliseconds = 250;
 
         /// <summary>USS class added to every instance, for styling and for UQuery.</summary>
-        public const string UssClassName = "gf-safe-area";
+        public const string UssClassName = "cuvara-safe-area";
 
         [UxmlAttribute("conform-x")] public bool ConformX { get => this.conformX; set { this.conformX = value; this.Refresh(true); } }
 

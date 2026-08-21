@@ -60,6 +60,16 @@ jobs:
       - name: Standalone — no host-framework references
         run: python3 .github/scripts/check_standalone.py
 
+      # An ALLOWLIST, deliberately, and it exists because the denylist above has been wrong
+      # twice in the same way — each escape a SHORTER abbreviation than the one on the list:
+      # gdk-grid-row got through, gdk was added, then gf-safe-area got through. A denylist can
+      # only ban the abbreviations somebody thought of.
+      #
+      # USS class names are public API: consumers write stylesheets against them, so renaming
+      # one after release stops their rules matching and the screen renders unstyled, silently.
+      - name: Exported USS class names carry the cuvara- prefix
+        run: python3 .github/scripts/check_uss_prefix.py
+
       - name: Validate CHANGELOG has current version
         run: |
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./package.json','utf8')).version")
