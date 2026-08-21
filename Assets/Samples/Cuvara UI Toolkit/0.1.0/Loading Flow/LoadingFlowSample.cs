@@ -22,20 +22,9 @@ namespace Cuvara.UIToolkit.Samples.LoadingFlow
     //   BackNavigationSource, ScreenSubscriptions, UIToolkitListAdapter, lifecycle labels.
     // -------------------------------------------------------------------------------------
 
-    #region Asset loader
-
-    public sealed class ResourceAssetLoader : IVisualTreeAssetLoader
-    {
-        public UniTask<VisualTreeAsset> LoadAsync(string key)
-        {
-            var asset = Resources.Load<VisualTreeAsset>(key);
-            if (asset == null)
-                throw new KeyNotFoundException($"No VisualTreeAsset in Resources for key '{key}'.");
-            return UniTask.FromResult(asset);
-        }
-    }
-
-    #endregion
+    // Asset loader: uses AddressableAssetLoader from Scripts.UI (game code).
+    // UXML assets are marked Addressable with address = screen key.
+    // No Resources folder needed.
 
     #region Main screen — 5 buttons, lifecycle label, depth display
 
@@ -390,11 +379,14 @@ namespace Cuvara.UIToolkit.Samples.LoadingFlow
 
     public sealed class InventoryPopupPresenter : BaseUIToolkitPopupPresenter<IInventoryPopupView>
     {
+        private readonly IVisualTreeAssetLoader loader;
         private UIToolkitListAdapter<InventoryItem, InventoryItemView, InventoryItemPresenter> adapter;
 
-        protected override UniTask OnBindAsync(ScreenSubscriptions subs, CancellationToken ct)
+        public InventoryPopupPresenter(IVisualTreeAssetLoader loader) { this.loader = loader; }
+
+        protected override async UniTask OnBindAsync(ScreenSubscriptions subs, CancellationToken ct)
         {
-            var itemTemplate = Resources.Load<VisualTreeAsset>("InventoryItem");
+            var itemTemplate = await this.loader.LoadAsync("InventoryItem");
             this.adapter = new UIToolkitListAdapter<InventoryItem, InventoryItemView, InventoryItemPresenter>(
                 this.View.ItemList, itemTemplate, fixedItemHeight: 56f);
 
@@ -413,7 +405,6 @@ namespace Cuvara.UIToolkit.Samples.LoadingFlow
             });
 
             subs.Clicked(this.View.CloseButton, this.Close);
-            return UniTask.CompletedTask;
         }
     }
 

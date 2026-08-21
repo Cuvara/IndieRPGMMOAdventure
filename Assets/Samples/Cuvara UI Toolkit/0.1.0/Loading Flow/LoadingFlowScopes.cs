@@ -2,6 +2,7 @@ namespace Cuvara.UIToolkit.Samples.LoadingFlow
 {
     using Cuvara.UIToolkit.Core;
     using Cuvara.UIToolkit.VContainer;
+    using Scripts.UI;
     using global::VContainer;
     using global::VContainer.Unity;
 
@@ -17,7 +18,7 @@ namespace Cuvara.UIToolkit.Samples.LoadingFlow
         protected override void Configure(IContainerBuilder builder)
         {
             builder.RegisterUIToolkit();
-            builder.RegisterInstance<IVisualTreeAssetLoader>(new ResourceAssetLoader());
+            builder.RegisterInstance<IVisualTreeAssetLoader>(new AddressableAssetLoader());
             builder.RegisterScreenFlow();
 
             // Full screens

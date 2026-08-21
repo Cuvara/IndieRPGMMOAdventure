@@ -1,12 +1,9 @@
 {
-  "name": "Cuvara.UIToolkit.Samples.LoadingFlow",
-  "rootNamespace": "Cuvara.UIToolkit.Samples.LoadingFlow",
+  "name": "NDC.Scripts.UI",
+  "rootNamespace": "Scripts.UI",
   "references": [
     "Cuvara.UIToolkit",
-    "Cuvara.UIToolkit.VContainer",
-    "NDC.Scripts.UI",
     "UniTask",
-    "VContainer",
     "Unity.Addressables",
     "Unity.ResourceManager"
   ],
