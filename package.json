@@ -19,10 +19,8 @@
   },
   "dependencies": {
     "com.cysharp.unitask": "2.5.10",
-    "com.unity.modules.uielements": "1.0.0"
-  },
-  "x-optionalDependencies": {
-    "jp.hadashikick.vcontainer": "1.16.8 — enables the container registration extension via the GDK_VCONTAINER versionDefine. Absent, that one file compiles out and nothing else changes."
+    "com.unity.modules.uielements": "1.0.0",
+    "jp.hadashikick.vcontainer": "1.16.9"
   },
   "x-nonDependencies": {
     "com.gdk.core": "DELIBERATELY ABSENT. This package must not reference GameFoundation. The screen-flow adapter — the IScreenViewBackend implementation, the presenter bases, the back-navigation policy — lives in com.gdk.core and references THIS package, not the other way round. If a com.gdk.core type ever appears in Runtime/, the inversion has been broken and the package stops being installable on its own.",
