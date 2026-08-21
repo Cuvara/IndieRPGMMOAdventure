@@ -14,6 +14,7 @@ jobs:
   validate:
     name: Validate package
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -128,6 +129,7 @@ jobs:
   samples:
     name: Compile samples (${{ matrix.unityVersion }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         unityVersion:
@@ -227,6 +229,7 @@ jobs:
   test:
     name: Unity Tests (${{ matrix.unityVersion }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         unityVersion:
@@ -353,6 +356,7 @@ jobs:
   install-probe:
     name: Install probe (${{ matrix.probe.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # NOTE: no job-level continue-on-error. It was here, and it made the informational row
     # report SUCCESS regardless of what happened inside it — a green tick on a job that had
     # just failed to resolve two packages. The compile step carries continue-on-error
@@ -389,11 +393,19 @@ jobs:
           # and the test framework, and a failure there says nothing about installing.
           # Registries first, dependencies last, so the optional block never leaves a
           # trailing comma behind when it is empty.
+          # com.unity.test-framework is here because the probe drives unity-test-runner.
+          # Removing "testables" from this manifest was correct — the probe asks whether the
+          # package INSTALLS AND COMPILES, not whether its tests build — but it left the
+          # runner starting against a project with no test framework and no tests at all,
+          # and it HUNG rather than exiting: 62 minutes on the Compile step while every other
+          # Unity job in the same run finished in under four. With no timeout-minutes that
+          # would have burned GitHub's six-hour default before failing.
           cat > Packages/manifest.json << JSON
           {
             $REGISTRIES
             "dependencies": {
-              "com.cuvara.uitoolkit": "file:../package"
+              "com.cuvara.uitoolkit": "file:../package",
+              "com.unity.test-framework": "1.6.0"
             }
           }
           JSON
