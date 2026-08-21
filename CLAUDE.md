@@ -42,16 +42,29 @@ Build a Windows player (Mono2x, stripping disabled — the quickest target):
   -buildTarget Win64 \
   -executeMethod PlayerBuilder.Build \
   -buildOutput 'E:\SecretProject\IndieRPGMMOAdventure\Builds\MultiClient' \
+  -bootScene 'Assets/Samples/Cuvara Netcode/0.16.3/DOTS Sample/Scenes/DOTSSample.unity' \
   -logFile 'E:\SecretProject\IndieRPGMMOAdventure\Builds\multiclient-build.log'
 ```
 
 `-buildOutput` rather than `BUILD_OUTPUT_DIR`: a variable exported in a WSL shell is
 not in the environment of a Windows `Unity.exe`. Paths handed to `Unity.exe` must be
 Windows paths for the same reason. The player lands in
-`Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe`, and boots
-`Assets/Samples/Cuvara Netcode/0.15.0/DOTS Sample/Scenes/DOTSSample.unity` — scene 0 in
-`EditorBuildSettings`, which is what `PlayerBuilder` reads. (`BuildConfig/*.json` lists
-only `MainScene`; that path is the CI toolkit's, not this one.)
+`Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe`. (`BuildConfig/*.json`
+lists only `MainScene`; that path is the CI toolkit's, not this one.)
+
+**`-bootScene` is what makes this a netcode-sample player, and omitting it gives you the
+wrong game.** `PlayerBuilder` builds every enabled scene in `EditorBuildSettings` and the
+player boots index 0 — which is `Assets/Scenes/MainScene.unity`, because that is what a
+release build must boot. `-bootScene` moves the named scene to index 0 for this build
+only; the enabled set, and therefore what ships inside the player, is unchanged, and
+nothing is committed. Without the flag the three windows come up in MainScene, never
+authenticate, and the harness looks broken for a reason that has nothing to do with
+networking.
+
+The path must match the enabled scene path exactly — an unmatched value is a hard build
+error, not a silent fall-back to index 0. Note the version number in it: the sample lives
+under the vendored netcode version (`0.16.3` today) and moves every time that package is
+re-vendored, so check the directory before copying the command.
 
 Then launch the instances:
 

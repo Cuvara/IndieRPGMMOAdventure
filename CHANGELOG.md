@@ -5,9 +5,35 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.4.2] — 2026-08-21
+
+### Fixed
+- **`MainScene` was missing from every build, and the player booted the netcode sample.**
+  `EditorBuildSettings` had been reduced to a single enabled scene — the vendored DOTS
+  sample — when `MainScene` was dropped in f57117e alongside an unrelated sample reimport.
+  Index 0 decides what the player boots, so every artifact built since then started in the
+  netcode sample, and `MainScene` was not merely misordered but absent from the build
+  entirely. Both scenes are enabled again, with `MainScene` at index 0.
+
+- **Three test-harness display settings were shipping in `ProjectSettings`.** f57117e set
+  them for tiling three player windows on one desktop and they were never reverted:
+  `defaultScreenWidth`/`defaultScreenHeight` 800x600 -> 1024x768, `defaultIsNativeResolution`
+  0 -> 1, `fullscreenMode` 3 (windowed) -> 1 (fullscreen window), `runInBackground` 1 -> 0.
+  Every value is restored to what it was immediately before that commit. The web defaults
+  (`defaultScreenWidthWeb`/`Height` 960x600) were not touched by f57117e and are unchanged.
+
+- **`bundleVersion` was still `0.1.0` after two tagged releases.** It had never tracked the
+  `v0.4.x` tags. Set to `0.4.2`, matching this release.
 
 ### Added
+- **`PlayerBuilder` accepts `-bootScene <path>`**, which moves the named enabled scene to
+  index 0 for that build only. Restoring `MainScene` to index 0 was correct for the release
+  but would have broken the three-client multiplayer harness in `CLAUDE.md`, which needs a
+  player that boots the DOTS sample. The flag resolves that without either scene leaving the
+  build and without a committed `EditorBuildSettings` edit per harness run. An unmatched path
+  fails the build rather than silently falling back to index 0. The documented harness
+  command now passes it.
+
 - **The vendor drift check now covers `com.cuvara.dots` as well as `com.cuvara.netcode`.** Both jobs
   became a two-leg matrix and the workflow was renamed `netcode-vendor-drift.yml` ->
   `vendor-drift.yml`, since it is no longer about one package. `fail-fast` is off: one package
