@@ -62,6 +62,24 @@ namespace Cuvara.UIToolkit.Ecs.Tests
         }
     }
 
+    /// <summary>
+    /// A bridge carrying NO <c>[UpdateInGroup]</c> of its own.
+    /// </summary>
+    /// <remarks>
+    /// This is the type the inheritance test needs and the reason it is separate from
+    /// <see cref="TestHudBridge"/>, which declares the attribute explicitly: a test using an
+    /// attributed subclass would pass whether or not inheritance works, and would therefore
+    /// prove nothing about the case that matters — a host that subclasses the base and
+    /// reasonably assumes placement comes with it.
+    /// </remarks>
+    public partial class UnattributedHudBridge : EcsViewModelBridge<TestHudData, TestHudViewModel>
+    {
+        protected override TestHudViewModel Convert(in TestHudData component)
+        {
+            return new(component.Health, component.MaxHealth, $"{component.Health}/{component.MaxHealth}");
+        }
+    }
+
     /// <summary>A sink that records what it was handed. What a Presenter is, minus the Presenter.</summary>
     public sealed class RecordingSink : IViewModelSink<TestHudViewModel>
     {
@@ -378,6 +396,54 @@ namespace Cuvara.UIToolkit.Ecs.Tests
 
             Assert.Throws<ArgumentNullException>(() => EcsSinkRegistration.Bind<TestHudData, TestHudViewModel>(null, new RecordingSink()));
             Assert.Throws<ArgumentNullException>(() => EcsSinkRegistration.Bind(bridge, null));
+        }
+
+        #endregion
+
+        #region System-group placement
+
+        [Test]
+        public void AnUnattributedSubclass_IsStillPlacedInPresentationSystemGroup()
+        {
+            // The question this settles: does [UpdateInGroup(typeof(PresentationSystemGroup))]
+            // on the abstract base reach a concrete subclass that does not repeat it?
+            //
+            // It matters more than a placement detail. If it does not inherit, a host bridge
+            // is created but never added to any group, so it never updates: the screen simply
+            // stays blank, nothing throws, and nothing in a log says why. That is the worst
+            // failure shape available — silent, and indistinguishable from "the simulation is
+            // not writing the component".
+            //
+            // AddSystemsToRootLevelSystemGroups is the function Unity's own bootstrap uses to
+            // read the attribute and place systems, so this exercises the real path rather
+            // than a reimplementation of it.
+            using var attributeWorld = new World("UpdateInGroupInheritance");
+
+            DefaultWorldInitialization.AddSystemsToRootLevelSystemGroups(
+                attributeWorld,
+                typeof(PresentationSystemGroup),
+                typeof(UnattributedHudBridge));
+
+            var group  = attributeWorld.GetExistingSystemManaged<PresentationSystemGroup>();
+            var bridge = attributeWorld.GetExistingSystemManaged<UnattributedHudBridge>();
+
+            Assert.That(group, Is.Not.Null, "the presentation group was not created");
+            Assert.That(bridge, Is.Not.Null, "the bridge system was not created");
+
+            var sink = new RecordingSink();
+            bridge.AddSink(sink);
+
+            var entity = attributeWorld.EntityManager.CreateEntity(typeof(TestHudData));
+            attributeWorld.EntityManager.SetComponentData(entity, new TestHudData { Health = 12, MaxHealth = 20 });
+
+            // Running the GROUP, not the system: if placement did not happen, this updates
+            // nothing and the sink stays empty.
+            group.Update();
+
+            Assert.That(sink.Received, Has.Count.EqualTo(1),
+                "the bridge did not run inside PresentationSystemGroup — [UpdateInGroup] did not inherit onto the subclass, "
+                + "so every host bridge would be created and never updated.");
+            Assert.That(sink.Received[0].Health, Is.EqualTo(12));
         }
 
         #endregion
