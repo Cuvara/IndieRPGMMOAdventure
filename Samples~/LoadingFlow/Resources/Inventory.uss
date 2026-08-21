@@ -1,0 +1,47 @@
+.inventory-list {
+    flex-grow: 1;
+    margin: 10px 0;
+}
+
+.inv-item-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: rgb(50, 55, 75);
+    border-radius: 8px;
+    margin: 3px 0;
+    height: 56px;
+}
+
+.inv-item-row:hover {
+    background-color: rgb(60, 65, 90);
+}
+
+.inv-item-icon {
+    font-size: 28px;
+    width: 40px;
+    -unity-text-align: middle-center;
+}
+
+.inv-item-info {
+    flex-grow: 1;
+    margin-left: 10px;
+}
+
+.inv-item-name {
+    font-size: 18px;
+    color: rgb(220, 220, 240);
+    -unity-font-style: bold;
+}
+
+.inv-item-desc {
+    font-size: 13px;
+    color: rgb(140, 140, 160);
+}
+
+.inv-item-qty {
+    font-size: 16px;
+    color: rgb(180, 180, 200);
+    width: 40px;
+    -unity-text-align: middle-right;
+}

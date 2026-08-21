@@ -1,0 +1,50 @@
+.main-root {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgb(30, 35, 50);
+    align-items: center;
+    justify-content: center;
+}
+
+.main-title {
+    font-size: 48px;
+    color: rgb(220, 220, 240);
+    margin-bottom: 40px;
+    -unity-font-style: bold;
+}
+
+.button-group { align-items: center; }
+
+.main-button {
+    width: 340px;
+    height: 54px;
+    font-size: 22px;
+    margin: 8px;
+    border-radius: 12px;
+    border-width: 0;
+    color: white;
+    -unity-font-style: bold;
+}
+
+.main-button:hover { scale: 1.04 1.04; transition-duration: 0.1s; }
+.main-button:active { scale: 0.96 0.96; }
+
+.info-button { background-color: rgb(60, 130, 220); }
+.confirm-button { background-color: rgb(220, 120, 40); }
+.settings-button { background-color: rgb(80, 170, 80); }
+.inventory-button { background-color: rgb(140, 80, 200); }
+.replace-button { background-color: rgb(200, 70, 70); }
+
+.lifecycle-label {
+    position: absolute;
+    top: 12px; left: 16px;
+    font-size: 14px;
+    color: rgb(100, 200, 100);
+}
+
+.nav-depth-label {
+    position: absolute;
+    bottom: 12px; left: 16px;
+    font-size: 14px;
+    color: rgb(100, 110, 140);
+}

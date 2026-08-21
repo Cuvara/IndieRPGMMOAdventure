@@ -43,6 +43,11 @@
       "displayName": "ECS HUD",
       "description": "A UXML health bar driven from a DOTS/ECS component through the presentation adapter: an unmanaged component carries the values, a main-thread SystemBase converts them to a ViewModel on change, and a Presenter renders it through an IView. ECS never touches the visual tree. Requires com.unity.entities.",
       "path": "Samples~/EcsHud"
+    },
+    {
+      "displayName": "Loading Flow",
+      "description": "Two-scene flow: LoadingScene (MonoBehaviour-driven progress bar, tips, spinner) transitions to MainScene (ScreenNavigator with every feature). Demonstrates: Push, Pop, Replace, PopToRoot, Modal+DimsBelow overlay, model parameters, OnActivate/OnDeactivate/OnSuspend/OnResume lifecycle hooks, OnBackRequested override, BackNavigationSource, UIToolkitListAdapter collection, and per-scene navigator scoping. Import, add both scenes to Build Settings, open LoadingScene, press Play.",
+      "path": "Samples~/LoadingFlow"
     }
   ],
   "testables": [
