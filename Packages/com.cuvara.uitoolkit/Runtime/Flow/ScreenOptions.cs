@@ -42,30 +42,21 @@ namespace Cuvara.UIToolkit.Flow
         /// <summary>Dim and disable interaction on what is below, without suspending it.</summary>
         DimsBelow = 1 << 1,
 
-        /// <summary>A press outside the modal's panel closes it.</summary>
-        CloseOnTapOutside = 1 << 2,
+        // CloseOnTapOutside deliberately does not exist yet. It was declared here with no
+        // code reading it and no test pinning it, on the understanding that behaviour would
+        // follow — which is exactly the excuse this enum's rule refuses. The flag it replaced in
+        // the framework this package came from was doubtless also going to be implemented later;
+        // it shipped for years, read zero times, silently doing nothing to anyone who set it.
+        // It comes back in the commit that gives it behaviour and a test that fails when the
+        // behaviour is removed, and it takes bit 2 when it does.
 
-        /// <summary>
-        /// Keep the presenter and view alive across a close, instead of destroying them.
-        /// </summary>
-        /// <remarks>
-        /// <para><b>Reach for this only with a written reason.</b> The default everywhere else in
-        /// this package is destroy-on-close, and it is a deliberate choice rather than an
-        /// inherited one: a screen that is rebuilt has no stale state to leak into its next open,
-        /// and the cost that would normally argue against it is neutralised by caching the
-        /// <c>VisualTreeAsset</c> rather than the view — the expensive part is loading the UXML,
-        /// not cloning it.</para>
-        ///
-        /// <para>Retention brings back precisely the problems that choice avoids: state from the
-        /// last open surviving into the next, and bind logic that must now be re-entrant. It
-        /// exists because "rebuild a two-thousand-element world map on every open" is a real
-        /// objection that caching the asset does not answer. It is also the flag most likely to
-        /// be reached for casually, and the resulting bug looks like a data problem rather than a
-        /// lifecycle one.</para>
-        ///
-        /// <para>A screen using this should have a test asserting its bind path still runs on
-        /// every push.</para>
-        /// </remarks>
-        Retain = 1 << 3,
+        // Retain deliberately does not exist yet either, and for the same reason — the
+        // navigator has exactly one teardown path and nothing reads this. Its argument is real
+        // ("do not rebuild a two-thousand-element world map on every open"), and it is answered
+        // first by caching the VisualTreeAsset rather than the view, which is the cheap half.
+        // If that turns out to be insufficient, Retain returns WITH the branch in the navigator
+        // that honours it and a test asserting the bind path still re-runs on every push —
+        // because retention reintroduces precisely the stale-state problems destroy-on-close
+        // exists to avoid, and a flag that silently does nothing about them is worse than none.
     }
 }
