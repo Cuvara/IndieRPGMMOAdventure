@@ -1,6 +1,6 @@
 {
-  "name": "Cuvara.UIToolkit.Samples.ScreenFlow",
-  "rootNamespace": "Cuvara.UIToolkit.Samples.ScreenFlow",
+  "name": "Cuvara.UIToolkit.Samples.ScreenFlowScene",
+  "rootNamespace": "Cuvara.UIToolkit.Samples.ScreenFlowScene",
   "references": [
     "Cuvara.UIToolkit",
     "Cuvara.UIToolkit.VContainer",
