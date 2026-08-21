@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A test that `[UpdateInGroup]` inherits onto a host's bridge subclass.** The attribute is
+  declared on the abstract `EcsViewModelBridge<,>`, and whether it reaches a concrete subclass
+  that does not repeat it was assumed, not known. It does — verified through
+  `DefaultWorldInitialization.AddSystemsToRootLevelSystemGroups`, the function Unity's own
+  bootstrap uses to read it, with a subclass carrying no attribute of its own. Had it not
+  inherited, a host bridge would be created and never updated: the screen stays blank, nothing
+  throws, and no log says why.
 - **A samples compile job** in CI. `Samples~` is excluded from Unity's import, so no other
   job builds a line of it — both declared samples had never been through a compiler at all,
   and every other gate stayed green regardless. The job bootstraps a throwaway project,
