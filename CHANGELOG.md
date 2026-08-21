@@ -107,6 +107,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and exits 1, and reports clean on the fixed project.
 
 ### Fixed
+- **The Addressables CI job hung for the full 120-minute timeout after a build that took eight
+  minutes.** Bounded to 30 seconds by a watchdog, and instrumented so the next run says which half
+  of the problem it is.
+
+  Measured from the cancelled 2026-08-20 staging run:
+
+  | | |
+  |---|---|
+  | `11:28:21` | `[AddressableBuilder] Addressables build succeeded` |
+  | `11:28:25` | `Cleanup mono` — teardown ran, and ran far |
+  | `11:28:58` | `[AI] BufferedFileLogStorage Flush called but already disposed` |
+  | `13:20:04` | cancelled by the timeout |
+
+  **111 minutes of total silence.** The build was not slow — the process would not terminate.
+  Raising `BUILD_TIMEOUT_MINUTES` would only have bought a longer wait for a dead process, and the
+  job takes every platform build down with it when it is cancelled.
+
+  `EditorApplication.Exit(0)`, added on 2026-08-12 for this exact symptom, **did help and did not
+  fix it**: the 08-12 hang stopped at "Batchmode quit successfully invoked", this one reached
+  "Cleanup mono", which is very late in Unity's teardown.
+
+  **The obvious suspect does not survive contact with the evidence.** `com.ivanmurzak.unity.mcp`
+  is the last thing to speak, but the Android build on the same day logs the *identical* warning
+  one second after its own `Cleanup mono` and exits cleanly. Both paths run
+  `-batchmode -quit -executeMethod` with the same flags. Why this one stalls is **not established**,
+  and is not claimed here.
+
+  The watchdog is a background thread, so it costs nothing when the exit works — it dies with the
+  process. It is also the experiment: if a future log carries its warning line, the graceful
+  shutdown stalled and the deadlock is in managed teardown; if it never appears,
+  `EditorApplication.Exit` was fine and the stall is somewhere that line cannot see.
+
 - **The built player ignored every `-cuvara-*` backend flag, because the imported sample lagged the
   package.** `Samples~` carries a `~`, so Unity never imports it; the copy Unity actually compiles
   lives in `Assets/Samples/`, is made once at import time, and **does not update when the package
