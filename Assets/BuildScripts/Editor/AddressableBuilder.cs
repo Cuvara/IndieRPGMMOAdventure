@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Threading;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
@@ -76,14 +77,34 @@ public static class AddressableBuilder
         // graceful shutdown stalled and the deadlock is in managed teardown. If it
         // never appears, EditorApplication.Exit was fine all along and the stall was
         // somewhere this line cannot see.
+        // MEASURED 2026-08-21: the watchdog below FIRED. The build reported success,
+        // EditorApplication.Exit(0) ran, and the process still had to be killed — so the
+        // deadlock is in managed shutdown, which is what the previous revision set out
+        // to find out. The job ended in 8.5 minutes instead of the 120-minute timeout.
+        //
+        // But it ended in FAILURE, because killing yourself yields 137 and GameCI reads
+        // the exit code. A build that succeeded must not report failure, so the exit has
+        // to be immediate AND zero.
+        //
+        // Environment.Exit is not that: it runs finalizers and AppDomain unload, which is
+        // exactly the machinery that is stuck. libc `_exit` returns to the kernel without
+        // touching any of it. The Editor here is Linux (the lane builds
+        // StandaloneLinux64 in the GameCI container), so libc is present; the fallback
+        // covers anything else and is no worse than the previous behaviour.
         var watchdog = new Thread(() =>
         {
             Thread.Sleep(30000);
             Debug.LogWarning(
                 "[AddressableBuilder] Graceful exit stalled for 30s after a successful " +
-                "build; killing the process. The build output is already on disk — see " +
-                "the comment in AddressableBuilder.cs for what this means.");
-            System.Diagnostics.Process.GetCurrentProcess().Kill();
+                "build; leaving the process immediately with code 0. The build output is " +
+                "already on disk — see the comment in AddressableBuilder.cs for what this " +
+                "means.");
+
+            // Give the log a moment to drain. `_exit` returns straight to the kernel and
+            // flushes nothing, so without this the warning above — the only evidence that
+            // this path was taken at all — can be lost with the buffer.
+            Thread.Sleep(2000);
+            HardExitZero();
         })
         {
             IsBackground = true,
@@ -92,5 +113,25 @@ public static class AddressableBuilder
         watchdog.Start();
 
         EditorApplication.Exit(0);
+    }
+
+    [DllImport("libc", EntryPoint = "_exit")]
+    private static extern void LibcExit(int code);
+
+    /// <summary>
+    /// Leaves the process immediately with the given code, running no managed shutdown.
+    /// </summary>
+    private static void HardExitZero()
+    {
+        try
+        {
+            LibcExit(0);
+        }
+        catch (System.Exception)
+        {
+            // No libc (or the P/Invoke was refused). Killing still beats hanging; the
+            // non-zero code is the old behaviour, not a new failure mode.
+            System.Diagnostics.Process.GetCurrentProcess().Kill();
+        }
     }
 }
