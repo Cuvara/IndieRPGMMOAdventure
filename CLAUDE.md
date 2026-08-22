@@ -42,7 +42,7 @@ Build a Windows player (Mono2x, stripping disabled — the quickest target):
   -buildTarget Win64 \
   -executeMethod PlayerBuilder.Build \
   -buildOutput 'E:\SecretProject\IndieRPGMMOAdventure\Builds\MultiClient' \
-  -bootScene 'Assets/Samples/Cuvara Netcode/0.17.0/DOTS Sample/Scenes/DOTSSample.unity' \
+  -bootScene 'Assets/Samples/Cuvara Netcode/0.18.0/DOTS Sample/Scenes/DOTSSample.unity' \
   -logFile 'E:\SecretProject\IndieRPGMMOAdventure\Builds\multiclient-build.log'
 ```
 
@@ -63,7 +63,7 @@ networking.
 
 The path must match the enabled scene path exactly — an unmatched value is a hard build
 error, not a silent fall-back to index 0. Note the version number in it: the sample lives
-under the vendored netcode version (`0.17.0` today) and moves every time that package is
+under the vendored netcode version (`0.18.0` today) and moves every time that package is
 re-vendored, so check the directory before copying the command.
 
 Then launch the instances:
