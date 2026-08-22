@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Content pipeline** — item definitions now come from the game server at runtime instead
+  of being something the client would ship in its build (ADR-19). The client half lives in
+  `com.cuvara.netcode` as `Cuvara.Netcode.Content`, with a `Content Pipeline` sample scene
+  built in UXML; see `docs/CONTENT-PIPELINE.md` and the package changelog for detail.
+  - `com.cuvara.netcode` bumped to **0.17.0** for the new public namespace and sample.
+
+### Changed
+
+- **`com.rpgmmo.shared-gamelogic` bumped to `sgl-v0.2.1`** in both `manifest.json` and
+  `packages-lock.json`, for the new `Shared.GameLogic.Content` namespace. Both files, because
+  the lock is what resolves — a manifest-only bump silently keeps the old commit.
+  `0.2.0` shipped that namespace without `.meta` files, so Unity never imported it and the
+  client could not see `Shared.GameLogic.Content` at all; `0.2.1` is the tag that works.
+
 - **Account recovery** (`NakamaSessionService`, `docs/ACCOUNT-RECOVERY.md`). Until now a
   character was bound to `SystemInfo.deviceUniqueIdentifier` and nothing else: reinstalling,
   wiping or replacing the phone lost it permanently, with no second credential pointing at
