@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`unity-build-workflows` bumped `f5616af` → `c4ceb8e`** ("gate Final Report on every result,
+  and fail on cancelled"). Provisional: that commit sits on the submodule repo's
+  `fix/final-report-gate` branch and is not merged there yet, so the pin should be re-pointed
+  once it lands.
+
+### Fixed
+
+- **`Assets/Scripts/UI.meta` is now tracked.** The folder it describes has been in the repo all
+  along, and every sibling folder meta (`DI.meta`, `Extensions.meta`, `Nakama.meta`) was
+  committed — this one never was, so Unity regenerated it with a fresh guid on every machine
+  that opened the project and it kept surfacing as an untracked file.
+- **Removed a duplicate `Screen Flow` sample import** at `Assets/Samples/Cuvara UIToolkit/`.
+  All 11 files were byte-identical to the tracked copy under
+  `Assets/Samples/Cuvara UI Toolkit/0.1.0/Screen Flow (scene)/`, but the duplicate carried no
+  `.asmdef`, so its `ScreenFlowSample.cs` and `ScreenFlowSampleScope.cs` compiled into
+  `Assembly-CSharp` alongside the same types in `Cuvara.UIToolkit.Samples.ScreenFlow` — the
+  ghost-duplicate condition the package's own `1d28bc8` was written to break.
+
 ### Added
 
 - **`com.cuvara.uitoolkit` vendored at v0.2.0** — screen flow system, Loading Flow sample with
