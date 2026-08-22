@@ -5,6 +5,714 @@ All notable changes to the Cuvara Netcode package will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The samples job compiled one sample out of five** (#30). The gate added to close that
+  issue named `DOTSSample` directly, so `DemoBootstrap`, `WorldView`, `E2ECertification` and
+  `ContentPipeline` shipped with nothing compiling them while the job reported success over
+  samples it had never seen. It now copies every sample `package.json` declares.
+  A list maintained by hand goes stale silently, which is the exact failure #30 was opened
+  about — naming one sample in the fix reproduced it one sample at a time.
+  - Compiling all five immediately found a real break: **`WorldView` does not compile** in
+    the CI project. Its screenshot helper calls `Texture2D.EncodeToPNG`, an extension method
+    living in `com.unity.modules.imageconversion`, which a real Unity project has by default
+    and this job's hand-written manifest did not. The sample compiled everywhere except the
+    one place that was supposed to be checking it. Module added to the samples manifest.
+
+### Added
+
+- **`Reconcile(Vec2, long, long)` — the prediction lead survives an acknowledgement that
+  empties the pending buffer** (#53). The third argument is the base tick the snapshot was
+  produced on.
+  - An **overload, never a change**: the two-argument form is a cross-package contract
+    enforced by `PredictionSurfaceContractTests` and driven by `com.cuvara.dots`. Callers
+    that cannot supply the tick keep today's behaviour exactly, including today's defect,
+    and a test pins that.
+  - `WorldViewBinder` passes `world.Tick`, which it already had — it was feeding the same
+    value to `SeedBaseTick` one line above, so the two clocks were already in one space and
+    the plumbing was a single argument.
+  - **Why the tick is genuinely required.** The cheaper fix was implemented first and
+    measured: anchor the replay to the acknowledged input's own base tick, which the
+    predictor already holds, needing no new parameter. It rebuilds the lead correctly and
+    then over-replays whenever the snapshot already covers the hold window — **3 steps of
+    phantom correction on a case with no lead at all**. The anchor supplies a start; only
+    the snapshot's tick supplies the end. That attempt is not in any branch; the test that
+    rejected it is.
+  - Two things are deliberately not replayed, each an earlier attempt's measured failure:
+    the acknowledged input's own step (the server applied it, so it is in `authoritative`),
+    and anything at or before the snapshot's tick (the snapshot already includes it).
+
+- **`ReconcileLeadTests` — a harness that actually measures the prediction lead** (#53).
+  The defect is unfixed; this is the instrument a fix can be judged with, which #53 says has
+  to exist first.
+  - An earlier fixture of this name was shipped `[Ignore]`d by its own author because every
+    configuration returned a constant `1.000` step — zero latency and both code paths alike.
+    It never reached `develop` and no longer exists. A fix evaluated against it would have
+    been evaluated against nothing.
+  - What makes this one trustworthy is two tests, not the numbers: `ZeroLead_CorrectsByNothing`
+    reads **0** where there is no lead to lose, and `PendingInputSurvives_TheLeadIsRebuilt`
+    reads **materially different values on the anchored and unanchored paths** — compared
+    against each other rather than a threshold, since indistinguishable readings were the old
+    fixture's whole failure.
+  - Three drafts were needed and each was corrected by a measurement rather than by reasoning:
+    passing base ticks where `RecordInput` expects input ticks read one step off at every lead
+    including zero; advancing after a consumed hold window produced no lead at all and looked
+    like the defect being absent; and an anchor recorded *after* the held ticks rebuilt nothing,
+    reading identically to the unanchored path. That last one is a real property of the replay
+    and is documented at the call site.
+  - The defect is pinned as characterization: `EmptyBuffer_DiscardsTheLead...` asserts the
+    correction tracks the acknowledgement interval — 1, 2 and 3 steps for 1, 2 and 3 held
+    ticks — and says at the call site that the expected value becomes `0` once #53 is fixed.
+    These pass today. A fixture that failed would be reverted or ignored, and an ignored
+    fixture is how the last one died.
+
+- **`Generated Wire.cs matches the backend` CI job** (#20).
+  `Runtime/Protocol/Generated/Wire.cs` is the third generated copy of `wire.proto` and the
+  only one nothing guarded; the backend's two are covered by its
+  `proto-generated-up-to-date` job.
+  - A stale copy is the expensive kind of wrong: it **decodes cleanly**, reading any field
+    added since generation as that type's default, so the symptom is a feature that looks
+    wired up and silently does nothing while every test on both sides passes.
+  - It diffs against the backend's **committed generated file** rather than running
+    `protoc`. Both sides generate from one schema with one generator, so the artefacts are
+    byte-identical by construction — md5 `c77092611a6e7815` on both when this landed.
+    Regenerating here would mean pinning `protoc` and the C# plugin to the backend's exact
+    versions, since generated output moves between generator versions; that yields diffs
+    which are not drift, and a gate that cries wolf gets switched off.
+  - It compares against the backend's `develop`, unpinned on purpose. A schema change
+    landing there **should** turn this red until this package regenerates. A pin would hide
+    the drift until someone moved it — the failure mode of the stale copy itself. The cost
+    is that a backend change can redden a netcode PR that did not cause it; that is the
+    two-repo protocol contract being enforced, not a defect.
+  - On failure it prints the diff and names the trap the issue documented: a bare
+    `--csharp_out` nests output under the `csharp_namespace`, writing
+    `Generated/RpgMmo/Wire/V1/Wire.cs` and leaving the committed `Generated/Wire.cs`
+    untouched **while reporting success**.
+
+- **`sync-main.yml` — `main` now follows the release tag by itself.** Runs on a `v*` push and
+  opens an auto-merging pull request moving `main` to the tagged commit.
+  - It opens a PR instead of pushing: `main` requires a pull request and four passing checks,
+    and a workflow that bypassed that would be removing the gate from the branch other people
+    read. No approval is required there, so a green PR lands on its own.
+  - No-ops when `main` already contains the tag, and warns instead of forcing when the move
+    would not be a fast-forward.
+  - `workflow_dispatch` accepts a tag, for a tag pushed while this was broken or a sync PR
+    that was closed.
+  - Written because a `main` that drifts is worse than one that is obviously abandoned: it
+    *looks* current while being stale, which is exactly how `develop` sat two releases behind
+    with nothing noticing.
+
+### Changed
+
+- **`develop` is the integration branch, and release tags are cut on it.** PRs target
+  `develop`; `main` is still built on push but nothing targets it by default.
+  - `release-reminder.yml` now watches `develop` instead of `main`. Watching `main` meant the
+    reminder fired on a branch nothing was merging into, so a version could sit untagged on
+    the branch people actually work on — which is how `develop` fell **two releases behind**
+    (`v0.16.3` and `v0.17.0` were both tagged on `main`) with nothing noticing. Anyone
+    branching from `develop` started without them.
+  - `ci.yml` accepts pull requests targeting either branch, so a PR aimed at `develop` is
+    built. It previously only ran on PRs into `main`.
+  - `release.yml` is unchanged and did not need changing: it triggers on the **tag**, not on
+    a branch, so a tag cut on `develop` already ran it. The branch decides where work lives,
+    not whether a release fires.
+  - The policy is written into `README.md` under *Branching and releases*, with the failure
+    that motivated it, so the next person does not have to reconstruct it.
+
+## [0.17.0] - 2026-08-22
+
+### Added
+
+- **Content pipeline client** (`Runtime/Content/`, sample `Samples~/ContentPipeline`).
+  Game content lives as JSON on the game server and is served over HTTP at `/content`, so a
+  content change reaches players through a server restart rather than a client build, a
+  `Shared.GameLogic` tag and a `packages-lock.json` bump (ADR-19). Until now the only channel
+  between the repos was a package pinned by exact commit — right for simulation rules, which
+  must change on both sides at once or prediction diverges, and fatal for content, whose
+  whole value is iteration speed.
+  - `ContentClient` caches **by hash, never by time**. Content does not expire; it changes
+    when a server restarts with different files, and the hash is how that is detected. A TTL
+    cache would either re-download unchanged content or serve content that had changed.
+  - Prefers `X-Content-Hash` over `ETag`: `UnityWebRequest` and several proxies rewrite or
+    strip `ETag`, and a client that cannot read back its own hash can never send `?hash=` —
+    so every launch silently re-downloads the full set while appearing to work.
+  - Treats a `304` arriving as a `UnityWebRequestException` as success. Unity raises any
+    non-2xx as a protocol error, so the successful steady-state answer would otherwise report
+    a content failure on every launch after the first.
+  - A `304` against an empty cache clears the stored hash rather than looping on a response
+    it cannot satisfy.
+  - `ContentJsonReader` builds the **same `Shared.GameLogic.Content` types the server
+    simulates against** and runs the **same validator**. The parser is per-side and the
+    schema is not — forced rather than preferred: Unity compiles `Shared.GameLogic` as source
+    and has no `System.Text.Json`, while the server is NativeAOT and cannot reflect.
+  - Client-side validation grants the client nothing: it answers "is this content coherent",
+    never "may this player have this item".
+- **`Samples~/ContentPipeline`** — a UXML scene listing every fetched item with a chip
+  reading NETWORK, CACHE or LOCAL. All three verified against a real server; the second run
+  reads CACHE, which is the 304 path working.
+
+### Changed
+
+- **CI pins `Shared.GameLogic` at `sgl-v0.2.2`**, up from `sgl-v0.1.9`. `Runtime/Content/`
+  compiles against `Shared.GameLogic.Content`, a namespace `0.1.9` does not have, so every
+  Unity job in this repo failed to compile until the pin moved — the package's own
+  `dependencies` do not name it, because it is supplied by the consuming project.
+
+## [0.16.3] - 2026-08-20
+
+Test-harness only. No runtime assembly changed.
+
+### Added — `PredictionLatencyMeasurement` can measure the unseeded base tick
+
+`SeedBaseTick` shipped in v0.16.0 with a described mechanism and **no number**. The harness
+could not supply one: it drives the predictor through `WorldViewBinder`, and the binder seeds
+on every snapshot, so every run it had ever produced was already the *after*.
+
+`MeasureAsync` takes `seedBaseTick`, and the unseeded arm is interleaved with the other two.
+Reproducing the pre-fix state needs no production change: `SeedBaseTick` takes effect once and
+`_baseTick` starts at 1, so seeding it with **1** leaves the counter where it began and marks it
+seeded, which makes the binder's real call a no-op for the rest of the run.
+
+**Measured against a live backend, 2026-08-20** (medians of 3 interleaved runs, 20/20 usable
+samples, server-advertised 60 Hz and 60.0 Hz measured off the wire):
+
+| | unseeded | seeded |
+|---|---|---|
+| max correction | **0.0833** world units | **0.0000** |
+| corrections smoothed / snapped | — | 1 / 0 |
+| reconciles | 140 | 162 |
+
+`0.0833` is not an arbitrary figure: player speed 5 ÷ 60 Hz = 0.08333, i.e. **exactly one base
+tick of movement**. That is what a one-tick phase misalignment produces, so the number and the
+documented mechanism corroborate each other rather than merely coexisting.
+
+Reported, never asserted. It is a phase effect and the unseeded arm carries the widest spread of
+the three configurations (28 % of mean, against 6 % for the seeded arm) — the correction going to
+zero clears that comfortably, the reconcile count does not and should not be read as a result.
+
+## [0.16.2] - 2026-08-20
+
+Test-infrastructure only. No runtime assembly changed.
+
+### Fixed — `PredictionSurfaceContractTests` could not survive an added overload
+
+`Method(string name)` selected out of `GetMethods` with `SingleOrDefault(m => m.Name == name)`.
+`SingleOrDefault` throws `InvalidOperationException` — "Sequence contains more than one matching
+element" — as soon as two methods share a name, so the first overload added to
+`LocalMovePredictor` made the fixture throw.
+
+The fixture exists to guard the surface `com.cuvara.dots` drives, and its own remarks tell callers
+to extend that surface by **adding rather than changing**. An overload is the sanctioned way to add,
+and the guard reported the sanctioned move as a broken contract.
+
+Two things made it worse than a plain false positive:
+
+- it surfaced as an **exception**, not an assertion, so none of the explanatory messages this
+  fixture is built around were printed; and
+- it broke **every case sharing the fixture** — `AdvanceKeepsItsSignature` and the rest — none of
+  which the author had touched. The failure pointed away from the change that caused it.
+
+`Method` now matches on name **and** parameter types, so each case resolves the exact signature it
+is asserting and overloads are invisible to the others. Observed while prototyping a three-argument
+`Reconcile`; that prototype was rejected on its own merits and no overload is added here — this is
+the guard, fixed so the next addition fails for a real reason or not at all.
+
+## [0.16.1] - 2026-08-19
+
+Sample-only release. No runtime assembly changed, so nothing about transport, codec,
+handshake, snapshots or prediction moves — a consumer who does not import the DOTS
+sample gets the same package as 0.16.0 under a new version number.
+
+### Added — `Samples~/DOTSSample/BackendCommandLine.cs`
+
+The DOTS sample can now be pointed at a backend from the command line (with
+`CUVARA_*` environment variables as a fallback), and can be run as several
+processes that authenticate as several distinct Nakama users.
+
+Both of these were previously impossible in a build. The sample scene carries only
+`DOTSSceneSetup`, which adds `DOTSNetworkBridge` at runtime — so the bridge can never
+hold anything but its own field initializers, and every address it knew
+(`127.0.0.1:8000` for the gateway, `127.0.0.1:7350` for Nakama) was baked into source.
+Retargeting a player meant editing a `[SerializeField]` default and rebuilding. That is
+wrong by construction for this backend: the game server runs as an Agones pod whose port
+is assigned at scheduling time.
+
+- **Flags, and their precedence.** Command line beats environment beats the value the
+  caller already had; with no arguments at all every field is left exactly as it was, so
+  the sample's out-of-the-box behaviour is unchanged.
+
+  | Flag | Environment | Selects |
+  |---|---|---|
+  | `-cuvara-gateway-host` | `CUVARA_GATEWAY_HOST` | gateway host |
+  | `-cuvara-gateway-port` | `CUVARA_GATEWAY_PORT` | gateway port |
+  | `-cuvara-nakama-scheme` | `CUVARA_NAKAMA_SCHEME` | `http` / `https` |
+  | `-cuvara-nakama-host` | `CUVARA_NAKAMA_HOST` | Nakama host |
+  | `-cuvara-nakama-port` | `CUVARA_NAKAMA_PORT` | Nakama port |
+  | `-cuvara-nakama-key` | `CUVARA_NAKAMA_SERVER_KEY` | Nakama server key |
+  | `-cuvara-status-url` | `CUVARA_STATUS_URL` | game-server status URL for the HUD |
+  | `-cuvara-map` | `CUVARA_MAP_ID` | map to join, skipping the selector |
+  | `-cuvara-device` | `CUVARA_DEVICE_ID` | explicit device id |
+  | `-cuvara-instance` | `CUVARA_INSTANCE` | label shown in the HUD and folded into the device id |
+
+  The names match the ones `Tests/Runtime/LiveBackend.cs` already reads, so one exported
+  environment drives both the Editor live-backend tests and a built player.
+
+- **`ResolveDeviceId` is what makes N processes N players.** Nakama device auth keys the
+  user by device id; two instances that compute the same one log in as the same user and
+  the second eviscerates the first. What is left on screen is one client alone in an
+  empty world — the same picture a broken area-of-interest draws, which is why this is
+  worth a changelog paragraph rather than a footnote. `ResolveDeviceId` folds the process
+  id, the instance label and the clock into the id so co-located processes cannot collide,
+  and honours an explicit `-cuvara-device` so a launcher can give each window a name that
+  greps out of the server logs.
+
+- **No address is baked in, deliberately.** `Resolve` takes the caller's current values as
+  its defaults and returns them untouched when nothing overrides them. The sample ships
+  pointing at localhost because that is where a dev stack is, not because the package has
+  an opinion about where your backend lives.
+
+- **`-cuvara-map` collapses the offered map set to one entry.** With two or more maps
+  available the bridge draws a selector and waits for a click, which an unattended launcher
+  cannot supply; the window would sit at a menu and read as "connected to nothing".
+
+- Reading the command line is wrapped in a `try` — WebGL denies
+  `Environment.GetCommandLineArgs()` outright, and the environment fallback must still work
+  there rather than throwing at startup.
+
+### Changed — `Samples~/DOTSSample/DOTSNetworkBridge.cs` wires the above in
+
+One `BackendCommandLine.Resolve` call at the top of `Start`, before anything connects, and
+`ResolveDeviceId` at the authentication call site. Nothing runs per frame, and no netcode
+behaviour changes.
+
+### Why these two files moved upstream now
+
+They already existed in the Cuvara client and were held back at 0.16.0 as "harness". They
+are not: pointing a build at a chosen backend, and running several clients that are several
+users, is what any consumer with more than one window needs. Keeping them out also left a
+permanent false positive in the client's vendor-drift check, because a drift allowlist can
+legitimately excuse a file that is *absent* upstream but must never excuse one that
+*differs* — an exemption that covered modifications would hide real drift behind it.
+
+### Documentation
+
+`Documentation~/NETCODE.md` gains **Pointing a build at a backend**: the full flag and
+environment table with its precedence rule, the identity-collision failure mode and why it
+looks like a netcode bug, and why no address is baked into the sample.
+
+## [0.16.0] - 2026-08-19
+
+Three defects in the movement predictor, all of which left every existing counter clean
+while the player's own avatar misbehaved. Read the first section even if you are not
+touching prediction code: it changes what you are allowed to assume about the golden
+vectors, and about the `sgl-*` pin.
+
+### If you read nothing else
+
+- **The golden vectors do not prove client/server agreement.** They cover
+  `Shared.GameLogic`, which both sides genuinely share. All three defects below lived in
+  `LocalMovePredictor`, the *client-side* mirror of `GameServer/Input/InputHandler.cs` —
+  code the shared library does not contain and the vectors therefore never touch. Green
+  vectors mean the movement *arithmetic* matches. They say nothing about *when* each side
+  decides to run it, which is where prediction actually diverges.
+- **The `sgl-*` pin is a label, not behaviour.** This release moves the manual
+  `com.rpgmmo.shared-gamelogic` pin from `sgl-v0.1.8` to `sgl-v0.1.9`. That range changes
+  exactly one line inside `Shared.GameLogic/` — the version string. The real change in it
+  is in `GameServer/Input/InputHandler.cs`, which is *outside* the UPM package and does not
+  ship to the client at all. So the pin bump moves no client code; it names the server
+  build this predictor was transcribed against. Do not infer behaviour from a pin diff.
+- **If you write your own view binding, you must call `SeedBaseTick`.** See below.
+
+### Changed — `StepDeltaTime` now takes `heldFrom`, and a restart after idle steps **once**
+
+This is the contract not to "fix" back.
+
+`LocalMovePredictor.StepDeltaTime(baseTick, lastMoveTick, heldFrom)` returns one plain
+timestep (`_dt`) when `heldFrom == 0`, before any banked-time arithmetic runs. It mirrors
+`rpg-mmo-server` `GameServer/Input/InputHandler.cs:78-93` line for line, and the rule it
+transcribes is stated in `gameserver-dotnet/docs/API.md`:
+
+> **Only a moving entity accrues that time.** A deadzone input clears the hold, and an
+> entity with no held direction is *stopped*, not stalled — so a player who releases the
+> stick, waits, and presses again is owed nothing for the pause.
+
+**What happens if someone removes that guard**, on the reasoning that rule 3 says a step
+covers the time since the entity last moved: the client predicts up to `MaxBankedTicks` of
+travel — 15 timesteps at 60 Hz, from the 250 ms `MaxBankedMovementMs` bound — that the
+server never takes, on the first input after every pause. The player stops, starts, and
+lurches a quarter-second of travel forward in one frame, then rubber-bands back when the
+snapshot lands. It reproduces on no test that does not deliberately contain an idle, and it
+is the most common thing a player does.
+
+Paired with it: an input the movement model resolves to `MoveResult.None` (a deadzone
+vector) now clears the hold **and** stamps `_lastMoveTick`, on the live path and the replay
+path alike, exactly as `InputHandler.ProcessInput` does in its pre-check and again in its
+`MoveResult.None` branch. Leaving `_lastMoveTick` stale is what let an idle bank time in the
+first place. A `Rejected` vector still leaves both fields alone, matching the server, which
+logs and drops it without disturbing state. `GameConstants.MaxBankedMovementMs` is untouched
+— the cap was never the problem; what counted against it was.
+
+Measured against a transcription of `InputHandler` (60 Hz base / 15 Hz world, zero
+latency): **19 snaps and a 14.00-step worst correction before, 0 snaps and 0.0000 after.**
+The `heldFrom` guard alone takes it to zero snaps; the `_lastMoveTick` stamp takes the
+residual correction from 3.00 steps to nothing.
+
+**Why no existing test caught it.** `LocalMovePredictorTests.ServerWalk` — the oracle the
+bit-exactness assertions compare against, whose own docblock claimed it "is not a second
+copy of the movement rule" — was a hand-rolled rule-3 loop missing both guards. It modelled
+the client, not `InputHandler`, so `PredictingForwardMatchesTheServerExactly` passed on a
+walk that deliberately contains a stop *because both sides were wrong the same way*. It is
+now transcribed from `ProcessInput`, and two tests pin the restart-after-idle case directly.
+
+### Added — `SeedBaseTick(long serverTick)`, and its one caller (#13)
+
+**If you use `WorldViewBinder`, this is already wired and you need do nothing.** If you
+bind views yourself — a DOTS system reading `LocalMovePredictor.Position` into
+`LocalTransform`, or any custom binder — **you must call it**, or the feature is inert and
+you keep the defect:
+
+```csharp
+predictor.SeedBaseTick(world.Tick);   // BEFORE Reconcile, every snapshot; one-shot inside
+predictor.SetServerSpeed(e.Speed);
+predictor.Reconcile(new Vec2(e.X, e.Y), world.AckTick);
+```
+
+`_baseTick` used to start at 1 and free-run on wall-clock accumulation while the server's
+`current_tick` sat in the hundreds of thousands. The absolute values never mattered —
+`StepDeltaTime` and `ApplyHeld` use differences — but the **phase** did: the hold window is
+`HoldTicks` base ticks wide, and where each clock's boundary fell relative to an input
+changed how many held steps got applied between inputs. On localhost, matched rates, no
+loss: 17 of 20 samples needed a correction of exactly 2 steps.
+
+It is a separate method rather than a `Reconcile` parameter for the same reason
+`SetServerSpeed` is: `Reconcile`'s signature is a cross-package contract that
+`com.cuvara.dots` drives and `PredictionSurfaceContractTests` pins. Seeding takes effect
+once — the accumulator clock in `Advance` owns the counter afterwards, and re-seeding every
+snapshot would fight it. `Reset()` clears the flag so a new session re-seeds.
+`LocalMovePredictor.BaseTick` is public so you can confirm the seed took.
+
+### Fixed — the local avatar froze for part of every base tick (#11)
+
+`SmoothingSpan` returned the integration timestep `_dt` unconditionally whenever a hold
+window was in use, on the premise that with a hold the server steps every base tick and so
+the steps being spread arrive one `_dt` apart.
+
+**That is the steady case, not the only one.** The base tick immediately after an input is
+declined by rule 1 — `ApplyHeld`'s `heldFrom == baseTick` guard, because the input already
+stepped that tick — so the next step lands a full timestep after the *following* boundary,
+a gap of up to `2 * _dt`. Spreading it over `_dt` finishes the step part-way through the
+gap; `StepProgress` pins at 1, `remaining` goes to zero, and `Position` is bit-identical for
+the rest of the gap. At ~1000 fps against 60 Hz that is a run of still frames on the one
+entity the player is controlling.
+
+It is invisible to every correction counter because **the simulated position is correct
+throughout** — only the rendered one stops. `Snaps` stays 0, the corrections budget passes,
+the tick rate agrees, the hold window measures the correct 4.
+
+The span now follows the interval steps are **actually** arriving at, smoothed with the same
+α = 0.3 moving average `WorldViewBinder` uses on snapshot arrivals, floored at `_dt` as
+before. In sustained movement that interval *is* `_dt`, so the steady case is unchanged; it
+widens only across the boundary that was freezing. A gap longer than the whole hold window
+means the hold lapsed and the step begins a new burst rather than continuing one — adopting
+it would spread the next step across an idle period and leave the avatar crawling behind its
+own simulation, which is the 0.12.3 defect in a new place — so such a gap restarts the
+measurement and the span falls back to its floor. `StepProgress` still saturates at 1: a
+wider span makes the avatar reach the step *later*, never *further* than the step the input
+actually produced.
+
+### Fixed — one narrow snapshot pair permanently shrank the hold window
+
+`TickRateEstimator.SnapshotTickGap` is a running minimum of the base-tick gap between
+consecutive snapshots that never recovers, and it feeds the predictor's hold window
+directly. The premise behind the minimum — that only drops move a gap, and only widen it —
+is false at one moment every session passes through: the first snapshot after joining is a
+keyframe emitted when the join is handled rather than on a world-tick boundary, so the gap
+to the next scheduled snapshot is whatever the phase happens to be, 1 to 3 base ticks
+instead of 4. Two snapshots batched into one socket read do the same.
+
+**A narrower gap must now be observed twice before it is adopted.** The true cadence repeats
+on every snapshot and confirms immediately; a one-off join artefact never does. Drops still
+only widen a gap and are still ignored, so "minimum, not mean" is kept.
+
+**What you would observe without the two-observation rule:** the hold window is pinned for
+the whole session at the width of one off-cadence join keyframe. At a real cadence of 4 with
+a keyframe gap of 1, `HoldTicks` sits at 1, which switches the hold off entirely — the
+predictor then steps only on inputs, reproduces a quarter of the server's motion at a 15 Hz
+send rate against a 60 Hz base tick, and the difference arrives as a correction on every
+snapshot. It is set once, at join, and never recovers; reconnecting is the only thing that
+clears it, and whether it clears is a coin flip on phase.
+
+`SnapshotTickGap` had no EditMode coverage at all despite being the sole source of the hold
+window; four tests now pin the rule.
+
+**Known limitation, deliberately recorded.** The rule tracks a single candidate, so gaps
+alternating between two values would reset the candidate on every sighting and leave
+`_minGap` at 0 — and `SetHoldTicks(0)` is ignored, so `HoldTicks` would sit at its fallback
+of 1 with the hold switched off. A steady cadence cannot produce that, and a bisect confirmed
+this rule is not behind the snap counts it was briefly suspected of, but counting per gap
+value rather than tracking one candidate is the durable form, and is left as follow-up.
+
+### Added — a diagnostic surface for render-side faults, pinned as contract
+
+The three defects above share one property: **no correction counter could see any of them**,
+because in all three the simulated position was right and only the rendered one was wrong.
+`Snaps`, `Reconciles`, `ReplayedSteps` and `LastCorrection` cannot answer "is my avatar's
+rendered position keeping up with its simulated one". These can, and they are part of the
+package's public contract rather than debug leftovers — `PredictionSurfaceContractTests`
+pins each one, so removing one is a deliberate act:
+
+| Member | Answers |
+|---|---|
+| `IntegrationTimestep` | the base tick period the predictor is integrating on |
+| `EffectiveSmoothingSpan` | the span one step is being spread across |
+| `ObservedStepInterval` | the interval steps are actually arriving at |
+| `RenderStepProgress` | how much of the current step has been rendered, 0..1 |
+| `HoldIsActive` | whether a step is in flight *right now* |
+| `BaseTick` | the predictor's tick, on the server's timeline once seeded |
+| `BaseTicksAdvanced` / `HeldStepsApplied` | ticks advanced vs. ticks that moved |
+| `SkipNoHoldWindow`, `SkipNothingHeld`, `SkipInputAlreadyStepped`, `SkipExpired`, `SkipRefusedByMovementModel`, `SkipNoDisplacement` | *why* the shortfall between those two |
+| `StepIntervalSamples` / `StepIntervalResets` | whether the interval measurement is converging or being torn down |
+
+**Read `EffectiveSmoothingSpan` against `ObservedStepInterval` first.** A span shorter than
+the interval means the avatar finishes its step and then holds still —
+`RenderStepProgress` pins at 1 and `Position` goes exactly constant — for the remainder.
+Longer, and the avatar permanently lags its own simulation. Neither shows in any correction
+counter. That comparison is the line that named #11.
+
+The skip counters are recorded **only on the live path**. `Reconcile` replays the same
+guards over the unacknowledged timeline, and folding those in would measure how much replay
+ran rather than how the rendered position behaved.
+
+### Removed — `HoldDeclines`, `DebugBaseTick`, `DebugLastMoveTick`, `DebugStepDt`
+
+Never part of a released surface; they existed only during the investigation.
+`HoldDeclines` was the exact sum of the six `Skip*` counters, which are reported
+individually. `DebugBaseTick` survives, renamed to `BaseTick` and documented. The `HoldSkip`
+reason code is now private: it is how the class talks to itself, and publishing it would
+invite a consumer to switch on values this package expects to be free to extend.
+
+### Changed — the measurement rig, `Tests/Runtime/PredictionLatencyMeasurement.cs`
+
+A harness, not a runtime feature; nothing in `Runtime/` depends on it. Summarised because
+its findings are the evidence for everything above.
+
+- **Its own clock leaked.** `lastFrameAt` was only written inside the sample loop, so the
+  first `AdvanceFrame` of every sample re-advanced the whole ~400 ms settle window on top of
+  what `PumpAsync` had already advanced — ~24 base ticks in one call, which expired the
+  four-tick hold window before a single frame rendered against it. `FramesHoldActive` came
+  back as 20 across 20 samples where ~67 per sample was expected. This is the same
+  double-advance `WorldViewBinder` guards with `_frameDriven`, reappearing in the harness.
+  Guarded against recurrence: the report prints the largest `AdvanceFrame`, counts calls
+  wider than one base tick, and self-flags an implausibly small hold denominator.
+- **The first reading of each sample spanned no time.** It read the position as of
+  `RecordInput` returning, against a baseline captured moments earlier — necessarily zero,
+  and correctly so, since `RecordInput` deliberately preserves the rendered position across
+  an input. It now re-baselines rather than being recorded as a fault; the count prints as
+  `zero-duration reads` and must equal the sample count exactly.
+- **The smoothness assertion is now `RenderingFaultPercent`** — still frames on which the
+  hold window was still running, over the frames on which it was running. The old figure
+  divided by every sampled frame, including the tail of each sample where the avatar is
+  *correctly* at rest: a live run split 437 still frames into 417 legitimate and 20 genuine.
+  Budget 0.5%; the correct value is exactly zero and the budget is margin against scheduling
+  noise, not against a known source. Every still frame is classified at the moment it occurs
+  by `HoldIsActive`, which is what makes the narrowing a counter rather than an argument.
+- **Correction magnitude is now also sized by `MeasuredTickRate`.** Sizing it only by the
+  client's own belief about the tick rate is self-referential: a client predicting at the
+  wrong rate sizes its own yardstick by the same wrong rate, so four real base ticks of
+  correction print as `1.00 steps`, which is what perfect health looks like. Measured at
+  15 Hz against 60 Hz: 0.3334 world units reported as one step; matched rates: 0.0833, also
+  one step. Identical readings, opposite verdicts.
+- **The correction-shape note no longer asserts a clock error.** A whole-number-of-steps
+  correction has two candidate causes the arithmetic cannot distinguish — a clock error
+  (linear in `holdTicks`) and banked movement (capped at `MaxBankedMovementTicks`). The note
+  now compares against the cap and names the reading that matches.
+- **Added:** the still-run-length histogram (20 isolated frames and 3 freezes of 7 need
+  opposite responses), the per-repeat `SNAPS PER RUN` distribution (`Representative()`
+  selects by a *rendered* metric while `Snaps` is a simulation property, so any rendering
+  change reselects the reported repeat), `HOLD WINDOW IN USE`, `sample window`,
+  `ack timeouts`, `non-advancing frames`, and `harness clock resolution`.
+- **Harness frame timing** now comes from `Time.realtimeSinceStartupAsDouble` rather than
+  differencing `Time.realtimeSinceStartup`, a `float` whose spacing coarsens with process
+  uptime (~1.95 ms past 4.5 hours) and near 1000 fps can return the same instant twice.
+
+## [0.15.5] - 2026-08-15
+
+### Fixed — the local avatar stuttered at every frame rate
+
+`WorldViewBinder` advanced the predictor **twice per frame**, so its clock ran at about
+**2x real time**.
+
+0.15.0 added `AdvanceFrame(deltaTime)` as the per-frame driver but left the existing
+advance inside the snapshot pass in place. That pass is not once per arriving snapshot:
+a real client calls `Tick(world, localId)` **every rendered frame**, whether or not a
+snapshot landed. Both drivers therefore ran on every frame, each covering the same span.
+
+The doubling does not show up as the avatar running away — reconciliation pins the
+position to the server's every snapshot — so it is spent on base ticks instead. The
+server holds a direction for `WorldEvery` base ticks and stops the entity when that
+window expires. At double rate the client's copy of the window expired in **half the
+real time it should**, so the predicted avatar moved for the first part of each send
+period and stood still for the rest.
+
+Three things about the symptom follow from that and made it hard to place:
+
+- **Frame rate is irrelevant.** Capping to 60 fps changed nothing, which wrongly ruled
+  out the render path as the location.
+- **Only the local player is affected.** Remote entities are driven by the
+  interpolator's own clock and stayed smooth throughout — "everyone else moves fine,
+  only the character I control stutters" is the exact signature.
+- **Distance is correct.** Nothing about total travel or final position is wrong, so no
+  positional assertion catches it.
+
+Measured on a live client at 15 input sends per real second: the predictor read the
+interval between them as **0.133 s** where 0.067 s was sent, and **85-100% of frames**
+rendered no movement with worst-frame jumps of **1.1-1.25 units**. After the fix, the
+same build reads **0.0669 s**, with **0-0.3% still frames** and a worst-frame jump of
+**0.027 units** while moving.
+
+The frame loop now owns the clock: `AdvanceFrame` claims each span it advances, and the
+snapshot pass advances only when no frame loop is running at all — a headless harness
+that pumps snapshots and renders nothing, which must still see prediction move. That
+second case is covered by its own test, so the fix cannot decay into "delete the
+snapshot advance".
+
+### Added
+
+- `PredictorClockAdvancesOnceTests` — asserts the predictor's clock matches real time
+  with both drivers running, driving `Tick` every frame as a real client does. Verified
+  against the defect: with the fix reverted the suite reports 1 failure, with it
+  restored 372/372 pass. It asserts `ObservedInputInterval`, not travel, because travel
+  is unchanged by the defect.
+
+### A note on the version number
+
+0.15.3 was reserved for this and is being skipped. 0.15.4 is already tagged, so
+publishing a lower number afterwards would make the changelog read backwards and any
+"latest" resolution ambiguous. A reserved number stops being free once something else
+ships past it.
+
+## [0.15.4] - 2026-08-15
+
+Tests and measurement. No runtime change — and the point of it is that **no runtime change
+was needed**, which is not what the previous release said was coming.
+
+`0.15.3` is deliberately skipped: it is reserved for the frame-clock fix described below,
+which is not in this repository.
+
+### A planned change, withdrawn on evidence
+
+0.15.2 announced a `Reconcile` contract change to fix a "phase error" — an input
+acknowledged on receipt while its hold keeps stepping, so replay drops steps the server
+has not yet taken. The reasoning was sound and the constant `2.00` fitted it exactly.
+
+**It is wrong.** Running client and server against each other end to end, over thirty
+snapshots, with the real server rules on the other side:
+
+```
+clock=1.00x   correction: 0.00 steps
+clock=1.25x   correction: 1.00 steps
+clock=1.50x   correction: 2.00 steps
+clock=2.00x   correction: 4.00 steps
+```
+
+**A predictor whose clock is right disagrees with the server by nothing at all.** There is
+no inherent hold-remainder defect, and the cross-package `Reconcile` change — which
+`PredictionSurfaceContractTests` pins and which would have been expensive to reverse — is
+not needed and is not being made.
+
+The `2.00` was real, but it was a reading of something else.
+
+### The correction is an instrument
+
+`correction_steps = (clockFactor - 1) * holdTicks`, exactly, at every factor measured. So a
+live run reporting `2.00` steps against a 4-tick hold is reporting **a predictor clock
+running at 1.5x real time**, and one reporting `0.00` is reporting a clock that is right.
+
+The measurement now prints that reading beside the correction, so the next person does not
+have to derive it — this took several releases to arrive at.
+
+### Added
+
+- **`ACorrectClockProducesNoCorrectionAtAll`** — the property the whole prediction path
+  exists to have, and nothing asserted it end to end. The pieces were pinned individually
+  (the step, the hold, replay parity) but client and server were never run against each
+  other over many snapshots with the answer required to be exactly zero. **This is the
+  guard that catches a clock defect**, and it would have caught the one this release was
+  chasing.
+- **`TheCorrectionMeasuresTheClockError`** at 1.25x, 1.5x and 2.0x, so the reading above
+  stays trustworthy rather than becoming folklore.
+
+Both go into an existing fixture with an existing `.meta`, per 0.15.1.
+
+### Correcting 0.15.2 again
+
+That release said a sub-threshold correction is invisible and the user cannot feel it.
+Wrong, and it cost several builds. Below the snap threshold a correction is *smoothed*,
+which means a decaying offset injected on every snapshot — fifteen times a second — and
+that reads as jerk at any frame rate. It is also local-only, because remote entities are
+never reconciled. "Smoothed" is not "unseen".
+
+## [0.15.2] - 2026-08-15
+
+Assertions only. No runtime change — and the measurement below is the reason there is no
+runtime change.
+
+### Measured before changing anything
+
+A player build reported **82.7% of frames with no movement**, at ~500 fps against a 60 Hz
+tick. That is 8.3 frames per tick, so a rendered position advancing once per tick leaves
+`(F-1)/F` = 87.5% still — the figure identifies its own cause.
+
+The predictor was measured at those exact parameters before touching it, and it is **not**
+the source: per-frame deltas came out `0.01012, 0.01011, 0.01011, 0.01010, ...` against a
+step of `0.08333`, eight even frames per tick. It interpolates within the tick correctly.
+A per-tick figure therefore comes from a consumer sampling `Position` once per tick, which
+is exactly what `AdvanceFrame` was added in 0.15.0 to fix — and the build measured predates
+it.
+
+A candidate change was also tested and rejected on the same run: restarting the
+interpolation only on an input that moved made still frames **worse**, 10.8% to 16.2%,
+leaving burstiness untouched. Second time that change has been proposed and measured away.
+
+### Added
+
+- **The live measurement asserts still frames below 25%.** More direct than burstiness and
+  it needs no noise floor: a still frame either is one or is not. The failure message
+  computes frames-per-tick from the run's own observed fps and tick rate, so a reader sees
+  immediately whether the figure matches a per-tick render.
+- **`AlmostEveryFrameMovesAtAFrameRateThatDoesNotDivideTheTick`** — 500 fps against 60 Hz,
+  8.33 frames per tick. Every existing evenness case used frame rates that divide the tick
+  exactly, so the awkward case, which is the only one a real client ever runs, was not
+  covered.
+
+### On the assertions added here
+
+Both live in files that already have their `.meta`, and both were added to existing
+fixtures rather than new files, deliberately: 0.15.1 records that
+`HeldMovementParityTests.cs` shipped in 0.14.0 without one and therefore never ran in
+Unity — not here and not in any consumer — while passing out of Unity, where `.meta` files
+are irrelevant. Every mutation result quoted for that fixture in 0.14.0 was true of the
+out-of-Unity run and vacuous in Unity. A green out-of-Unity suite says nothing about
+whether Unity can see the file.
+
+## [0.15.1] - 2026-08-15
+
+### Fixed
+
+- **`HeldMovementParityTests.cs` shipped in 0.14.0 without its `.meta`, so Unity ignored
+  the asset entirely — the parity test has never run, in this repository or in any
+  consumer.** Worse for consumers than for us: Unity logs
+  `has no meta file, but it's in an immutable folder`, and the test framework turns an
+  unexpected log error into an exception, so **the error fails the whole test run of any
+  project that installs the package**. Found by `com.cuvara.dots`' CI, whose job reported
+  failure with 137/137 EditMode and 29/29 PlayMode passing and not one test failed.
+
+  A `.meta` is load-bearing for a git-installed package: the package lands in the
+  immutable `Library/PackageCache`, where Unity will not generate one. This is the third
+  time a missing or stub `.meta` has silently disabled shipped content here.
+
 ## [0.15.0] - 2026-08-15
 
 **Consumers must now call `WorldViewBinder.AdvanceFrame(deltaTime)` once per rendered

@@ -2,6 +2,7 @@
 
 Client-side networking module for the RPG MMO. Handles wire transport, codec, two-hop handshake (gateway → game server), snapshot resolution and world state management.
 
+
 ## Features
 
 - **Wire transport** — TCP (KCP planned), 4-byte BE length-prefix framing
@@ -62,7 +63,7 @@ with `CS0246: The type or namespace name 'VContainer' could not be found`.
   with the server.
 
 ```json
-"com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.8"
+"com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.9"
 ```
 
 This one cannot be declared by the package. A UPM package's `dependencies` accepts
@@ -80,9 +81,53 @@ All four are imported from the Package Manager and all four need a running backe
 |---|---|
 | **Demo Bootstrap** | Minimal dev harness scene: press Play and the full connection flow runs against a local backend, logging every step. Mints its own development JWT from a shared secret in the config asset. |
 | **World View** | Renders replicated entities as primitive GameObjects so the world can be looked at rather than read from logs. Run one in a player build and one in the Editor to see two clients move around each other. |
-| **DOTS Sample** | The full client presented with DOTS/ECS: auth, both handshake hops, replicated entities, combat, economy, a map selector and a HUD. **WASD moves the local player**, with prediction on by default — this is the one to press Play on to judge how movement feels. |
+| **DOTS Sample** | The full client presented with DOTS/ECS: auth, both handshake hops, replicated entities, combat, economy, a map selector and a HUD. **WASD moves the local player**, with prediction on by default — this is the one to press Play on to judge how movement feels. A built player can be aimed at any backend with `-cuvara-gateway-host` / `-cuvara-nakama-host` (or `CUVARA_*` environment variables), and several instances authenticate as several distinct Nakama users — see "Pointing a build at a backend" in `Documentation~/NETCODE.md`. |
 | **E2E Certification** | Certification rig that drives the whole flow from the client with **no signing secret**: Nakama device auth, the `gateway_token` RPC, both handshake hops, the input/snapshot loop, resync, and a reconnect inside the server's 30 s entity hold. Exposes its results as static fields so they can be asserted on rather than read off the console. |
 
 ## Documentation
 
 See `Documentation~/NETCODE.md` for architecture details, wire protocol spec, and handshake sequence.
+
+## Branching and releases
+
+**`develop` is the integration branch.** Pull requests target it, release tags are cut on
+it, and the tags the Unity client pins point at commits reachable from it.
+
+`main` still exists and CI still builds a push to it, but nothing targets it by default.
+
+### Cutting a release
+
+1. Land the work on `develop`.
+2. Bump `version` in `package.json` **in the commit the tag will point at** — the release
+   workflow refuses to publish when `package.json` and the tag disagree.
+3. Add the matching `## [x.y.z]` heading to `CHANGELOG.md`; the workflow extracts the
+   release notes from it by heading.
+4. Tag `vx.y.z` on `develop` and push the tag.
+
+`release.yml` triggers on the **tag**, not on a branch, so a tag cut anywhere runs it. The
+branch matters for where the work lives, not for whether the release fires.
+
+`release-reminder.yml` watches `develop` and says so when the version there has no tag yet.
+It never tags and never publishes: pushing a `v*` tag is the last gate before `npm publish`,
+which cannot be undone — a bad version can only be superseded, never withdrawn.
+
+### `main` syncs itself
+
+`sync-main.yml` runs on the tag push and opens a pull request moving `main` to the tagged
+commit, set to auto-merge. Nothing to remember and nothing to do by hand.
+
+It opens a PR rather than pushing because `main` requires one plus four passing checks, and
+a workflow that bypassed that would be quietly removing the gate from the branch other
+people read. When the tag is already reachable from `main` it does nothing and says so; when
+the move would not be a fast-forward it opens the PR anyway and warns, rather than choosing
+for you.
+
+`workflow_dispatch` takes a tag, for when a tag was pushed while the workflow was broken or
+a sync PR was closed.
+
+### Why this is written down
+
+`develop` fell two releases behind `main` (`v0.16.3` and `v0.17.0` were both tagged on
+`main`) because the reminder watched a branch nothing was merging into, so nothing noticed.
+Anyone branching from `develop` started without those releases. One integration branch, with
+the reminder pointed at it, is what stops that recurring.
