@@ -144,8 +144,16 @@ jobs:
           mkdir -p Assets ProjectSettings Packages
 
           mkdir -p "Assets/Samples"
-          cp -r "package/Samples~/NotificationPopup" "Assets/Samples/NotificationPopup"
-          cp -r "package/Samples~/EcsHud" "Assets/Samples/EcsHud"
+          # Copy EVERY sample package.json declares rather than naming them here. The
+          # hardcoded list had already fallen behind by two of four: ScreenFlow — the one
+          # with the scene, and the largest — and LoadingFlow were both added while this job
+          # kept compiling NotificationPopup and EcsHud and reporting success over samples it
+          # had never seen. A list maintained by hand is a list that goes stale, and nothing
+          # fails when it does.
+          for rel in $(python3 -c "import json;[print(e['path']) for e in json.load(open('package/package.json')).get('samples',[])]"); do
+            cp -r "package/$rel" "Assets/Samples/${rel##*/}"
+          done
+          echo "samples imported: $(ls Assets/Samples | tr '\n' ' ')"
 
           # com.unity.entities is an OPTIONAL dependency of this package, so it is not in
           # package.json's dependencies and nothing resolves it on our behalf. Without it
@@ -162,6 +170,7 @@ jobs:
             "dependencies": {
               "com.cuvara.uitoolkit": "file:../package",
               "com.unity.test-framework": "1.6.0",
+              "com.unity.inputsystem": "1.18.0",
               "com.unity.entities": "1.4.8",
               "com.unity.burst": "1.8.30",
               "com.unity.collections": "2.6.8",
@@ -189,6 +198,10 @@ jobs:
           # returning false, and it is what a Unity 6 project is most likely to be on. A
           # sample that only compiles under "Both" is a sample that breaks for most
           # consumers.
+          #
+          # As in the test job, this is only coherent because com.unity.inputsystem is in the
+          # manifest above. Pinning 1 without it leaves InputForUI on its legacy provider,
+          # reading the API the setting forbids.
           cat > ProjectSettings/ProjectSettings.asset << 'YAML'
           %YAML 1.1
           %TAG !u! tag:unity3d.com,2011:
@@ -251,11 +264,25 @@ jobs:
           # every [Test] and [UnityTest] attribute becomes a CS0246 on NUnit. That failure
           # reads as "the package is broken" when it means "the harness is incomplete", and
           # it cost a full CI round to tell those apart.
+          # com.unity.inputsystem is declared because ProjectSettings below pins
+          # activeInputHandler: 1. Pinning "Input System package only" WITHOUT installing it
+          # is an inconsistent project: UI Toolkit's InputForUI falls back to its legacy
+          # InputManagerProvider, that provider reads UnityEngine.Input.mousePosition, and the
+          # legacy API throws under activeInputHandler: 1. The exception surfaces as an
+          # unhandled log message, which the test framework turns into a failure of whichever
+          # test happened to be running — three innocent ones, none of them related to input.
+          #
+          # com.unity.entities makes the ECS assembly's tests run here at all. Without it the
+          # CUVARA_UITOOLKIT_ENTITIES constraint is unmet, Cuvara.UIToolkit.Ecs.Tests is not
+          # compiled, and CI silently reported 20 fewer tests than a local run — a gap that
+          # looks like nothing because the number is never compared against anything.
           cat > Packages/manifest.json << 'JSON'
           {
             "dependencies": {
               "com.cuvara.uitoolkit": "file:../package",
-              "com.unity.test-framework": "1.6.0"
+              "com.unity.test-framework": "1.6.0",
+              "com.unity.inputsystem": "1.18.0",
+              "com.unity.entities": "1.4.8"
             },
             "scopedRegistries": [
               {
@@ -277,6 +304,12 @@ jobs:
           # returning false, and it is what a Unity 6 project is most likely to be on. The
           # back-navigation source is built on NavigationCancelEvent precisely so it works
           # here; this pins that.
+          #
+          # This value is only coherent alongside com.unity.inputsystem in the manifest above.
+          # Setting it without installing the package does not make the project stricter, it
+          # makes it INVALID: InputForUI has no Input System provider to use, falls back to
+          # InputManagerProvider, and that provider reads the very legacy API this setting
+          # forbids. Change one, change the other.
           cat > ProjectSettings/ProjectSettings.asset << 'YAML'
           %YAML 1.1
           %TAG !u! tag:unity3d.com,2011:
@@ -420,6 +453,12 @@ jobs:
           m_EditorVersion: 6000.3.9f1
           TXT
 
+          # activeInputHandler: 1 with no com.unity.inputsystem would be an invalid combination
+          # in the test job — see the note there. It is harmless HERE and left alone on purpose:
+          # this probe runs EditMode only, never opens a runtime panel, so InputForUI never
+          # updates and the legacy provider is never asked for a mouse position. Adding the
+          # package would also defeat the probe, whose whole question is what the package's own
+          # declarations pull in.
           cat > ProjectSettings/ProjectSettings.asset << 'YAML'
           %YAML 1.1
           %TAG !u! tag:unity3d.com,2011:

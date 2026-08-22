@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI test project installs the Input System package it pins.** Both Unity jobs wrote
+  `activeInputHandler: 1` ("Input System package only") into `ProjectSettings.asset` without
+  adding `com.unity.inputsystem` to the manifest. That combination is an inconsistent project:
+  UI Toolkit's `InputForUI` finds no Input System provider, falls back to its legacy
+  `InputManagerProvider`, and that provider reads `UnityEngine.Input.mousePosition` — which
+  throws under `activeInputHandler: 1`. The exception arrives as an unhandled log message
+  during the runtime panel's update loop, and the test framework attributes it to whichever
+  test happens to be running. Three `ScreenFlowRegistrationTests` cases failed this way,
+  none of them touching input.
+
+### Changed
+
+- **The samples job compiles every sample `package.json` declares** instead of a hardcoded
+  list of two. The list had already gone stale: `ScreenFlow` — the sample with the scene, and
+  the largest of the four — was added while the job kept compiling `NotificationPopup` and
+  `EcsHud` and reporting success over a sample it had never seen. `LoadingFlow` was in the
+  same position.
+- **The test job installs `com.unity.entities`**, so `Cuvara.UIToolkit.Ecs.Tests` compiles and
+  runs in CI. Without it the `CUVARA_UITOOLKIT_ENTITIES` constraint is unmet, the assembly is
+  gated out, and CI silently reported ~20 fewer tests than a local run — invisible, because
+  the count is never compared against anything.
+
 ## [0.2.0] - 2026-08-21
 
 ### Added
