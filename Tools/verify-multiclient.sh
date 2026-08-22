@@ -211,11 +211,25 @@ fi
 
 # --- players_online -------------------------------------------------------
 if [ -n "$STATUS_URL" ]; then
-    online=$(curl -s -m 10 "$STATUS_URL" 2>/dev/null | python3 -c 'import sys,json;print(json.load(sys.stdin).get("players_online","?"))' 2>/dev/null || echo "?")
-    if [ "$online" = "$COUNT" ]; then
-        pass "game server reports players_online=$COUNT"
+    # Three outcomes, not two, and they must not be conflated. An unreachable
+    # endpoint is NOT a wrong player count -- reporting it as "expected 3, actual
+    # ?" accuses the server of a fault that belongs to the harness. This bit on
+    # the first real run: a rescheduled Agones pod left the port-forward pointing
+    # at a dead pod, and the row failed while all three players were in fact
+    # online. Same lesson as #216 on the server side: a bare null is the defect
+    # underneath the defect.
+    status_body=$(curl -s -m 10 --fail-with-body "$STATUS_URL" 2>/dev/null)
+    curl_rc=$?
+    if [ "$curl_rc" -ne 0 ] || [ -z "$status_body" ]; then
+        skip "game server players_online" \
+            "could not reach $STATUS_URL (curl exit $curl_rc). This is the harness, not the server -- the endpoint is usually a kubectl port-forward, and an Agones pod that was rescheduled leaves it pointing at a pod that no longer exists. Re-establish it against the CURRENT pod and re-run. The Redis session count above already indicates whether the clients joined."
     else
-        fail "players_online=$COUNT" "$COUNT" "$online (from $STATUS_URL)"
+        online=$(printf '%s' "$status_body" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("players_online","<absent>"))' 2>/dev/null || echo "<unparseable>")
+        if [ "$online" = "$COUNT" ]; then
+            pass "game server reports players_online=$COUNT"
+        else
+            fail "players_online=$COUNT" "$COUNT" "$online (from $STATUS_URL)"
+        fi
     fi
 else
     skip "game server players_online" "--status-url not given"
