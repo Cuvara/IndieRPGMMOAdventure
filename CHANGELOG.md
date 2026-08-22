@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Account recovery** (`NakamaSessionService`, `docs/ACCOUNT-RECOVERY.md`). Until now a
+  character was bound to `SystemInfo.deviceUniqueIdentifier` and nothing else: reinstalling,
+  wiping or replacing the phone lost it permanently, with no second credential pointing at
+  the account and no support path to restore one. `NakamaAuthProvider` restored a session or
+  fell back to device auth, and nothing ever attached anything durable.
+  - `LinkEmailAsync` attaches a recovery credential to the *current* account, additively —
+    the device id keeps working and the player is not signed out.
+  - `RecoverWithEmailAsync` signs in to that account from another device.
+  - `GetRecoveryEmailAsync` / `IsRecoverableAsync` report whether an account has been linked
+    yet, for a settings screen to branch on.
+  - `UnlinkEmailAsync` detaches it, and logs a warning: afterwards the account is device-only
+    and unrecoverable again.
+
 ### Changed
+
+- **`AuthenticateEmailAsync`'s `create` parameter lost its default**, which was `true`. That
+  default is the wrong value for recovery and wrong in a way that is silent: an email Nakama
+  does not recognise produces a brand-new empty account and a login that looks entirely
+  successful. A player mistyping their address during recovery would land in a fresh
+  character with no items and no progress, with no error raised anywhere — the client
+  authenticated, the gateway resolved an identity, the session was valid, it was just the
+  wrong account. Callers must now state which they mean. The method had no callers, so
+  nothing broke.
+  - Use `RecoverWithEmailAsync` for recovery; it pins `create: false` so an unknown email
+    fails loudly instead of silently succeeding into the wrong place.
 
 - **`unity-build-workflows` bumped `f5616af` → `c4ceb8e`** ("gate Final Report on every result,
   and fail on cancelled"). Provisional: that commit sits on the submodule repo's
