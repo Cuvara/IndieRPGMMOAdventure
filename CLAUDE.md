@@ -112,8 +112,25 @@ are different faults, and only the second one is about AOI.
 #### Telling a real pass from three isolated clients
 
 Three clients that each see only themselves is a failure that looks like success — the
-windows are up, the logs say "IN WORLD", and nothing is wrong on the surface. Check all
-of these, not the first one:
+windows are up, the logs say "IN WORLD", and nothing is wrong on the surface.
+
+**Run `Tools/verify-multiclient.sh` rather than walking the table below by hand.** It
+launches the clients, asserts every row a machine can assert, and captures the windows for
+the one row a machine cannot:
+
+```bash
+Tools/verify-multiclient.sh \
+  --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
+  --count 3 --gateway-port 7000 --nakama-port 7001 --nakama-key <key> \
+  --map map_01 --status-url http://127.0.0.1:19100/status \
+  --kube-context k3d-rpg-dev
+```
+
+It exits non-zero only when an asserted row fails. Rows it could not run — the Redis ones
+without `--kube-context`, and mutual visibility always — are printed as **NOT CHECKED** and
+never folded into the pass.
+
+The table is what it asserts, kept here because the reasoning is the useful part:
 
 | Where | Expect | What the wrong value means |
 |---|---|---|
