@@ -30,6 +30,16 @@
         "com.unity.modules.physics": "1.0.0"
       }
     },
+    "com.cuvara.uitoolkit": {
+      "version": "file:com.cuvara.uitoolkit",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.cysharp.unitask": "2.5.10",
+        "com.unity.modules.uielements": "1.0.0",
+        "jp.hadashikick.vcontainer": "1.16.9"
+      }
+    },
     "com.cysharp.messagepipe": {
       "version": "1.8.1",
       "depth": 0,
@@ -154,11 +164,11 @@
       "url": "https://package.openupm.com"
     },
     "com.rpgmmo.shared-gamelogic": {
-      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.9",
+      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.3.0",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "514d454192355943a24b822c1441ab25b5e770e1"
+      "hash": "40995af70e387a0251b5001367395911b6abac96"
     },
     "com.unity.addressables": {
       "version": "2.8.1",

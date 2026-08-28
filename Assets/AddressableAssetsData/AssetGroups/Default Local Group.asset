@@ -14,7 +14,47 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_GroupName: Default Local Group
   m_GUID: 0da311153aadd424dbd492149aa69d7d
-  m_SerializeEntries: []
+  m_SerializeEntries:
+  - m_GUID: 16b9cad93a22b314d9bc189edd14545a
+    m_Address: InventoryPopup
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 25a9e230e924c8d42b402adaeeac0754
+    m_Address: SettingsPopup
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 742564e9f6dcd5f40ba66928f3b8e7b8
+    m_Address: ConfirmPopup
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 754c89ea447be1f43a43743957633a0c
+    m_Address: MainScreen
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b188bf6944f48c2478c5cf96039734a8
+    m_Address: InfoPopup
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6d88148ca2886d4f843df6c061d3ea9
+    m_Address: InventoryItem
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea461469057e86b44ac5b396f3198f65
+    m_Address: LoadingScreen
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fa21a60de233c4944b3d9aaf39f5fa32
+    m_Address: SecondScreen
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: f062ee21a5b55b448aaa486766242d9d, type: 2}
   m_SchemaSet:

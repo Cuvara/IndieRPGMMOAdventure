@@ -5,6 +5,75 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Content pipeline** — item definitions now come from the game server at runtime instead
+  of being something the client would ship in its build (ADR-19). The client half lives in
+  `com.cuvara.netcode` as `Cuvara.Netcode.Content`, with a `Content Pipeline` sample scene
+  built in UXML; see `docs/CONTENT-PIPELINE.md` and the package changelog for detail.
+  - `com.cuvara.netcode` bumped to **0.17.0** for the new public namespace and sample.
+
+### Changed
+
+- **`com.rpgmmo.shared-gamelogic` bumped to `sgl-v0.2.1`** in both `manifest.json` and
+  `packages-lock.json`, for the new `Shared.GameLogic.Content` namespace. Both files, because
+  the lock is what resolves — a manifest-only bump silently keeps the old commit.
+  `0.2.0` shipped that namespace without `.meta` files, so Unity never imported it and the
+  client could not see `Shared.GameLogic.Content` at all; `0.2.1` is the tag that works.
+
+- **Account recovery** (`NakamaSessionService`, `docs/ACCOUNT-RECOVERY.md`). Until now a
+  character was bound to `SystemInfo.deviceUniqueIdentifier` and nothing else: reinstalling,
+  wiping or replacing the phone lost it permanently, with no second credential pointing at
+  the account and no support path to restore one. `NakamaAuthProvider` restored a session or
+  fell back to device auth, and nothing ever attached anything durable.
+  - `LinkEmailAsync` attaches a recovery credential to the *current* account, additively —
+    the device id keeps working and the player is not signed out.
+  - `RecoverWithEmailAsync` signs in to that account from another device.
+  - `GetRecoveryEmailAsync` / `IsRecoverableAsync` report whether an account has been linked
+    yet, for a settings screen to branch on.
+  - `UnlinkEmailAsync` detaches it, and logs a warning: afterwards the account is device-only
+    and unrecoverable again.
+
+### Changed
+
+- **`AuthenticateEmailAsync`'s `create` parameter lost its default**, which was `true`. That
+  default is the wrong value for recovery and wrong in a way that is silent: an email Nakama
+  does not recognise produces a brand-new empty account and a login that looks entirely
+  successful. A player mistyping their address during recovery would land in a fresh
+  character with no items and no progress, with no error raised anywhere — the client
+  authenticated, the gateway resolved an identity, the session was valid, it was just the
+  wrong account. Callers must now state which they mean. The method had no callers, so
+  nothing broke.
+  - Use `RecoverWithEmailAsync` for recovery; it pins `create: false` so an unknown email
+    fails loudly instead of silently succeeding into the wrong place.
+
+- **`unity-build-workflows` bumped `f5616af` → `c4ceb8e`** ("gate Final Report on every result,
+  and fail on cancelled"). Provisional: that commit sits on the submodule repo's
+  `fix/final-report-gate` branch and is not merged there yet, so the pin should be re-pointed
+  once it lands.
+
+### Fixed
+
+- **`Assets/Scripts/UI.meta` is now tracked.** The folder it describes has been in the repo all
+  along, and every sibling folder meta (`DI.meta`, `Extensions.meta`, `Nakama.meta`) was
+  committed — this one never was, so Unity regenerated it with a fresh guid on every machine
+  that opened the project and it kept surfacing as an untracked file.
+- **Removed a duplicate `Screen Flow` sample import** at `Assets/Samples/Cuvara UIToolkit/`.
+  All 11 files were byte-identical to the tracked copy under
+  `Assets/Samples/Cuvara UI Toolkit/0.1.0/Screen Flow (scene)/`, but the duplicate carried no
+  `.asmdef`, so its `ScreenFlowSample.cs` and `ScreenFlowSampleScope.cs` compiled into
+  `Assembly-CSharp` alongside the same types in `Cuvara.UIToolkit.Samples.ScreenFlow` — the
+  ghost-duplicate condition the package's own `1d28bc8` was written to break.
+
+### Added
+
+- **`com.cuvara.uitoolkit` vendored at v0.2.0** — screen flow system, Loading Flow sample with
+  full feature coverage (push/pop/replace/popToRoot, modal overlays, model parameters, lifecycle
+  hooks, back navigation, list adapter, per-scene scoping). All samples now ship assembly
+  definitions so they compile on import.
+
 ## [v0.4.2] — 2026-08-21
 
 ### Fixed

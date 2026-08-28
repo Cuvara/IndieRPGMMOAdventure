@@ -1,0 +1,60 @@
+{
+  "name": "com.cuvara.uitoolkit",
+  "version": "0.2.0",
+  "displayName": "Cuvara UI Toolkit",
+  "description": "A standalone UI Toolkit screen layer: view lifecycle, layer/surface parenting into a UIDocument, list/grid/multi-template collection adapters, safe-area and panel-scale utilities, a back-navigation event source, and an optional DOTS/ECS presentation adapter. It owns its own contracts and depends on no UI framework of its own — a host binds it to whatever screen flow it already has.",
+  "unity": "6000.3",
+  "documentationUrl": "https://github.com/Cuvara/UIToolkit",
+  "license": "MIT",
+  "keywords": [
+    "ui",
+    "uitoolkit",
+    "uxml",
+    "uielements",
+    "safearea",
+    "dots",
+    "ecs"
+  ],
+  "author": {
+    "name": "Cuvara",
+    "email": "duycuong2k3@gmail.com"
+  },
+  "dependencies": {
+    "com.cysharp.unitask": "2.5.10",
+    "com.unity.modules.uielements": "1.0.0",
+    "jp.hadashikick.vcontainer": "1.16.9"
+  },
+  "x-nonDependencies": {
+    "com.gdk.core": "DELIBERATELY ABSENT. This package must not reference GameFoundation. The screen-flow adapter — the IScreenViewBackend implementation, the presenter bases, the back-navigation policy — lives in com.gdk.core and references THIS package, not the other way round. If a com.gdk.core type ever appears in Runtime/, the inversion has been broken and the package stops being installable on its own.",
+    "com.frostbun.*": "DELIBERATELY ABSENT. UniT.Logging and UniT.ResourceManagement come from an OpenUPM scoped registry, and a UPM package cannot declare a scoped registry of its own — so it could never be a real dependency. Asset loading goes through IVisualTreeAssetLoader, which the host implements."
+  },
+  "samples": [
+    {
+      "displayName": "Screen Flow (scene)",
+      "description": "A playable scene exercising the whole screen flow: push, pop, replace, pop-to-root, a modal that dims rather than suspends, and Back through the navigator's root policy. A HUD reports Depth and the top screen's ScreenLifecycleState live, so suspend and resume are watched rather than inferred. Import it, open ScreenFlowSample.unity, press Play.",
+      "path": "Samples~/ScreenFlow"
+    },
+    {
+      "displayName": "Notification Popup",
+      "description": "A UXML notification popup built on the package's own view base and asset loader, with no host framework involved. The smallest complete example of defining a screen, parenting it into a layer, and closing it.",
+      "path": "Samples~/NotificationPopup"
+    },
+    {
+      "displayName": "ECS HUD",
+      "description": "A UXML health bar driven from a DOTS/ECS component through the presentation adapter: an unmanaged component carries the values, a main-thread SystemBase converts them to a ViewModel on change, and a Presenter renders it through an IView. ECS never touches the visual tree. Requires com.unity.entities.",
+      "path": "Samples~/EcsHud"
+    },
+    {
+      "displayName": "Loading Flow",
+      "description": "Two-scene flow: LoadingScene (MonoBehaviour-driven progress bar, tips, spinner) transitions to MainScene (ScreenNavigator with every feature). Demonstrates: Push, Pop, Replace, PopToRoot, Modal+DimsBelow overlay, model parameters, OnActivate/OnDeactivate/OnSuspend/OnResume lifecycle hooks, OnBackRequested override, BackNavigationSource, UIToolkitListAdapter collection, and per-scene navigator scoping. Import, add both scenes to Build Settings, open LoadingScene, press Play.",
+      "path": "Samples~/LoadingFlow"
+    }
+  ],
+  "testables": [
+    "com.cuvara.uitoolkit"
+  ],
+  "x-optionalDependencies": {
+    "com.unity.entities": "1.4.8 — enables Runtime/Ecs, the ECS-to-ViewModel presentation adapter, via the CUVARA_UITOOLKIT_ENTITIES versionDefine. Absent, that assembly is not compiled and the rest of the package is unaffected. It is optional rather than required because a project with no DOTS simulation has nothing for the adapter to read."
+  },
+  "x-ecsConstraint": "Two separate rules govern Runtime/Ecs, and they constrain different things. ARCHITECTURE: ECS must never manipulate UI Toolkit. The path is ECS -> adapter -> ViewModel -> Presenter -> View -> UI Toolkit. Runtime/Ecs is the ADAPTER half only: it converts component data to a plain ViewModel and pushes it to an IViewModelSink the host implements. It must not reference VisualElement, must not hold a view reference and must not know a Presenter's concrete type — the assembly does not reference UIElements at all, and a test asserts that. THREADING: VisualElement is plain managed C#, not a UnityEngine.Object, so it cannot be touched from ISystem, IJobEntity, Burst or any worker thread. That is a type-system fact, not a performance guideline, and it is why the adapter is a managed SystemBase in PresentationSystemGroup with no [BurstCompile]. PERFORMANCE: the system is disabled while no sink is registered, and its query carries a change-version filter, so pushes happen on data change and never per frame."
+}

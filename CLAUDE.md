@@ -42,7 +42,7 @@ Build a Windows player (Mono2x, stripping disabled — the quickest target):
   -buildTarget Win64 \
   -executeMethod PlayerBuilder.Build \
   -buildOutput 'E:\SecretProject\IndieRPGMMOAdventure\Builds\MultiClient' \
-  -bootScene 'Assets/Samples/Cuvara Netcode/0.16.3/DOTS Sample/Scenes/DOTSSample.unity' \
+  -bootScene 'Assets/Samples/Cuvara Netcode/0.19.0/DOTS Sample/Scenes/DOTSSample.unity' \
   -logFile 'E:\SecretProject\IndieRPGMMOAdventure\Builds\multiclient-build.log'
 ```
 
@@ -63,7 +63,7 @@ networking.
 
 The path must match the enabled scene path exactly — an unmatched value is a hard build
 error, not a silent fall-back to index 0. Note the version number in it: the sample lives
-under the vendored netcode version (`0.16.3` today) and moves every time that package is
+under the vendored netcode version (`0.19.0` today) and moves every time that package is
 re-vendored, so check the directory before copying the command.
 
 Then launch the instances:
@@ -112,8 +112,25 @@ are different faults, and only the second one is about AOI.
 #### Telling a real pass from three isolated clients
 
 Three clients that each see only themselves is a failure that looks like success — the
-windows are up, the logs say "IN WORLD", and nothing is wrong on the surface. Check all
-of these, not the first one:
+windows are up, the logs say "IN WORLD", and nothing is wrong on the surface.
+
+**Run `Tools/verify-multiclient.sh` rather than walking the table below by hand.** It
+launches the clients, asserts every row a machine can assert, and captures the windows for
+the one row a machine cannot:
+
+```bash
+Tools/verify-multiclient.sh \
+  --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
+  --count 3 --gateway-port 7000 --nakama-port 7001 --nakama-key <key> \
+  --map map_01 --status-url http://127.0.0.1:19100/status \
+  --kube-context k3d-rpg-dev
+```
+
+It exits non-zero only when an asserted row fails. Rows it could not run — the Redis ones
+without `--kube-context`, and mutual visibility always — are printed as **NOT CHECKED** and
+never folded into the pass.
+
+The table is what it asserts, kept here because the reasoning is the useful part:
 
 | Where | Expect | What the wrong value means |
 |---|---|---|
@@ -122,12 +139,47 @@ of these, not the first one:
 | game server `/status` | `players_online: 3` | fewer means a client never joined, or was evicted |
 | game server `/metrics` | `gameserver_players_online{map_id="map_01"} 3` | same, and it is the counter the load tests read |
 | Redis `KEYS 'session:*'` | three entries | the gateway holds one session per user |
-| Redis `KEYS 'servers:*'` | **one** entry for the map | one entry per game server, never per player; three means the clients landed on three servers and could never see each other |
-| Redis `KEYS 'player:location:*'` | three entries | per-user location records |
+| Redis `SMEMBERS servers:map:map_01` | **one** member | one entry per game server, never per player; two or three means the clients landed on different servers and could never see each other |
+
+Verified live against `k3d-rpg-dev` on 2026-08-22: three clients, three distinct
+Nakama user ids, all three assigned **the same** `127.0.0.1:7018`, `players_online: 3`,
+`servers:map:map_01` holding exactly one member.
+
+**There is no `player:location:*` key, and there never has been.** This table used to
+claim three of them. `PlayerLocationKey` is declared in
+`backend/shared/constants/keys.go` and has no reader and no writer anywhere in either
+repo, so an operator following that row found zero entries and had every reason to
+conclude the run had failed. Tracked as Cuvara/rpg-mmo-server#210.
 
 The area-of-interest radius is 50 units. Clients that wander further apart than that are
 mutually invisible and the server is *correct* to omit them, so judge visibility in the
 first seconds after all three have joined, before they drift.
+
+#### Checking the windows without a human looking at them
+
+The first row of that table — three capsules, not one — is the only one that actually
+proves mutual visibility, and it is the one row a headless check normally skips. It does
+not have to be skipped.
+
+`SetForegroundWindow` fails from a background process, so raising each window and
+grabbing the screen returns whatever is on top instead: you get a screenshot of your own
+terminal that *looks* like a captured window. `PrintWindow` with `PW_RENDERFULLCONTENT`
+(`2`) reads the window's own content while it stays occluded, and works against this
+player's D3D12 surface:
+
+```powershell
+# $hw = (Get-Process IndieRPGMMOAdventure).MainWindowHandle -- note the PIDs printed by
+# run-clients.sh are the launcher's, NOT the player's; they have no window handle.
+$bmp = New-Object System.Drawing.Bitmap $w, $h
+$g   = [System.Drawing.Graphics]::FromImage($bmp)
+$hdc = $g.GetHdc(); [P]::PrintWindow($hw, $hdc, 2); $g.ReleaseHdc($hdc)
+```
+
+The player draws its own answer: each window shows `★ YOU (<id>)` plus a labelled capsule
+per remote player, and a Server Status panel carrying Players, Enemies and the
+Nakama/Gateway/GameServer/PostgreSQL/Redis states. Reading three screenshots settles the
+whole table at once — including `Predict … err 0.000`, which is the reconciliation error
+and the one number that says prediction and server authority agree.
 
 ### CI/CD (GitHub Actions)
 - `.github/workflows/unity-build.yml` — thin dispatcher delegating to `unity-build-workflows` submodule pipeline

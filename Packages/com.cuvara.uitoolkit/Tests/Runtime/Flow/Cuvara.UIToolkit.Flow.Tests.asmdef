@@ -1,0 +1,26 @@
+{
+  "name": "Cuvara.UIToolkit.Flow.Tests",
+  "rootNamespace": "Cuvara.UIToolkit.Flow.Tests",
+  "references": [
+    "Cuvara.UIToolkit",
+    "VContainer",
+    "Cuvara.UIToolkit.VContainer",
+    "Cuvara.UIToolkit.TestSupport",
+    "UniTask",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
