@@ -5,6 +5,18 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`UXML-CODEGEN.md` documents a batchmode limitation** found while verifying 0.3.0 on
+  a real Editor (6000.3.9f1): a `-batchmode -quit` session that starts with compile
+  errors exits before the asset import step (exit code still 0), so the auto-regen
+  postprocessor never runs in it — after an element rename breaks consuming code,
+  batchmode cannot regenerate its way out. The doc lists the recovery paths (git
+  checkout of the `.g.cs`, the menu item in an interactive Editor, or
+  `Tools~/UxmlCodegenCli`). Docs only; no code change.
+
 ## [0.3.0] - 2026-09-03
 
 ### Added
