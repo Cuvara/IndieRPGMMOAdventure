@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`com.cuvara.uitoolkit` bumped to 0.4.0 — hybrid data-binding convention.** Unity 6
+  runtime data binding is now allowed inside the package's MVP screens, strictly as a
+  View-internal detail behind the existing `IView` interfaces: a new `BindableViewModel`
+  base (notify-on-real-change is mandatory — a non-notifying source is version-polled
+  every UI update), the EcsHud sample retrofitted as the reference hybrid screen
+  (`Root.dataSource` + `SetBinding`, `nameof` paths, `BindingMode.ToTarget`, UXML enrolled
+  in the codegen), and `Documentation~/HYBRID-DATA-BINDING.md` with the per-screen
+  decision table. Commands and navigation stay on `ScreenSubscriptions`; see the package
+  changelog for detail.
+
 - **Content pipeline** — item definitions now come from the game server at runtime instead
   of being something the client would ship in its build (ADR-19). The client half lives in
   `com.cuvara.netcode` as `Cuvara.Netcode.Content`, with a `Content Pipeline` sample scene
