@@ -169,6 +169,30 @@ no timestamp, output is UTF-8 without BOM with `\n` newlines. Regenerating from 
 input is byte-identical; that byte-identity is both the Editor's loop guard and CI's
 drift check.
 
+## Known limitation — batchmode sessions with compile errors do not regenerate
+
+Renaming an element in an enrolled UXML regenerates its `.uxml.g.cs`, and any code still
+using the old property name stops compiling. That compile error is the desired signal —
+but it changes what a **batchmode** session can do afterwards. A `-batchmode -quit`
+session that *starts* with compile errors logs `Scripts have compiler errors.` and exits
+**before the asset import step**, so no `AssetPostprocessor` — this one included — ever
+runs in it, and the process still exits 0. Verified on 6000.3.9f1 (2026-09-03): the
+reverted UXML produced no import line in the log and the generated file was left stale.
+
+Consequences:
+
+- Reverting the UXML from that state does **not** regenerate the old bindings via
+  batchmode. Recover with any of: `git checkout` the `.uxml.g.cs`, the
+  **Assets → Cuvara → Generate UXML Bindings** menu item in an interactive Editor
+  (an interactive session imports assets before compiling, so it self-heals), or
+  `Tools~/UxmlCodegenCli` from the shell — the CLI compiles the generator core directly
+  and does not care about the project's compile state.
+- A CI job that opens Unity in batchmode expecting a regeneration must check the log for
+  import lines and for `Scripts have compiler errors.` — the exit code alone proves
+  nothing.
+- Keep committed `.uxml.g.cs` files in sync with the code that consumes them (the drift
+  workflow enforces the UXML side of this), so batchmode never starts dirty.
+
 ## Layout
 
 | Piece | Where |
