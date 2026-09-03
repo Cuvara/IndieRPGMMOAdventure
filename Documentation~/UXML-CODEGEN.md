@@ -203,7 +203,7 @@ Consequences:
 | Drift CLI | `Tools~/UxmlCodegenCli/` — compiles `Editor/Codegen/Core/` with plain `dotnet` |
 | Generator tests (string fixtures, also run under plain `dotnet`) | `Tests/Editor/UxmlBindingGeneratorTests.cs` |
 | `Require` + generated-class tests | `Tests/Runtime/RequireQueryTests.cs`, `Tests/Runtime/GeneratedConfirmPopupTests.cs` |
-| Enrolled example, checked by CI | `Tests/Runtime/ConfirmPopup.uxml` + `Tests/Runtime/Generated/ConfirmPopup.uxml.g.cs` |
+| Enrolled examples, checked by CI | `Tests/Runtime/ConfirmPopup.uxml` + `Tests/Runtime/Generated/ConfirmPopup.uxml.g.cs`; `Samples~/EcsHud/VitalsView.uxml` + its `Generated/VitalsView.uxml.g.cs` (the partial-view half of the hybrid data-binding sample — see `HYBRID-DATA-BINDING.md`) |
 
 The core stays Unity-free so the CLI can compile it — a `UnityEngine` using anywhere under
 `Editor/Codegen/Core/` breaks the drift workflow's build, which is the enforcement.
