@@ -5,7 +5,42 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-09-03
+
+### Added
+
+- **Hybrid data-binding convention** — Unity 6 runtime data binding
+  (`DataBinding`/`INotifyBindablePropertyChanged`/`[CreateProperty]`) is now allowed, as a
+  **View-internal implementation detail behind the existing `IView` interfaces**, for
+  data-heavy screens. The MVP core is untouched; commands, clicks and navigation stay on
+  `ScreenSubscriptions`; every binding is `BindingMode.ToTarget` with a `nameof` path
+  (stringly UXML `<Bindings>` discouraged). Convention, walkthrough, testing story and a
+  per-screen decision table: `Documentation~/HYBRID-DATA-BINDING.md`.
+- **`BindableViewModel`** (`Runtime/ViewModel/`, namespace `Cuvara.UIToolkit.ViewModel`).
+  The notifying base a binding source must derive from: `Set<T>(ref field, value)` guards
+  with `EqualityComparer<T>.Default`, raises `propertyChanged` with the
+  `[CallerMemberName]` property name only on real change, and returns whether anything
+  changed. Notifying is mandatory because a non-notifying `DataBinding` source is
+  version-polled by the binding system on every UI update — per-frame work the package's
+  "update on data change, not per frame" contract forbids. Stays plain C#: testable with
+  NUnit alone, no panel.
+- **EcsHud sample retrofitted as the reference hybrid screen.** The imperative
+  `Render(caption, fraction)` path is gone: the sink writes properties on a
+  `[CreateProperty]`-annotated `VitalsHudViewModel`, and `VitalsView.Bind` assigns
+  `Root.dataSource` and wires the label and bar once via `SetBinding` (the
+  fraction→`StyleLength` conversion is a converter on the binding, so UI Toolkit types
+  never leak above the View). The `adapter → ViewModel → View` layering and the ECS rule
+  are unchanged — nothing in `Runtime/Ecs/` moved. The sample's UXML (renamed
+  `VitalsView.uxml` so the generated class matches the view) is now **enrolled in the
+  UXML codegen**: `Generated/VitalsView.uxml.g.cs` is the other half of the partial View
+  and is drift-checked by CI alongside the test fixture.
+- **Tests**: `Tests/Runtime/ViewModel/BindableViewModelTests.cs` (plain C# — raise with
+  correct name via `[CallerMemberName]`, silence on equal values including null→null,
+  same-reference and equal-but-distinct strings, return-value semantics, value and
+  reference types; verified under plain `dotnet` as well) and
+  `BindableViewModelBindingTests.cs` (`[UnityTest]` on a live `UIDocument` — a `Set()`
+  reaches a bound `Label` and a converter-driven `style.width` through the real binding
+  system, with no `Render` call).
 
 ### Changed
 
