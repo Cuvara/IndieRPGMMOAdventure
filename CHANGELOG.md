@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`com.rpgmmo.shared-gamelogic` bumped to `sgl-v0.3.1`** in both `manifest.json` and
+  `packages-lock.json` (both files, because the lock is what resolves). 0.3.1 names the
+  out-of-range attack rejection as the interned constant `CombatLogic.OutOfRangeRejection`
+  (rpg-mmo-server#249 follow-up); the message text is unchanged (`target out of range`),
+  and the client's golden vectors assert only that prefix, so no client fixture changed.
+
 - **`com.rpgmmo.shared-gamelogic` bumped to `sgl-v0.2.1`** in both `manifest.json` and
   `packages-lock.json`, for the new `Shared.GameLogic.Content` namespace. Both files, because
   the lock is what resolves — a manifest-only bump silently keeps the old commit.

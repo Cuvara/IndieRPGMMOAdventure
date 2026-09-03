@@ -25,7 +25,7 @@
     "com.cysharp.unitask": "2.5.10",
     "com.heroiclabs.nakama-unity": "3.9.0",
     "com.ivanmurzak.unity.mcp": "0.87.0",
-    "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.3.0",
+    "com.rpgmmo.shared-gamelogic": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.3.1",
     "com.unity.addressables": "2.8.1",
     "com.unity.ai.navigation": "2.0.10",
     "com.unity.burst": "1.8.30",
