@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`com.cuvara.uitoolkit` bumped to 0.4.0 — hybrid data-binding convention.** Unity 6
+  runtime data binding is now allowed inside the package's MVP screens, strictly as a
+  View-internal detail behind the existing `IView` interfaces: a new `BindableViewModel`
+  base (notify-on-real-change is mandatory — a non-notifying source is version-polled
+  every UI update), the EcsHud sample retrofitted as the reference hybrid screen
+  (`Root.dataSource` + `SetBinding`, `nameof` paths, `BindingMode.ToTarget`, UXML enrolled
+  in the codegen), and `Documentation~/HYBRID-DATA-BINDING.md` with the per-screen
+  decision table. Commands and navigation stay on `ScreenSubscriptions`; see the package
+  changelog for detail.
+
 - **Content pipeline** — item definitions now come from the game server at runtime instead
   of being something the client would ship in its build (ADR-19). The client half lives in
   `com.cuvara.netcode` as `Cuvara.Netcode.Content`, with a `Content Pipeline` sample scene
@@ -16,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `com.cuvara.netcode` bumped to **0.17.0** for the new public namespace and sample.
 
 ### Changed
+
+- **`com.rpgmmo.shared-gamelogic` bumped to `sgl-v0.3.1`** in both `manifest.json` and
+  `packages-lock.json` (both files, because the lock is what resolves). 0.3.1 names the
+  out-of-range attack rejection as the interned constant `CombatLogic.OutOfRangeRejection`
+  (rpg-mmo-server#249 follow-up); the message text is unchanged (`target out of range`),
+  and the client's golden vectors assert only that prefix, so no client fixture changed.
 
 - **`com.rpgmmo.shared-gamelogic` bumped to `sgl-v0.2.1`** in both `manifest.json` and
   `packages-lock.json`, for the new `Shared.GameLogic.Content` namespace. Both files, because

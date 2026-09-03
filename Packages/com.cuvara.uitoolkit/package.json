@@ -1,6 +1,6 @@
 {
   "name": "com.cuvara.uitoolkit",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "displayName": "Cuvara UI Toolkit",
   "description": "A standalone UI Toolkit screen layer: view lifecycle, layer/surface parenting into a UIDocument, list/grid/multi-template collection adapters, safe-area and panel-scale utilities, a back-navigation event source, and an optional DOTS/ECS presentation adapter. It owns its own contracts and depends on no UI framework of its own — a host binds it to whatever screen flow it already has.",
   "unity": "6000.3",
@@ -41,7 +41,7 @@
     },
     {
       "displayName": "ECS HUD",
-      "description": "A UXML health bar driven from a DOTS/ECS component through the presentation adapter: an unmanaged component carries the values, a main-thread SystemBase converts them to a ViewModel on change, and a Presenter renders it through an IView. ECS never touches the visual tree. Requires com.unity.entities.",
+      "description": "A UXML health bar driven from a DOTS/ECS component through the presentation adapter, and the reference hybrid data-binding screen: an unmanaged component carries the values, a main-thread SystemBase converts them to a ViewModel on change, the Presenter writes notifying properties on a BindableViewModel, and the View binds them once with SetBinding (ToTarget, nameof paths). ECS never touches the visual tree. Requires com.unity.entities.",
       "path": "Samples~/EcsHud"
     },
     {

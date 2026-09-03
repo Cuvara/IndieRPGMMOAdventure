@@ -119,14 +119,45 @@ public sealed class AddressablesVisualTreeAssetLoader : IVisualTreeAssetLoader
 |---|---|
 | `Runtime/Core/` | `IViewLayer`, `IViewSurface`, `IUIToolkitView`, `IVisualTreeAssetLoader`, `IPresenterInstantiator` |
 | `Runtime/View/` | `BaseUIToolkitView`, `UIToolkitViewFactory`, `VisualElementViewLayer` |
+| `Runtime/ViewModel/` | `BindableViewModel` — the notifying base for hybrid data-binding ViewModels |
 | `Runtime/Managers/` | `RootUIDocument` and the default three-layer `RootUIDocument.uxml` |
 | `Runtime/Collections/` | list, grid and multi-template adapters + item view/presenter bases |
-| `Runtime/Utilities/` | `SafeAreaElement`, `SafeAreaCalculator`, `PanelScaleRatio` |
+| `Runtime/Utilities/` | `SafeAreaElement`, `SafeAreaCalculator`, `PanelScaleRatio`, `Require<T>` |
 | `Runtime/Input/` | back-navigation event source |
 | `Runtime/Ecs/` | DOTS/ECS presentation adapter — optional, needs `com.unity.entities` |
+| `Editor/Codegen/` | UXML → typed view codegen (menu + auto-regen); `Core/` is Unity-free |
+| `Tools~/UxmlCodegenCli/` | plain-`dotnet` CI drift check over the committed generated bindings |
 | `Samples~/NotificationPopup/` | the smallest complete screen, host-free |
-| `Samples~/EcsHud/` | a HUD driven from ECS, through the adapter |
+| `Samples~/EcsHud/` | a HUD driven from ECS, through the adapter — and the reference hybrid data-binding screen |
 | `Tests/` | PlayMode tests (113) — they need a live panel, which EditMode has not got |
+
+## Typed queries and UXML codegen
+
+`root.Require<Label>("popup-title")` is `Q<T>` that throws a precise
+`InvalidOperationException` instead of returning null — the element name, the expected
+type and the root searched under, in the message.
+
+On top of it sits a codegen: enroll a UXML once via
+**Assets/Cuvara/Generate UXML Bindings** and a `partial` class with one typed property per
+named element plus an `AssignQueries(root)` appears in `Generated/` beside it, regenerated
+automatically on every save (opt-in — only enrolled files are ever touched) and
+byte-checked against its UXML in CI by `Tools~/UxmlCodegenCli`. Your half of the partial
+picks the base type and calls `AssignQueries` in the constructor. The full workflow — a
+`ConfirmPopup` end to end, the naming/namespace conventions, the failure rules —
+is in [Documentation~/UXML-CODEGEN.md](Documentation~/UXML-CODEGEN.md).
+
+## Hybrid data binding
+
+For data-heavy screens, Unity 6's runtime data binding is allowed — as a **View-internal
+implementation detail** behind the existing `IView` interfaces, never above them. The
+View assigns `Root.dataSource` and wires elements with C# `SetBinding` (`nameof` paths,
+`BindingMode.ToTarget`); the Presenter writes plain properties on a
+`BindableViewModel` (`Runtime/ViewModel/`) and never learns binding exists. Commands,
+clicks and navigation stay on `ScreenSubscriptions`; and **a binding source must
+notify** — a non-notifying source is version-polled by the binding system on every UI
+update, which is the per-frame work this package forbids. The full convention, the
+EcsHud walkthrough, the testing story and a per-screen decision table:
+[Documentation~/HYBRID-DATA-BINDING.md](Documentation~/HYBRID-DATA-BINDING.md).
 
 ## DOTS / ECS
 

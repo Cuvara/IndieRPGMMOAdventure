@@ -5,7 +5,91 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-09-03
+
+### Added
+
+- **Hybrid data-binding convention** — Unity 6 runtime data binding
+  (`DataBinding`/`INotifyBindablePropertyChanged`/`[CreateProperty]`) is now allowed, as a
+  **View-internal implementation detail behind the existing `IView` interfaces**, for
+  data-heavy screens. The MVP core is untouched; commands, clicks and navigation stay on
+  `ScreenSubscriptions`; every binding is `BindingMode.ToTarget` with a `nameof` path
+  (stringly UXML `<Bindings>` discouraged). Convention, walkthrough, testing story and a
+  per-screen decision table: `Documentation~/HYBRID-DATA-BINDING.md`.
+- **`BindableViewModel`** (`Runtime/ViewModel/`, namespace `Cuvara.UIToolkit.ViewModel`).
+  The notifying base a binding source must derive from: `Set<T>(ref field, value)` guards
+  with `EqualityComparer<T>.Default`, raises `propertyChanged` with the
+  `[CallerMemberName]` property name only on real change, and returns whether anything
+  changed. Notifying is mandatory because a non-notifying `DataBinding` source is
+  version-polled by the binding system on every UI update — per-frame work the package's
+  "update on data change, not per frame" contract forbids. Stays plain C#: testable with
+  NUnit alone, no panel.
+- **EcsHud sample retrofitted as the reference hybrid screen.** The imperative
+  `Render(caption, fraction)` path is gone: the sink writes properties on a
+  `[CreateProperty]`-annotated `VitalsHudViewModel`, and `VitalsView.Bind` assigns
+  `Root.dataSource` and wires the label and bar once via `SetBinding` (the
+  fraction→`StyleLength` conversion is a converter on the binding, so UI Toolkit types
+  never leak above the View). The `adapter → ViewModel → View` layering and the ECS rule
+  are unchanged — nothing in `Runtime/Ecs/` moved. The sample's UXML (renamed
+  `VitalsView.uxml` so the generated class matches the view) is now **enrolled in the
+  UXML codegen**: `Generated/VitalsView.uxml.g.cs` is the other half of the partial View
+  and is drift-checked by CI alongside the test fixture.
+- **Tests**: `Tests/Runtime/ViewModel/BindableViewModelTests.cs` (plain C# — raise with
+  correct name via `[CallerMemberName]`, silence on equal values including null→null,
+  same-reference and equal-but-distinct strings, return-value semantics, value and
+  reference types; verified under plain `dotnet` as well) and
+  `BindableViewModelBindingTests.cs` (`[UnityTest]` on a live `UIDocument` — a `Set()`
+  reaches a bound `Label` and a converter-driven `style.width` through the real binding
+  system, with no `Render` call).
+
+### Changed
+
+- **`UXML-CODEGEN.md` documents a batchmode limitation** found while verifying 0.3.0 on
+  a real Editor (6000.3.9f1): a `-batchmode -quit` session that starts with compile
+  errors exits before the asset import step (exit code still 0), so the auto-regen
+  postprocessor never runs in it — after an element rename breaks consuming code,
+  batchmode cannot regenerate its way out. The doc lists the recovery paths (git
+  checkout of the `.g.cs`, the menu item in an interactive Editor, or
+  `Tools~/UxmlCodegenCli`). Docs only; no code change.
+
+## [0.3.0] - 2026-09-03
+
+### Added
+
+- **`Require<T>` query extension** (`Runtime/Utilities/VisualElementQueryExtensions.cs`).
+  `root.Require<Label>("popup-title")` wraps `Q<T>` and throws `InvalidOperationException`
+  naming the missing element, the expected type and the root searched under — a UXML edit
+  that breaks a binding now fails at bind time with a message, not as a
+  `NullReferenceException` later.
+- **UXML → typed view codegen** (`Editor/Codegen/`, new `Cuvara.UIToolkit.Editor`
+  assembly). Parses a `.uxml` as plain XML and generates
+  `<uxml-dir>/Generated/<Name>.uxml.g.cs`: a `partial`, base-less class with one typed
+  property per named element (PascalCase from kebab-case; unknown/custom tags fall back to
+  `VisualElement` with a comment naming the tag) and an `AssignQueries(VisualElement root)`
+  resolving each through `Require<T>`. Three layers:
+  - **pure core** in `Editor/Codegen/Core/` — string in, string out, deliberately
+    Unity-free so it compiles outside Unity;
+  - **enrollment menu** — `Assets/Cuvara/Generate UXML Bindings` on selected `.uxml`
+    assets does the first generation;
+  - **auto-regen postprocessor** — regenerates on `.uxml` import ONLY when the generated
+    file already exists (opt-in gate), and skips writing (and refreshing) when the fresh
+    content is byte-identical (loop guard).
+  Duplicate names, PascalCase collisions (`popup-title` vs `popupTitle`) and a property
+  colliding with the class name fail generation with a message listing the offenders.
+  Output is deterministic — document order, no timestamps, UTF-8 no BOM, `\n`.
+  Namespace convention (`.uxml-namespace` override → nearest asmdef `rootNamespace` →
+  `UxmlBindings`) and the full workflow: `Documentation~/UXML-CODEGEN.md`.
+- **CI drift check** (`Tools~/UxmlCodegenCli/` — Unity ignores `~` folders). A plain
+  `dotnet run` console project compiling the same pure-core sources; scans roots for
+  enrolled UXML, regenerates in memory, byte-compares with the committed file and exits
+  non-zero listing drifted files. Wired into the consuming repo's
+  `.github/workflows/uxml-codegen-drift.yml`.
+- **Tests**: `Tests/Editor/UxmlBindingGeneratorTests.cs` (string fixtures — properties and
+  types, unknown-tag fallback, template skipping, duplicate/collision errors,
+  kebab→Pascal edge cases, determinism, document order; also runnable under plain
+  `dotnet`), `Tests/Runtime/RequireQueryTests.cs`, and an enrolled
+  `Tests/Runtime/ConfirmPopup.uxml` whose committed generated class is exercised by
+  `GeneratedConfirmPopupTests` and drift-checked by CI.
 
 ### Fixed
 
