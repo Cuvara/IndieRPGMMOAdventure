@@ -1,0 +1,35 @@
+name: UXML Codegen Drift
+
+# Committed Generated/<Name>.uxml.g.cs files must match what the codegen produces from
+# their .uxml. The check compiles the codegen's pure core (no Unity) with plain dotnet,
+# regenerates every enrolled UXML in memory and byte-compares — see
+# Packages/com.cuvara.uitoolkit/Documentation~/UXML-CODEGEN.md.
+#
+# Standalone on purpose: no Unity license, no unity-build-workflows involvement.
+
+on:
+  pull_request:
+    paths:
+      - "**/*.uxml"
+      - "**/*.uxml.g.cs"
+      - "Packages/com.cuvara.uitoolkit/Editor/Codegen/**"
+      - "Packages/com.cuvara.uitoolkit/Tools~/UxmlCodegenCli/**"
+      - ".github/workflows/uxml-codegen-drift.yml"
+  workflow_dispatch:
+
+jobs:
+  drift:
+    name: Check generated UXML bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        # No submodules: the check only needs the uitoolkit package and Assets, both in-tree.
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Run drift check
+        run: |
+          dotnet run --project Packages/com.cuvara.uitoolkit/Tools~/UxmlCodegenCli/UxmlCodegenCli.csproj \
+            -- Packages/com.cuvara.uitoolkit Assets

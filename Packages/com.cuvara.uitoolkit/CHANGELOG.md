@@ -5,7 +5,44 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-03
+
+### Added
+
+- **`Require<T>` query extension** (`Runtime/Utilities/VisualElementQueryExtensions.cs`).
+  `root.Require<Label>("popup-title")` wraps `Q<T>` and throws `InvalidOperationException`
+  naming the missing element, the expected type and the root searched under — a UXML edit
+  that breaks a binding now fails at bind time with a message, not as a
+  `NullReferenceException` later.
+- **UXML → typed view codegen** (`Editor/Codegen/`, new `Cuvara.UIToolkit.Editor`
+  assembly). Parses a `.uxml` as plain XML and generates
+  `<uxml-dir>/Generated/<Name>.uxml.g.cs`: a `partial`, base-less class with one typed
+  property per named element (PascalCase from kebab-case; unknown/custom tags fall back to
+  `VisualElement` with a comment naming the tag) and an `AssignQueries(VisualElement root)`
+  resolving each through `Require<T>`. Three layers:
+  - **pure core** in `Editor/Codegen/Core/` — string in, string out, deliberately
+    Unity-free so it compiles outside Unity;
+  - **enrollment menu** — `Assets/Cuvara/Generate UXML Bindings` on selected `.uxml`
+    assets does the first generation;
+  - **auto-regen postprocessor** — regenerates on `.uxml` import ONLY when the generated
+    file already exists (opt-in gate), and skips writing (and refreshing) when the fresh
+    content is byte-identical (loop guard).
+  Duplicate names, PascalCase collisions (`popup-title` vs `popupTitle`) and a property
+  colliding with the class name fail generation with a message listing the offenders.
+  Output is deterministic — document order, no timestamps, UTF-8 no BOM, `\n`.
+  Namespace convention (`.uxml-namespace` override → nearest asmdef `rootNamespace` →
+  `UxmlBindings`) and the full workflow: `Documentation~/UXML-CODEGEN.md`.
+- **CI drift check** (`Tools~/UxmlCodegenCli/` — Unity ignores `~` folders). A plain
+  `dotnet run` console project compiling the same pure-core sources; scans roots for
+  enrolled UXML, regenerates in memory, byte-compares with the committed file and exits
+  non-zero listing drifted files. Wired into the consuming repo's
+  `.github/workflows/uxml-codegen-drift.yml`.
+- **Tests**: `Tests/Editor/UxmlBindingGeneratorTests.cs` (string fixtures — properties and
+  types, unknown-tag fallback, template skipping, duplicate/collision errors,
+  kebab→Pascal edge cases, determinism, document order; also runnable under plain
+  `dotnet`), `Tests/Runtime/RequireQueryTests.cs`, and an enrolled
+  `Tests/Runtime/ConfirmPopup.uxml` whose committed generated class is exercised by
+  `GeneratedConfirmPopupTests` and drift-checked by CI.
 
 ### Fixed
 
