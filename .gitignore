@@ -97,6 +97,13 @@ UnityEntitlementLicense.xml
 /Tools/**/bin/
 /Tools/**/obj/
 
+# Same deal for the uitoolkit package's drift-check CLI: a hand-written dotnet
+# project under a ~ folder Unity never imports. Keep the project file, ignore
+# its build output.
+!/Packages/com.cuvara.uitoolkit/Tools~/**/*.csproj
+/Packages/com.cuvara.uitoolkit/Tools~/**/bin/
+/Packages/com.cuvara.uitoolkit/Tools~/**/obj/
+
 # Written by Claude Code when a project MCP server is accepted. The URL it holds
 # is machine-local — a localhost port plus a per-install id — so a committed copy
 # points every other clone at an endpoint that does not exist there.

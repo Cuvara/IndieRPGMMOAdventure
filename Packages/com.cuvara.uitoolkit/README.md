@@ -121,12 +121,29 @@ public sealed class AddressablesVisualTreeAssetLoader : IVisualTreeAssetLoader
 | `Runtime/View/` | `BaseUIToolkitView`, `UIToolkitViewFactory`, `VisualElementViewLayer` |
 | `Runtime/Managers/` | `RootUIDocument` and the default three-layer `RootUIDocument.uxml` |
 | `Runtime/Collections/` | list, grid and multi-template adapters + item view/presenter bases |
-| `Runtime/Utilities/` | `SafeAreaElement`, `SafeAreaCalculator`, `PanelScaleRatio` |
+| `Runtime/Utilities/` | `SafeAreaElement`, `SafeAreaCalculator`, `PanelScaleRatio`, `Require<T>` |
 | `Runtime/Input/` | back-navigation event source |
 | `Runtime/Ecs/` | DOTS/ECS presentation adapter — optional, needs `com.unity.entities` |
+| `Editor/Codegen/` | UXML → typed view codegen (menu + auto-regen); `Core/` is Unity-free |
+| `Tools~/UxmlCodegenCli/` | plain-`dotnet` CI drift check over the committed generated bindings |
 | `Samples~/NotificationPopup/` | the smallest complete screen, host-free |
 | `Samples~/EcsHud/` | a HUD driven from ECS, through the adapter |
 | `Tests/` | PlayMode tests (113) — they need a live panel, which EditMode has not got |
+
+## Typed queries and UXML codegen
+
+`root.Require<Label>("popup-title")` is `Q<T>` that throws a precise
+`InvalidOperationException` instead of returning null — the element name, the expected
+type and the root searched under, in the message.
+
+On top of it sits a codegen: enroll a UXML once via
+**Assets/Cuvara/Generate UXML Bindings** and a `partial` class with one typed property per
+named element plus an `AssignQueries(root)` appears in `Generated/` beside it, regenerated
+automatically on every save (opt-in — only enrolled files are ever touched) and
+byte-checked against its UXML in CI by `Tools~/UxmlCodegenCli`. Your half of the partial
+picks the base type and calls `AssignQueries` in the constructor. The full workflow — a
+`ConfirmPopup` end to end, the naming/namespace conventions, the failure rules —
+is in [Documentation~/UXML-CODEGEN.md](Documentation~/UXML-CODEGEN.md).
 
 ## DOTS / ECS
 

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The CI drift check for UXML codegen. Lives under Tools~/ because Unity ignores
+       folders ending in '~', so nothing here is ever imported as an asset or compiled
+       into the project. It compiles the SAME pure-core sources the Editor integration
+       uses (Editor/Codegen/Core/ — Unity-free by contract), regenerates every enrolled
+       UXML in memory and byte-compares against the committed Generated/ file. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Cuvara.UIToolkit.Codegen.Cli</RootNamespace>
+    <AssemblyName>UxmlCodegenCli</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Editor/Codegen/Core/*.cs" LinkBase="Core" />
+  </ItemGroup>
+
+</Project>
