@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **DOTS stress benchmark** (`Assets/Scripts/Benchmark/Dots/`, CLI flags
+  `-stress-pure` / `-stress-hybrid`) — measures cuvara.dots simulation + Unity.Physics
+  throughput at entity tiers 100 → 100M. Pure DOTS mode (no GameObjects) hits 1,246 FPS
+  at 1K entities and 81 FPS at 1M with 300K physics bodies. Hybrid mode caps views at
+  50K GameObjects and runs simulation-only beyond. Memory guard auto-skips tiers that
+  would exceed 60% system RAM. Batch entity creation in 64K chunks avoids single large
+  allocations. Reusable `StressBenchmark` sample added to `com.cuvara.dots` v0.25.0.
+- **`WireConformance` tool fixed** — source paths updated from `Scripts.Net.*` to
+  `Cuvara.Netcode.*` (code moved to package), Google.Protobuf NuGet reference added.
+  All 49 wire format conformance tests pass.
+- **`com.cuvara.dots` bumped to v0.25.0** — `StressBenchmark` sample entry added to
+  `package.json` (pure DOTS + hybrid modes, documented in `Samples~/StressBenchmark/README.md`).
+
+### Fixed
+
+- **Unity batch test runner** — `-quit` flag before `-runTests` caused Unity to exit
+  before the test runner started. Removing `-quit` allows all 540 EditMode tests to
+  execute (539 pass, 1 false failure from MCP socket noise in `NetworkEntityViewTests`).
 - **Device benchmark harness** (`Assets/Scripts/Benchmark/`, `Assets/Scenes/DeviceBenchmark.unity`,
   runbook in `docs/DEVICE-BENCHMARK.md`) — the project's first instrument for client
   performance on real hardware. `BenchmarkRecorder` (new `NDC.Scripts.Benchmark` assembly;
