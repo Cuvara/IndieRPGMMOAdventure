@@ -6,6 +6,9 @@
     using UnityEngine;
     using VContainer;
     using VContainer.Unity;
+#if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER
+    using Scripts.DI.Dots;
+#endif
 
     public class GameLifetimeScope : LifetimeScope
     {
@@ -14,6 +17,15 @@
             base.Configure(builder);
             builder.RegisterNetworking();
             builder.RegisterNakama();
+
+#if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER
+            // The DOTS view layer, its MessagePipe brokers, the simulation-model seam and the
+            // session predictor. Root-scoped for the same reason RegisterNetworking is: pools and
+            // registry outlive scene loads. The per-scene half is DotsWorldBridge, injected by
+            // MainSceneScope. viewRoot is this scope's transform so spawned views live and die
+            // with the container that owns their pools.
+            builder.RegisterDots(viewRoot: transform);
+#endif
 
             // Registering the services is not enough to inject them. VContainer only
             // injects components it has been told about, so without this NetworkBootstrap
