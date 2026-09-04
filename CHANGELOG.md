@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`com.cuvara.dots` wired into the client** — the package was installed but orphaned
+  (in `manifest.json` and `testables`, referenced by nothing). `GameLifetimeScope` now calls
+  a new `RegisterDots()` (`Assets/Scripts/DI/Dots/`): MessagePipe brokers for the package's
+  five messages **before** `RegisterDotsViews` (its adapters resolve `IPublisher<T>` at
+  container build), a `PrimitiveViewAssetProvider` fallback as `IViewAssetProvider` (the
+  container registers no GameFoundation `IAssetsManager`/`IObjectPoolManager`, so
+  `RegisterGameFoundationViewProvisioning()` cannot be used yet), `RegisterSimulationModel()`
+  (binds `SharedGameLogicSimulation`, authoritative), and the session's single
+  `LocalMovePredictor` built from `GameConstants`. `MainSceneScope` injects a new
+  `DotsWorldBridge` scene component that hangs the netcode adapter (`DotsEntityView` +
+  `DotsNetcodeBootstrap`) and prediction driver (`DotsPredictionBootstrap`) off the same
+  container-owned `NetworkClient`, ticks `WorldViewBinder` per frame (no-predictor overload —
+  required with the DOTS adapter), and tears down in the documented order. `NDC.Scripts.DI`
+  gains the package/MessagePipe/Entities references and its own `versionDefines`
+  (`CUVARA_DOTS`, `CUVARA_DOTS_VCONTAINER`, `CUVARA_DOTS_MESSAGEPIPE`, `CUVARA_NETCODE`,
+  `CUVARA_SHARED_GAMELOGIC`) — defines do not flow from package asmdefs. See
+  `docs/DOTS-WIRING.md` for the shape, the provider decision, and the traps respected.
+
+- **First Assets-side test assembly** — `Assets/Tests/Editor` (`NDC.Tests.Editor`, EditMode):
+  `DotsRegistrationTests` proves the container builds through `RegisterDots` and resolves the
+  view layer, MessagePipe-backed publishers, the authoritative simulation model and a single
+  predictor instance; `DotsBootstrapLifecycleTests` proves the bridge's install/uninstall
+  sequence creates the expected group tree and singletons, is idempotent, and leaks neither
+  singletons nor the catalog blob.
+
 - **`com.cuvara.uitoolkit` bumped to 0.4.0 — hybrid data-binding convention.** Unity 6
   runtime data binding is now allowed inside the package's MVP screens, strictly as a
   View-internal detail behind the existing `IView` interfaces: a new `BindableViewModel`

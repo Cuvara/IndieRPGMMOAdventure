@@ -1,32 +1,37 @@
 {
-    "name": "NDC.Scripts.DI",
-    "rootNamespace": "DI",
+    "name": "NDC.Tests.Editor",
+    "rootNamespace": "Tests.Editor",
     "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "NDC.Scripts.DI",
         "VContainer",
-        "Scripts",
-        "NDC.Scripts",
-        "Cuvara.Netcode.Runtime",
-        "Cuvara.Netcode.Bootstrap",
-        "Cuvara.Netcode.DI",
-        "NDC.Scripts.Nakama",
+        "MessagePipe",
+        "MessagePipe.VContainer",
         "Cuvara.DOTS.Runtime",
         "Cuvara.DOTS.DI",
         "Cuvara.DOTS.Netcode",
         "Cuvara.DOTS.Netcode.Prediction",
-        "MessagePipe",
-        "MessagePipe.VContainer",
+        "Cuvara.Netcode.Runtime",
         "Shared.GameLogic",
         "Unity.Entities",
         "Unity.Collections",
-        "Unity.InputSystem"
+        "Unity.Mathematics",
+        "Unity.Transforms"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
     "versionDefines": [
         {
             "name": "com.cuvara.dots",
