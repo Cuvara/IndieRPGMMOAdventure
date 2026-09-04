@@ -50,7 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is not in the enabled set but exists on disk is now prepended for that build only, so
   harness-only scenes (`DeviceBenchmark.unity`) can boot without ever being enabled or
   shipped. A path matching neither remains a hard error.
-
 - **DOTS → UI Toolkit HUD bridge** (`Assets/Scripts/UI/Hud/`, docs in `docs/HUD-BRIDGE.md`) —
   ECS world data now reaches a UI Toolkit HUD through the packages' existing seams, with the
   packages staying mutually unaware. A game-side `HudStateSystem` (`SimulationSystemGroup`)
