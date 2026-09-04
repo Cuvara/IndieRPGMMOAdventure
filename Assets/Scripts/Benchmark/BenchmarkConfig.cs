@@ -34,7 +34,7 @@ namespace Scripts.Benchmark
                  "actual frame rate; a run that outpaces it is truncated and flagged, never " +
                  "grown mid-run (growing would allocate while measuring GC).")]
         [Min(30)]
-        public int MaxExpectedFps = 240;
+        public int MaxExpectedFps = 1000;
 
         [Tooltip("Quit the player when the run completes. Ignored in the Editor. Turn off " +
                  "for interactive inspection; adb-driven runs want it on.")]

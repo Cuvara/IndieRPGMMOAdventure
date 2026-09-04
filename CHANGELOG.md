@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   player-remote, deterministic seed) and drives the real `HudView` binding path with a
   synthetic once-per-second `HudViewModel` feed. EditMode tests cover the aggregation math
   and argument parsing; a PlayMode test covers the recorder over a live player loop.
+  `MaxExpectedFps` defaults to 1000 (was 240): the first live run on desktop hit 595 fps
+  uncapped and truncated the buffer at 24k samples, silently losing the 1000-entity phase —
+  the sizing bound must cover an uncapped desktop run, not a device target.
 - **`-bench` any-scene activation** (`BenchmarkBootstrap`) — launching any player with
   `-bench` spawns a `DontDestroyOnLoad` recorder into whatever scene boots (the netcode
   DOTS sample included) with `-bench-duration`/`-bench-warmup`/`-bench-label` control.

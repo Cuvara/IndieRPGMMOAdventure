@@ -171,7 +171,7 @@ One object; the aggregates are the product, the memory series is the leak detect
   phase is a leak; `EntityCount` confirms the ramp actually happened (expect roughly
   250/500/1000 plus a handful of system entities).
 - **`Truncated`** — `true` means the device outran the preallocated sample buffer
-  (`MaxExpectedFps`, default 240) and aggregates cover only the captured prefix. Raise
+  (`MaxExpectedFps`, default 1000) and aggregates cover only the captured prefix. Raise
   `MaxExpectedFps` and rerun.
 
 The recorder itself allocates nothing per frame in steady state (preallocated struct

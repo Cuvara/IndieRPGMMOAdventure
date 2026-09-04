@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   WarmupSeconds: 10
   SettleSeconds: 2
-  MaxExpectedFps: 240
+  MaxExpectedFps: 1000
   AutoQuit: 1
   Phases:
   - Label: ramp-250
