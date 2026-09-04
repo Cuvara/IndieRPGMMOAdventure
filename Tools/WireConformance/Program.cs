@@ -1,10 +1,10 @@
 using System;
 using System.Text;
-using Scripts.Net.Codec;
-using Scripts.Net.Protocol;
-using Scripts.Net.Protocol.Messages;
-using Scripts.Net.Snapshot;
-using Scripts.Net.Transport;
+using Cuvara.Netcode.Codec;
+using Cuvara.Netcode.Protocol;
+using Cuvara.Netcode.Protocol.Messages;
+using Cuvara.Netcode.Snapshot;
+using Cuvara.Netcode.Transport;
 
 internal static class Program
 {
@@ -124,7 +124,7 @@ internal static class Program
         var quoted = codec.EncodeBody(MsgType.Auth, new AuthRequest { Token = awkward });
         var quotedFrame = codec.DecodeBody(quoted);
         Check(quotedFrame.Type == MsgType.Auth, "escaped payload parses back as an envelope");
-        var reparsed = Scripts.Net.Json.JsonParser.Parse(Encoding.UTF8.GetString(quoted));
+        var reparsed = Cuvara.Netcode.Json.JsonParser.Parse(Encoding.UTF8.GetString(quoted));
         reparsed.TryGetMember("payload", out var quotedPayload);
         Check(quotedPayload.GetString("token") == awkward,
             "quotes, backslashes, control characters and non-ASCII round-trip");

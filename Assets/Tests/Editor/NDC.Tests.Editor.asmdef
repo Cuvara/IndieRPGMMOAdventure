@@ -1,0 +1,73 @@
+{
+    "name": "NDC.Tests.Editor",
+    "rootNamespace": "Tests.Editor",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "NDC.Scripts.DI",
+        "NDC.Scripts.UI",
+        "NDC.Scripts.Benchmark",
+        "NDC.Scripts.UI.Hud.Ecs",
+        "Cuvara.UIToolkit",
+        "Cuvara.UIToolkit.Ecs",
+        "VContainer",
+        "MessagePipe",
+        "MessagePipe.VContainer",
+        "Cuvara.DOTS.Runtime",
+        "Cuvara.DOTS.DI",
+        "Cuvara.DOTS.Netcode",
+        "Cuvara.DOTS.Netcode.Prediction",
+        "Cuvara.Netcode.Runtime",
+        "Shared.GameLogic",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Unity.Transforms"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.dots",
+            "expression": "",
+            "define": "CUVARA_DOTS"
+        },
+        {
+            "name": "jp.hadashikick.vcontainer",
+            "expression": "",
+            "define": "CUVARA_DOTS_VCONTAINER"
+        },
+        {
+            "name": "com.cysharp.messagepipe",
+            "expression": "",
+            "define": "CUVARA_DOTS_MESSAGEPIPE"
+        },
+        {
+            "name": "com.cuvara.netcode",
+            "expression": "0.19.0",
+            "define": "CUVARA_NETCODE"
+        },
+        {
+            "name": "com.rpgmmo.shared-gamelogic",
+            "expression": "",
+            "define": "CUVARA_SHARED_GAMELOGIC"
+        },
+        {
+            "name": "com.unity.entities",
+            "expression": "",
+            "define": "CUVARA_UITOOLKIT_ENTITIES"
+        }
+    ],
+    "noEngineReferences": false
+}

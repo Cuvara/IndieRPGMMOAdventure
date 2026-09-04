@@ -9,6 +9,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **DOTS stress benchmark** (`Assets/Scripts/Benchmark/Dots/`, CLI flags
+  `-stress-pure` / `-stress-hybrid`) — measures cuvara.dots simulation + Unity.Physics
+  throughput at entity tiers 100 → 100M. Pure DOTS mode (no GameObjects) hits 1,246 FPS
+  at 1K entities and 81 FPS at 1M with 300K physics bodies. Hybrid mode caps views at
+  50K GameObjects and runs simulation-only beyond. Memory guard auto-skips tiers that
+  would exceed 60% system RAM. Batch entity creation in 64K chunks avoids single large
+  allocations. Reusable `StressBenchmark` sample added to `com.cuvara.dots` v0.25.0.
+- **`WireConformance` tool fixed** — source paths updated from `Scripts.Net.*` to
+  `Cuvara.Netcode.*` (code moved to package), Google.Protobuf NuGet reference added.
+  All 49 wire format conformance tests pass.
+- **`com.cuvara.dots` bumped to v0.25.0** — `StressBenchmark` sample entry added to
+  `package.json` (pure DOTS + hybrid modes, documented in `Samples~/StressBenchmark/README.md`).
+
+### Fixed
+
+- **Unity batch test runner** — `-quit` flag before `-runTests` caused Unity to exit
+  before the test runner started. Removing `-quit` allows all 540 EditMode tests to
+  execute (539 pass, 1 false failure from MCP socket noise in `NetworkEntityViewTests`).
+- **Device benchmark harness** (`Assets/Scripts/Benchmark/`, `Assets/Scenes/DeviceBenchmark.unity`,
+  runbook in `docs/DEVICE-BENCHMARK.md`) — the project's first instrument for client
+  performance on real hardware. `BenchmarkRecorder` (new `NDC.Scripts.Benchmark` assembly;
+  no netcode reference, works in any scene) samples per-frame main-thread CPU time, GC
+  bytes/allocations per frame, GC collections, and per-second memory + DOTS entity count via
+  `ProfilerRecorder` counters verified against this editor version's player binary, into
+  preallocated struct buffers (zero steady-state managed allocation — it measures GC, it
+  must not feed it). It aggregates mean/median/p95/p99 frame ms, steady-state allocs/frame,
+  and GC spike counts — warm-up window and per-phase settle windows excluded — then writes
+  one JSON to `persistentDataPath`, logs it on a single `[BENCH-RESULT]` line for
+  `adb logcat -s Unity`, and quits. Configurable via a `BenchmarkConfig` asset (the only
+  surface that reaches an Android device) with `-bench*` command-line overrides on desktop.
+  The benchmark scene ramps 250 → 500 → 1000 moving view-backed entities through the game's
+  own `RegisterDots()` container (new `NDC.Scripts.Benchmark.Workload` assembly; HybridViews
+  sample spawning pattern over the package's Burst simulation systems, half mob / half
+  player-remote, deterministic seed) and drives the real `HudView` binding path with a
+  synthetic once-per-second `HudViewModel` feed. EditMode tests cover the aggregation math
+  and argument parsing; a PlayMode test covers the recorder over a live player loop.
+  `MaxExpectedFps` defaults to 1000 (was 240): the first live run on desktop hit 595 fps
+  uncapped and truncated the buffer at 24k samples, silently losing the 1000-entity phase —
+  the sizing bound must cover an uncapped desktop run, not a device target.
+- **`-bench` any-scene activation** (`BenchmarkBootstrap`) — launching any player with
+  `-bench` spawns a `DontDestroyOnLoad` recorder into whatever scene boots (the netcode
+  DOTS sample included) with `-bench-duration`/`-bench-warmup`/`-bench-label` control.
+  Default mode is rolling windows: a labeled, window-indexed JSON is written and logged at
+  every window boundary while the player keeps running (a connected netcode client must
+  stay up); `-bench-quit` opts into single-window-then-quit. The recorder still reads only
+  engine/profiler counters — no netcode reference.
+- **`PlayerBuilder -development` flag** — adds `BuildOptions.Development` for builds that
+  need profiler counters in the player (the device benchmark is the consumer). Absent, the
+  build is unchanged.
+
+### Changed
+
+- **`Tools/run-clients.sh` gained `-- ARGS...` passthrough** — everything after `--` is
+  handed to every player instance verbatim, so the multi-client harness can launch with
+  the `-bench` flags (or any future per-instance player flag) without editing the script.
+- **`PlayerBuilder -bootScene` accepts scenes outside Build Settings** — a boot scene that
+  is not in the enabled set but exists on disk is now prepended for that build only, so
+  harness-only scenes (`DeviceBenchmark.unity`) can boot without ever being enabled or
+  shipped. A path matching neither remains a hard error.
+- **DOTS → UI Toolkit HUD bridge** (`Assets/Scripts/UI/Hud/`, docs in `docs/HUD-BRIDGE.md`) —
+  ECS world data now reaches a UI Toolkit HUD through the packages' existing seams, with the
+  packages staying mutually unaware. A game-side `HudStateSystem` (`SimulationSystemGroup`)
+  aggregates the netcode mirrors (`NetworkEntity` + `NetworkEntityState` + `LocalTransform`)
+  into a `HudState` singleton — local player hp/max-hp, 0.1-quantized position, player and
+  entity counts — writing only on change so the uitoolkit bridge's chunk change filter stays
+  exact. `HudBridgeSystem` (an `EcsViewModelBridge<HudState, HudSnapshot>` in
+  `PresentationSystemGroup`) converts to a boundary snapshot; `HudPresenter` (the
+  `IViewModelSink`) writes a `HudViewModel : BindableViewModel`; `HudView` binds the enrolled
+  `HudView.uxml` via `SetBinding` + `nameof` + `Require<T>` (committed
+  `Generated/HudView.uxml.g.cs`, hybrid data-binding convention). `HudWorldBridge` hosts the
+  `UIDocument` and joins the lifetimes (`EcsSinkRegistration`; teardown sink → systems → view)
+  — a lightweight host because no uitoolkit screen flow exists yet. New gated assembly
+  `NDC.Scripts.UI.Hud.Ecs` (`CUVARA_DOTS` + `CUVARA_NETCODE` + `CUVARA_UITOOLKIT_ENTITIES`);
+  the ViewModel/View halves compile with no ECS installed. Tests: EditMode
+  (`HudViewModelTests`, `HudSnapshotTests`, `HudPresenterTests`, `HudEcsLifecycleTests`
+  against a throwaway world) and the project's first PlayMode assembly
+  (`Assets/Tests/Runtime`, `HudViewBindingTests` on a live `UIDocument`).
+- **`com.cuvara.dots` wired into the client** — the package was installed but orphaned
+  (in `manifest.json` and `testables`, referenced by nothing). `GameLifetimeScope` now calls
+  a new `RegisterDots()` (`Assets/Scripts/DI/Dots/`): MessagePipe brokers for the package's
+  five messages **before** `RegisterDotsViews` (its adapters resolve `IPublisher<T>` at
+  container build), a `PrimitiveViewAssetProvider` fallback as `IViewAssetProvider` (the
+  container registers no GameFoundation `IAssetsManager`/`IObjectPoolManager`, so
+  `RegisterGameFoundationViewProvisioning()` cannot be used yet), `RegisterSimulationModel()`
+  (binds `SharedGameLogicSimulation`, authoritative), and the session's single
+  `LocalMovePredictor` built from `GameConstants`. `MainSceneScope` injects a new
+  `DotsWorldBridge` scene component that hangs the netcode adapter (`DotsEntityView` +
+  `DotsNetcodeBootstrap`) and prediction driver (`DotsPredictionBootstrap`) off the same
+  container-owned `NetworkClient`, ticks `WorldViewBinder` per frame (no-predictor overload —
+  required with the DOTS adapter), and tears down in the documented order. `NDC.Scripts.DI`
+  gains the package/MessagePipe/Entities references and its own `versionDefines`
+  (`CUVARA_DOTS`, `CUVARA_DOTS_VCONTAINER`, `CUVARA_DOTS_MESSAGEPIPE`, `CUVARA_NETCODE`,
+  `CUVARA_SHARED_GAMELOGIC`) — defines do not flow from package asmdefs. See
+  `docs/DOTS-WIRING.md` for the shape, the provider decision, and the traps respected.
+
+- **First Assets-side test assembly** — `Assets/Tests/Editor` (`NDC.Tests.Editor`, EditMode):
+  `DotsRegistrationTests` proves the container builds through `RegisterDots` and resolves the
+  view layer, MessagePipe-backed publishers, the authoritative simulation model and a single
+  predictor instance; `DotsBootstrapLifecycleTests` proves the bridge's install/uninstall
+  sequence creates the expected group tree and singletons, is idempotent, and leaks neither
+  singletons nor the catalog blob.
+
 - **`com.cuvara.uitoolkit` bumped to 0.4.0 — hybrid data-binding convention.** Unity 6
   runtime data binding is now allowed inside the package's MVP screens, strictly as a
   View-internal detail behind the existing `IView` interfaces: a new `BindableViewModel`

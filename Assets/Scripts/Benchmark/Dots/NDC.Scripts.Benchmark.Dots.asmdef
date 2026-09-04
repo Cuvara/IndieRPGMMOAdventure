@@ -1,0 +1,34 @@
+{
+    "name": "NDC.Scripts.Benchmark.Dots",
+    "rootNamespace": "Scripts.Benchmark.Dots",
+    "references": [
+        "NDC.Scripts.Benchmark",
+        "Cuvara.DOTS.Runtime",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Unity.Transforms",
+        "Unity.Burst",
+        "Unity.Physics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.dots",
+            "expression": "",
+            "define": "CUVARA_DOTS"
+        },
+        {
+            "name": "com.unity.physics",
+            "expression": "",
+            "define": "UNITY_PHYSICS"
+        }
+    ],
+    "noEngineReferences": false
+}
