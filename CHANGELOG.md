@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Device benchmark harness** (`Assets/Scripts/Benchmark/`, `Assets/Scenes/DeviceBenchmark.unity`,
+  runbook in `docs/DEVICE-BENCHMARK.md`) — the project's first instrument for client
+  performance on real hardware. `BenchmarkRecorder` (new `NDC.Scripts.Benchmark` assembly;
+  no netcode reference, works in any scene) samples per-frame main-thread CPU time, GC
+  bytes/allocations per frame, GC collections, and per-second memory + DOTS entity count via
+  `ProfilerRecorder` counters verified against this editor version's player binary, into
+  preallocated struct buffers (zero steady-state managed allocation — it measures GC, it
+  must not feed it). It aggregates mean/median/p95/p99 frame ms, steady-state allocs/frame,
+  and GC spike counts — warm-up window and per-phase settle windows excluded — then writes
+  one JSON to `persistentDataPath`, logs it on a single `[BENCH-RESULT]` line for
+  `adb logcat -s Unity`, and quits. Configurable via a `BenchmarkConfig` asset (the only
+  surface that reaches an Android device) with `-bench*` command-line overrides on desktop.
+  The benchmark scene ramps 250 → 500 → 1000 moving view-backed entities through the game's
+  own `RegisterDots()` container (new `NDC.Scripts.Benchmark.Workload` assembly; HybridViews
+  sample spawning pattern over the package's Burst simulation systems, half mob / half
+  player-remote, deterministic seed) and drives the real `HudView` binding path with a
+  synthetic once-per-second `HudViewModel` feed. EditMode tests cover the aggregation math
+  and argument parsing; a PlayMode test covers the recorder over a live player loop.
+  `MaxExpectedFps` defaults to 1000 (was 240): the first live run on desktop hit 595 fps
+  uncapped and truncated the buffer at 24k samples, silently losing the 1000-entity phase —
+  the sizing bound must cover an uncapped desktop run, not a device target.
+- **`-bench` any-scene activation** (`BenchmarkBootstrap`) — launching any player with
+  `-bench` spawns a `DontDestroyOnLoad` recorder into whatever scene boots (the netcode
+  DOTS sample included) with `-bench-duration`/`-bench-warmup`/`-bench-label` control.
+  Default mode is rolling windows: a labeled, window-indexed JSON is written and logged at
+  every window boundary while the player keeps running (a connected netcode client must
+  stay up); `-bench-quit` opts into single-window-then-quit. The recorder still reads only
+  engine/profiler counters — no netcode reference.
+- **`PlayerBuilder -development` flag** — adds `BuildOptions.Development` for builds that
+  need profiler counters in the player (the device benchmark is the consumer). Absent, the
+  build is unchanged.
+
+### Changed
+
+- **`Tools/run-clients.sh` gained `-- ARGS...` passthrough** — everything after `--` is
+  handed to every player instance verbatim, so the multi-client harness can launch with
+  the `-bench` flags (or any future per-instance player flag) without editing the script.
+- **`PlayerBuilder -bootScene` accepts scenes outside Build Settings** — a boot scene that
+  is not in the enabled set but exists on disk is now prepended for that build only, so
+  harness-only scenes (`DeviceBenchmark.unity`) can boot without ever being enabled or
+  shipped. A path matching neither remains a hard error.
+
 - **DOTS → UI Toolkit HUD bridge** (`Assets/Scripts/UI/Hud/`, docs in `docs/HUD-BRIDGE.md`) —
   ECS world data now reaches a UI Toolkit HUD through the packages' existing seams, with the
   packages staying mutually unaware. A game-side `HudStateSystem` (`SimulationSystemGroup`)

@@ -5,6 +5,7 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "NDC.Scripts.UI",
+        "NDC.Scripts.Benchmark",
         "Cuvara.UIToolkit",
         "UniTask"
     ],

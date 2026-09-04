@@ -6,6 +6,7 @@
         "UnityEditor.TestRunner",
         "NDC.Scripts.DI",
         "NDC.Scripts.UI",
+        "NDC.Scripts.Benchmark",
         "NDC.Scripts.UI.Hud.Ecs",
         "Cuvara.UIToolkit",
         "Cuvara.UIToolkit.Ecs",
