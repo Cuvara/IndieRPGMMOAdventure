@@ -84,6 +84,19 @@ namespace Tests.Runtime
             for (var i = 0; i < 3; ++i) await UniTask.Yield();
         }
 
+        /// <summary>
+        /// Asserts the health fill's width is a percent Length of the given value within
+        /// float tolerance. The converter computes fraction * 100f in float, so an exact
+        /// Length.Equals comparison fails on representation error (0.3f * 100f is not 30f
+        /// bit-for-bit) while both sides still PRINT as "30%".
+        /// </summary>
+        private static void AssertWidthPercent(HudView hudView, float expected)
+        {
+            var width = hudView.HudHealthFill.style.width.value;
+            Assert.That(width.unit, Is.EqualTo(LengthUnit.Percent));
+            Assert.That(width.value, Is.EqualTo(expected).Within(0.001f));
+        }
+
         [UnityTest]
         public IEnumerator PropertyWrites_ReachTheBoundElements_WithNoRenderCall() => UniTask.ToCoroutine(async () =>
         {
@@ -101,7 +114,7 @@ namespace Tests.Runtime
             await Settle();
 
             Assert.That(hudView.HudHealthCaption.text, Is.EqualTo("57/100"));
-            Assert.That(hudView.HudHealthFill.style.width.value, Is.EqualTo(Length.Percent(57f)));
+            AssertWidthPercent(hudView, 57f);
             Assert.That(hudView.HudPosition.text, Is.EqualTo("(12.3, 45.7)"));
             Assert.That(hudView.HudPlayers.text, Is.EqualTo("Players 3"));
             Assert.That(hudView.HudEntities.text, Is.EqualTo("Entities 5"));
@@ -112,7 +125,7 @@ namespace Tests.Runtime
             await Settle();
 
             Assert.That(hudView.HudHealthCaption.text, Is.EqualTo("30/100"), "a Set() on the ViewModel must reach the element through the binding system");
-            Assert.That(hudView.HudHealthFill.style.width.value, Is.EqualTo(Length.Percent(30f)));
+            AssertWidthPercent(hudView, 30f);
             Assert.That(hudView.HudPlayers.text, Is.EqualTo("Players 2"));
         });
 
