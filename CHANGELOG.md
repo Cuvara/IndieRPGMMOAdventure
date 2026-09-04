@@ -27,12 +27,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   player-remote, deterministic seed) and drives the real `HudView` binding path with a
   synthetic once-per-second `HudViewModel` feed. EditMode tests cover the aggregation math
   and argument parsing; a PlayMode test covers the recorder over a live player loop.
+- **`-bench` any-scene activation** (`BenchmarkBootstrap`) — launching any player with
+  `-bench` spawns a `DontDestroyOnLoad` recorder into whatever scene boots (the netcode
+  DOTS sample included) with `-bench-duration`/`-bench-warmup`/`-bench-label` control.
+  Default mode is rolling windows: a labeled, window-indexed JSON is written and logged at
+  every window boundary while the player keeps running (a connected netcode client must
+  stay up); `-bench-quit` opts into single-window-then-quit. The recorder still reads only
+  engine/profiler counters — no netcode reference.
 - **`PlayerBuilder -development` flag** — adds `BuildOptions.Development` for builds that
   need profiler counters in the player (the device benchmark is the consumer). Absent, the
   build is unchanged.
 
 ### Changed
 
+- **`Tools/run-clients.sh` gained `-- ARGS...` passthrough** — everything after `--` is
+  handed to every player instance verbatim, so the multi-client harness can launch with
+  the `-bench` flags (or any future per-instance player flag) without editing the script.
 - **`PlayerBuilder -bootScene` accepts scenes outside Build Settings** — a boot scene that
   is not in the enabled set but exists on disk is now prepended for that build only, so
   harness-only scenes (`DeviceBenchmark.unity`) can boot without ever being enabled or

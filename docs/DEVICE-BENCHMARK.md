@@ -30,6 +30,63 @@ Two surfaces, deliberately:
   `-benchNoQuit`. Malformed values fall back to the asset; a partially malformed
   `-benchPhases` falls back **whole** (a half-parsed ramp would measure the wrong workload).
 
+## `-bench`: measuring ANY scene, netcode sample included
+
+The recorder is not welded to the benchmark scene. Launch any player with `-bench` and
+`BenchmarkBootstrap` (`[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]`) spawns a
+`DontDestroyOnLoad` recorder into whatever scene boots — no scene edit, no special build.
+The recorder still reads only engine/profiler counters (it has no netcode reference); it
+just happens to be running while the netcode client does its real work, which is exactly
+what makes it the instrument for "what does a connected client cost".
+
+| Flag | Meaning | Default |
+|---|---|---|
+| `-bench` | activate; without it nothing happens | — |
+| `-bench-duration N` | seconds per measurement window | 60 |
+| `-bench-warmup N` | warm-up before the first window (excluded from aggregates) | 10 |
+| `-bench-label <text>` | run identity, echoed as `Label` in the JSON | empty |
+| `-bench-quit` | write ONE window, then `Application.Quit()` | off |
+
+**Without `-bench-quit` the recorder rolls**: at every window boundary it writes a JSON
+(`benchmark-<scene>-<timestamp>-w<index>.json`) and logs the `[BENCH-RESULT]` line, then
+keeps sampling — the player stays up, which a connected netcode client requires. Each
+report carries `WindowIndex` (0-based; warm-up applies to window 0 only) and `Label`.
+With `-bench-quit` the single report has no `-w` suffix and `WindowIndex` 0. If the booted
+scene already hosts a recorder (the DeviceBenchmark scene), `-bench` defers to it — two
+recorders would double-sample.
+
+The measured multiplayer run this exists for — three Windows players against a k3d
+backend, per the CLAUDE.md multi-client harness, one JSON per instance:
+
+```bash
+Tools/run-clients.sh --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
+  --count 3 --gateway-host <host> --gateway-port <port> \
+  --nakama-host <host> --nakama-port <port> --nakama-key <key> \
+  --map map_01 --status-url http://<gs-host>:<gs-port>/status --tile \
+  -- -bench -bench-duration 60 -bench-label mc
+```
+
+(`run-clients.sh` passes everything after `--` to every instance verbatim — added
+alongside this harness.) All three instances share one `persistentDataPath`
+(`%USERPROFILE%\AppData\LocalLow\DefaultCompany\IndieRPGMMOAdventure\`); the label is part
+of the filename (`benchmark-<scene>-<label>-<timestamp>[-w<i>].json`) and the script
+staggers the launches, which keeps same-second collisions out of practice — but the
+launcher hands every instance the SAME label, so **the authoritative per-instance channel
+is each instance's own player log** (`--log-dir`, default `/tmp/cuvara-clients`), where
+every window appears as a `[BENCH-RESULT]` line:
+
+```bash
+for f in /tmp/cuvara-clients/mc-<stamp>-*.log; do
+  grep -o '\[BENCH-RESULT\] .*' "$f" | sed 's/^\[BENCH-RESULT\] //' > "${f%.log}-bench.jsonl"
+done
+```
+
+For file-level separation instead, launch the three by hand with distinct
+`-bench-label mc-1|mc-2|mc-3`. `Label` +
+`StartedAtUtc` + `WindowIndex` make the three streams collatable. Frame-rate caveat:
+`FrameRateCap` defaults to uncapped, so pin comparable runs with `-targetFps` if the three
+machines differ.
+
 ## Building the Android APK
 
 From WSL, Windows paths, per the CLAUDE.md build notes (`-buildOutput` because WSL env vars

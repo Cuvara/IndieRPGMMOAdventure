@@ -11,6 +11,13 @@ namespace Scripts.Benchmark
     [Serializable]
     public sealed class BenchmarkReport
     {
+        // ---- run identity
+        /// <summary>Caller-chosen run label (<c>-bench-label</c>); empty for scene-driven runs.</summary>
+        public string Label;
+
+        /// <summary>Rolling-window index (0-based); always 0 for a single-shot run.</summary>
+        public int WindowIndex;
+
         // ---- environment: enough to never wonder "which phone was this?" again.
         public string Scene;
         public string DeviceModel;

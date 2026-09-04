@@ -30,6 +30,24 @@ namespace Tests.Editor
         }
 
         [Test]
+        public void ResolveString_ReadsValueAndFallsBack()
+        {
+            Assert.That(BenchmarkArgs.ResolveString(new[] { "-bench-label", "run-a" }, BenchmarkArgs.LabelFlag, ""), Is.EqualTo("run-a"));
+            Assert.That(BenchmarkArgs.ResolveString(new[] { "-bench-label" }, BenchmarkArgs.LabelFlag, "x"), Is.EqualTo("x"));
+            Assert.That(BenchmarkArgs.ResolveString(null, BenchmarkArgs.LabelFlag, "x"), Is.EqualTo("x"));
+        }
+
+        [Test]
+        public void BenchFlag_DoesNotMatchItsOwnPrefixedFlags()
+        {
+            // "-bench-duration 60" alone must NOT activate the bootstrap: matching is exact
+            // equality, never prefix.
+            Assert.That(BenchmarkArgs.HasFlag(new[] { "-bench-duration", "60" }, BenchmarkArgs.BenchFlag), Is.False);
+            Assert.That(BenchmarkArgs.HasFlag(new[] { "-bench" }, BenchmarkArgs.BenchFlag), Is.True);
+            Assert.That(BenchmarkArgs.ResolveFloat(new[] { "-bench", "-bench-duration", "45" }, BenchmarkArgs.DurationFlag, 60f), Is.EqualTo(45f));
+        }
+
+        [Test]
         public void ResolvePhases_ParsesRampSpec()
         {
             var phases = BenchmarkArgs.ResolvePhases(

@@ -58,7 +58,17 @@ namespace Scripts.Benchmark
         private float warmupSeconds;
         private float settleSeconds;
         private bool autoQuit;
+        private bool rolling;
+        private string runLabel = string.Empty;
         private float totalSeconds;
+        private bool hasExternalPlan;
+        private BenchmarkPhase[] externalPhases;
+        private float externalWarmupSeconds;
+        private float externalSettleSeconds;
+        private bool externalAutoQuit;
+        private bool externalRolling;
+        private string externalLabel;
+        private int windowIndex;
 
         // ---- preallocated sampling state
         private FrameSample[] frameSamples;
@@ -101,24 +111,77 @@ namespace Scripts.Benchmark
                 ? this.phases[this.currentPhase].EntityCount
                 : 0;
 
-        /// <summary>True once the report has been written.</summary>
+        /// <summary>True once at least one window's report has been written.</summary>
         public bool RunCompleted { get; private set; }
 
-        /// <summary>The final report JSON; null until <see cref="RunCompleted"/>.</summary>
+        /// <summary>The most recent window's report JSON; null until <see cref="RunCompleted"/>.</summary>
         public string LastJson { get; private set; }
 
         /// <summary>Where the report file landed; null until <see cref="RunCompleted"/>.</summary>
         public string LastFilePath { get; private set; }
+
+        /// <summary>Rolling windows completed so far (0 during the first window).</summary>
+        public int WindowIndex => this.windowIndex;
+
+        /// <summary>
+        /// Programs the run before the component enables, bypassing the config asset and the
+        /// scene-recorder flags — the seam <see cref="BenchmarkBootstrap"/> (any-scene
+        /// <c>-bench</c> activation) and the PlayMode tests use. Call it on a disabled
+        /// component (add the component to an inactive GameObject, configure, activate);
+        /// calling it after <c>OnEnable</c> has run is an error because the buffers are
+        /// already sized to the old plan.
+        /// </summary>
+        /// <param name="rollingWindows">
+        /// When true the run never ends: each time the timeline completes, the report is
+        /// written and logged as usual (labeled with a window index) and sampling restarts
+        /// for the next window — the first window's warm-up is not repeated. For a recorder
+        /// riding along in a live scene (the netcode sample) whose process must stay up.
+        /// </param>
+        public void ApplyPlan(
+            BenchmarkPhase[] planPhases,
+            float planWarmupSeconds,
+            float planSettleSeconds,
+            bool planAutoQuit,
+            bool rollingWindows,
+            string label)
+        {
+            if (this.running)
+            {
+                throw new InvalidOperationException("[BenchmarkRecorder] ApplyPlan must run before the component enables.");
+            }
+
+            this.hasExternalPlan = true;
+            this.externalPhases = planPhases ?? Array.Empty<BenchmarkPhase>();
+            this.externalWarmupSeconds = planWarmupSeconds;
+            this.externalSettleSeconds = planSettleSeconds;
+            this.externalAutoQuit = planAutoQuit;
+            this.externalRolling = rollingWindows;
+            this.externalLabel = label ?? string.Empty;
+        }
 
         private void OnEnable()
         {
             var args = Environment.GetCommandLineArgs();
             var defaults = this.config != null ? this.config : ScriptableObject.CreateInstance<BenchmarkConfig>();
 
-            this.warmupSeconds = BenchmarkArgs.ResolveFloat(args, BenchmarkArgs.WarmupFlag, defaults.WarmupSeconds);
-            this.settleSeconds = BenchmarkArgs.ResolveFloat(args, BenchmarkArgs.SettleFlag, defaults.SettleSeconds);
-            this.phases = BenchmarkArgs.ResolvePhases(args, defaults.Phases ?? Array.Empty<BenchmarkPhase>());
-            this.autoQuit = defaults.AutoQuit && !BenchmarkArgs.HasFlag(args, BenchmarkArgs.NoQuitFlag);
+            if (this.hasExternalPlan)
+            {
+                this.warmupSeconds = this.externalWarmupSeconds;
+                this.settleSeconds = this.externalSettleSeconds;
+                this.phases = this.externalPhases;
+                this.autoQuit = this.externalAutoQuit;
+                this.rolling = this.externalRolling;
+                this.runLabel = this.externalLabel;
+            }
+            else
+            {
+                this.warmupSeconds = BenchmarkArgs.ResolveFloat(args, BenchmarkArgs.WarmupFlag, defaults.WarmupSeconds);
+                this.settleSeconds = BenchmarkArgs.ResolveFloat(args, BenchmarkArgs.SettleFlag, defaults.SettleSeconds);
+                this.phases = BenchmarkArgs.ResolvePhases(args, defaults.Phases ?? Array.Empty<BenchmarkPhase>());
+                this.autoQuit = defaults.AutoQuit && !BenchmarkArgs.HasFlag(args, BenchmarkArgs.NoQuitFlag);
+                this.rolling = false;
+                this.runLabel = string.Empty;
+            }
 
             this.totalSeconds = this.warmupSeconds;
             foreach (var phase in this.phases)
@@ -136,6 +199,7 @@ namespace Scripts.Benchmark
             this.currentPhase = -1;
             this.nextMemorySampleTime = 0f;
             this.truncated = false;
+            this.windowIndex = 0;
 
             if (this.config == null)
             {
@@ -160,7 +224,8 @@ namespace Scripts.Benchmark
 
             Debug.Log($"[BenchmarkRecorder] recording: warmup={this.warmupSeconds}s, " +
                       $"settle={this.settleSeconds}s, phases={this.phases.Length}, " +
-                      $"total={this.totalSeconds}s, bufferCapacity={capacity}, autoQuit={this.autoQuit}");
+                      $"total={this.totalSeconds}s, bufferCapacity={capacity}, " +
+                      $"autoQuit={this.autoQuit}, rolling={this.rolling}, label='{this.runLabel}'");
         }
 
         private void Update()
@@ -310,6 +375,8 @@ namespace Scripts.Benchmark
 
             return new BenchmarkReport
             {
+                Label = this.runLabel,
+                WindowIndex = this.windowIndex,
                 Scene = this.sceneName,
                 DeviceModel = SystemInfo.deviceModel,
                 OperatingSystem = SystemInfo.operatingSystem,
@@ -329,6 +396,21 @@ namespace Scripts.Benchmark
             };
         }
 
+        private static string SanitizeForFileName(string value)
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            var chars = value.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                if (Array.IndexOf(invalid, chars[i]) >= 0)
+                {
+                    chars[i] = '_';
+                }
+            }
+
+            return new string(chars);
+        }
+
         private void Finish(float elapsed)
         {
             this.running = false;
@@ -337,8 +419,17 @@ namespace Scripts.Benchmark
             this.LastJson = JsonUtility.ToJson(report, prettyPrint: false);
 
             var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            var windowSuffix = this.rolling ? $"-w{this.windowIndex}" : string.Empty;
+
+            // The label goes into the filename when present: several instances on one
+            // machine share persistentDataPath, and same scene + same second would
+            // otherwise clobber each other's reports.
+            var labelPart = string.IsNullOrEmpty(this.runLabel)
+                ? string.Empty
+                : $"-{SanitizeForFileName(this.runLabel)}";
             this.LastFilePath = Path.Combine(
-                Application.persistentDataPath, $"benchmark-{this.sceneName}-{timestamp}.json");
+                Application.persistentDataPath,
+                $"benchmark-{this.sceneName}{labelPart}-{timestamp}{windowSuffix}.json");
             try
             {
                 File.WriteAllText(this.LastFilePath, this.LastJson);
@@ -360,7 +451,40 @@ namespace Scripts.Benchmark
             if (this.autoQuit && !Application.isEditor)
             {
                 Application.Quit();
+                return;
             }
+
+            if (this.rolling)
+            {
+                this.BeginNextWindow();
+            }
+        }
+
+        /// <summary>
+        /// Rolls into the next measurement window: same buffers (already sized for the
+        /// longest window — the first, the only one carrying warm-up), fresh counters, no
+        /// repeated warm-up, and the scene name re-read because a DontDestroyOnLoad
+        /// recorder outlives scene loads.
+        /// </summary>
+        private void BeginNextWindow()
+        {
+            this.windowIndex++;
+            this.warmupSeconds = 0f;
+            this.totalSeconds = 0f;
+            foreach (var phase in this.phases)
+            {
+                this.totalSeconds += phase.Seconds;
+            }
+
+            this.frameCount = 0;
+            this.memoryCount = 0;
+            this.currentPhase = -1;
+            this.nextMemorySampleTime = 0f;
+            this.truncated = false;
+            Array.Clear(this.phaseStartTimes, 0, this.phaseStartTimes.Length);
+            this.sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            this.startTime = Time.realtimeSinceStartupAsDouble;
+            this.running = true;
         }
     }
 }

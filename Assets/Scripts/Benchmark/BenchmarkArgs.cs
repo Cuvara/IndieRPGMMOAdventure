@@ -16,11 +16,21 @@ namespace Scripts.Benchmark
     /// measurement run on a machine nobody is watching.
     /// <para>Flags:</para>
     /// <list type="bullet">
-    /// <item><c>-benchWarmup 15</c> — warm-up seconds.</item>
-    /// <item><c>-benchSettle 3</c> — per-phase settle seconds.</item>
+    /// <item><c>-benchWarmup 15</c> — warm-up seconds (scene-driven recorder).</item>
+    /// <item><c>-benchSettle 3</c> — per-phase settle seconds (scene-driven recorder).</item>
     /// <item><c>-benchPhases 250:30,500:30,1000:30</c> — ramp as count:seconds pairs.</item>
     /// <item><c>-benchNoQuit</c> — keep the player alive after the run.</item>
     /// </list>
+    /// <para>And the any-scene activation set, read by <see cref="BenchmarkBootstrap"/>:</para>
+    /// <list type="bullet">
+    /// <item><c>-bench</c> — spawn a recorder in whatever scene boots.</item>
+    /// <item><c>-bench-duration 60</c> — seconds per measurement window.</item>
+    /// <item><c>-bench-warmup 10</c> — warm-up before the first window.</item>
+    /// <item><c>-bench-label run-a</c> — run identification, echoed in the JSON.</item>
+    /// <item><c>-bench-quit</c> — quit after ONE window (default is rolling windows).</item>
+    /// </list>
+    /// <para>Flag matching is exact (case-insensitive equality), so <c>-bench</c> never
+    /// swallows <c>-bench-duration</c>.</para>
     /// </remarks>
     public static class BenchmarkArgs
     {
@@ -28,6 +38,12 @@ namespace Scripts.Benchmark
         public const string SettleFlag = "-benchSettle";
         public const string PhasesFlag = "-benchPhases";
         public const string NoQuitFlag = "-benchNoQuit";
+
+        public const string BenchFlag = "-bench";
+        public const string DurationFlag = "-bench-duration";
+        public const string BootWarmupFlag = "-bench-warmup";
+        public const string LabelFlag = "-bench-label";
+        public const string QuitFlag = "-bench-quit";
 
         /// <summary>Reads <c>flag value</c> as a float; <paramref name="fallback"/> when absent or malformed.</summary>
         public static float ResolveFloat(string[] args, string flag, float fallback)
@@ -38,6 +54,12 @@ namespace Scripts.Benchmark
                    parsed >= 0f
                 ? parsed
                 : fallback;
+        }
+
+        /// <summary>Reads <c>flag value</c> as a string; <paramref name="fallback"/> when absent.</summary>
+        public static string ResolveString(string[] args, string flag, string fallback)
+        {
+            return ResolveValue(args, flag) ?? fallback;
         }
 
         /// <summary>True when <paramref name="flag"/> appears anywhere in <paramref name="args"/>.</summary>
