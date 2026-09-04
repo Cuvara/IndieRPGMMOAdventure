@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **DOTS → UI Toolkit HUD bridge** (`Assets/Scripts/UI/Hud/`, docs in `docs/HUD-BRIDGE.md`) —
+  ECS world data now reaches a UI Toolkit HUD through the packages' existing seams, with the
+  packages staying mutually unaware. A game-side `HudStateSystem` (`SimulationSystemGroup`)
+  aggregates the netcode mirrors (`NetworkEntity` + `NetworkEntityState` + `LocalTransform`)
+  into a `HudState` singleton — local player hp/max-hp, 0.1-quantized position, player and
+  entity counts — writing only on change so the uitoolkit bridge's chunk change filter stays
+  exact. `HudBridgeSystem` (an `EcsViewModelBridge<HudState, HudSnapshot>` in
+  `PresentationSystemGroup`) converts to a boundary snapshot; `HudPresenter` (the
+  `IViewModelSink`) writes a `HudViewModel : BindableViewModel`; `HudView` binds the enrolled
+  `HudView.uxml` via `SetBinding` + `nameof` + `Require<T>` (committed
+  `Generated/HudView.uxml.g.cs`, hybrid data-binding convention). `HudWorldBridge` hosts the
+  `UIDocument` and joins the lifetimes (`EcsSinkRegistration`; teardown sink → systems → view)
+  — a lightweight host because no uitoolkit screen flow exists yet. New gated assembly
+  `NDC.Scripts.UI.Hud.Ecs` (`CUVARA_DOTS` + `CUVARA_NETCODE` + `CUVARA_UITOOLKIT_ENTITIES`);
+  the ViewModel/View halves compile with no ECS installed. Tests: EditMode
+  (`HudViewModelTests`, `HudSnapshotTests`, `HudPresenterTests`, `HudEcsLifecycleTests`
+  against a throwaway world) and the project's first PlayMode assembly
+  (`Assets/Tests/Runtime`, `HudViewBindingTests` on a live `UIDocument`).
 - **`com.cuvara.dots` wired into the client** — the package was installed but orphaned
   (in `manifest.json` and `testables`, referenced by nothing). `GameLifetimeScope` now calls
   a new `RegisterDots()` (`Assets/Scripts/DI/Dots/`): MessagePipe brokers for the package's

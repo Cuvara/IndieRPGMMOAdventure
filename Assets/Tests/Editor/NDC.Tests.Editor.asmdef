@@ -5,6 +5,10 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "NDC.Scripts.DI",
+        "NDC.Scripts.UI",
+        "NDC.Scripts.UI.Hud.Ecs",
+        "Cuvara.UIToolkit",
+        "Cuvara.UIToolkit.Ecs",
         "VContainer",
         "MessagePipe",
         "MessagePipe.VContainer",
@@ -57,6 +61,11 @@
             "name": "com.rpgmmo.shared-gamelogic",
             "expression": "",
             "define": "CUVARA_SHARED_GAMELOGIC"
+        },
+        {
+            "name": "com.unity.entities",
+            "expression": "",
+            "define": "CUVARA_UITOOLKIT_ENTITIES"
         }
     ],
     "noEngineReferences": false

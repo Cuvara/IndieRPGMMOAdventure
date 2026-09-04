@@ -77,8 +77,9 @@ degrades to absent code, not compile errors — the same contract the package ho
 - **Input backend**: this project runs Input System (new) only (`activeInputHandler: 1`), under
   which legacy `UnityEngine.Input` throws; the bridge reads `Keyboard.current` under
   `ENABLE_INPUT_SYSTEM` and falls back per define, same as the netcode DOTS sample.
-- **ECS never touches UI Toolkit** — no `com.cuvara.uitoolkit` bridge here; that is a separate
-  task (see `docs/UI-ARCHITECTURE.md`).
+- **ECS never touches UI Toolkit** — no `com.cuvara.uitoolkit` bridge here. The HUD side of
+  that bridge exists now and lives in `Assets/Scripts/UI/Hud/` — see `docs/HUD-BRIDGE.md`; the
+  contract itself is `docs/UI-ARCHITECTURE.md`.
 
 ## Tests
 
