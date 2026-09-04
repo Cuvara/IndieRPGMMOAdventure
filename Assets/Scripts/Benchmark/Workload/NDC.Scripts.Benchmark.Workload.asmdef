@@ -1,0 +1,36 @@
+{
+    "name": "NDC.Scripts.Benchmark.Workload",
+    "rootNamespace": "Scripts.Benchmark.Workload",
+    "references": [
+        "NDC.Scripts.Benchmark",
+        "NDC.Scripts.DI",
+        "NDC.Scripts.UI",
+        "Cuvara.UIToolkit",
+        "Cuvara.DOTS.Runtime",
+        "VContainer",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Unity.Transforms"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.dots",
+            "expression": "",
+            "define": "CUVARA_DOTS"
+        },
+        {
+            "name": "jp.hadashikick.vcontainer",
+            "expression": "",
+            "define": "CUVARA_DOTS_VCONTAINER"
+        }
+    ],
+    "noEngineReferences": false
+}

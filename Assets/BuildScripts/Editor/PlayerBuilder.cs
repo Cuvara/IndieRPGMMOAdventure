@@ -60,13 +60,23 @@ public static class PlayerBuilder
         Debug.Log($"[PlayerBuilder] Building {target} -> {locationPath} " +
                   $"({scenes.Length} scene(s))");
 
+        // -development: BuildOptions.Development, for runs that need profiler counters in
+        // the player — the device benchmark (docs/DEVICE-BENCHMARK.md) is the consumer.
+        // Absent, the build is exactly what it always was.
+        BuildOptions buildOptions = BuildOptions.None;
+        if (HasArg("-development"))
+        {
+            buildOptions |= BuildOptions.Development;
+            Debug.Log("[PlayerBuilder] -development set -> development build");
+        }
+
         var options = new BuildPlayerOptions
         {
             scenes = scenes,
             locationPathName = locationPath,
             target = target,
             targetGroup = BuildPipeline.GetBuildTargetGroup(target),
-            options = BuildOptions.None,
+            options = buildOptions,
         };
 
         BuildReport report = BuildPipeline.BuildPlayer(options);
@@ -94,9 +104,13 @@ public static class PlayerBuilder
     /// sample. Both scenes stay enabled and shipped; this flag picks which one starts, so the
     /// harness no longer needs the build settings edited (and committed) to work.
     ///
-    /// The value is matched against the exact scene path as it appears in Build Settings.
-    /// A path that is not in the enabled set is a hard error rather than a silent no-op:
-    /// silently building the wrong boot scene is the failure this flag exists to prevent.
+    /// The value is matched against the exact scene path as it appears in Build Settings. A
+    /// scene that is NOT in the enabled set but exists on disk is prepended for this build
+    /// only — that is how harness-only scenes (the device benchmark,
+    /// <c>docs/DEVICE-BENCHMARK.md</c>) boot without ever being enabled, and therefore without
+    /// ever shipping in a release build. A path that matches nothing at all is still a hard
+    /// error rather than a silent no-op: silently building the wrong boot scene is the failure
+    /// this flag exists to prevent.
     /// </remarks>
     private static string[] ApplyBootSceneOverride(string[] scenes, string bootScene)
     {
@@ -111,9 +125,20 @@ public static class PlayerBuilder
 
         if (index < 0)
         {
-            throw new Exception(
-                $"[PlayerBuilder] -bootScene '{bootScene}' is not an enabled scene in Build " +
-                $"Settings. Enabled scenes: {string.Join(", ", scenes)}");
+            if (!File.Exists(normalized))
+            {
+                throw new Exception(
+                    $"[PlayerBuilder] -bootScene '{bootScene}' is neither an enabled scene in " +
+                    $"Build Settings nor a scene file on disk. Enabled scenes: " +
+                    $"{string.Join(", ", scenes)}");
+            }
+
+            var prepended = new string[scenes.Length + 1];
+            prepended[0] = normalized;
+            Array.Copy(scenes, 0, prepended, 1, scenes.Length);
+            Debug.Log($"[PlayerBuilder] -bootScene '{normalized}' is not in Build Settings; " +
+                      "prepending it for this build only.");
+            return prepended;
         }
 
         if (index == 0)
@@ -160,6 +185,21 @@ public static class PlayerBuilder
         }
 
         return null;
+    }
+
+    /// <summary>True when <paramref name="flag"/> appears on the Editor's command line (valueless flag).</summary>
+    private static bool HasArg(string flag)
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (string.Equals(args[i], flag, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Optional env-driven Android configuration, used by the release-signing lane
