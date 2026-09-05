@@ -1,7 +1,7 @@
 {
   "$schema": "../unity-build-workflows/schemas/unity-build-config.schema.json",
   "projectName": "IndieRPGMMOAdventure",
-  "companyName": "DefaultCompany",
+  "companyName": "Cuvara",
   "productName": "IndieRPGMMOAdventure",
   "bundleVersion": "1.0.0",
   "buildNumberStrategy": "github_run_number",
@@ -30,7 +30,7 @@
   },
 
   "android": {
-    "applicationId": "com.UnityTechnologies.com.unity.template.urpblank",
+    "applicationId": "com.cuvara.indierpgmmo",
     "buildAppBundle": true,
     "minSdkVersion": 22,
     "targetSdkVersion": 34,

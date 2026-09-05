@@ -105,6 +105,13 @@ jobs:
           git clone --quiet --depth 1 --branch "${TAG}" "${UPSTREAM}" /tmp/upstream
           rm -rf /tmp/upstream/.git
 
+          # Normalize line endings to LF on both sides so CRLF/LF mismatches
+          # (upstream repos without .gitattributes on Windows) do not register as
+          # content drift. The check exists to catch real code divergence, not to
+          # enforce a line-ending policy on an external repo.
+          find /tmp/upstream -type f \( -name '*.cs' -o -name '*.json' -o -name '*.md' -o -name '*.asmdef' -o -name '*.yml' -o -name '*.yaml' -o -name '*.txt' -o -name '*.uss' -o -name '*.uxml' \) -exec sed -i 's/\r$//' {} +
+          find "${VENDOR_DIR}" -type f \( -name '*.cs' -o -name '*.json' -o -name '*.md' -o -name '*.asmdef' -o -name '*.yml' -o -name '*.yaml' -o -name '*.txt' -o -name '*.uss' -o -name '*.uxml' \) -exec sed -i 's/\r$//' {} +
+
           # Files the client intentionally adds on top of the package. Anything listed
           # here may exist ONLY in the vendored copy; it may not differ, because a
           # listed-and-modified file would let a real drift hide behind an exemption.
