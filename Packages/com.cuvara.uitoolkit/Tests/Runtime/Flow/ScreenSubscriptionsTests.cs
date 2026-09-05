@@ -254,6 +254,40 @@ namespace Cuvara.UIToolkit.Flow.Tests
 
         #endregion
 
+        #region OnFirstGeometry
+
+        [Test]
+        public void OnFirstGeometry_RegistersOneSubscription()
+        {
+            var subs    = new ScreenSubscriptions();
+            var element = new VisualElement();
+
+            subs.OnFirstGeometry(element, _ => { });
+
+            Assert.That(subs.LiveCount, Is.EqualTo(1));
+
+            subs.Dispose();
+            Assert.That(subs.LiveCount, Is.Zero);
+        }
+
+        [Test]
+        public void OnFirstGeometry_NullElementThrows()
+        {
+            var subs = new ScreenSubscriptions();
+
+            Assert.Throws<ArgumentNullException>(() => subs.OnFirstGeometry(null, _ => { }));
+        }
+
+        [Test]
+        public void OnFirstGeometry_NullCallbackThrows()
+        {
+            var subs = new ScreenSubscriptions();
+
+            Assert.Throws<ArgumentNullException>(() => subs.OnFirstGeometry(new VisualElement(), null));
+        }
+
+        #endregion
+
         #region Null arguments
 
         [Test]

@@ -1,6 +1,7 @@
 namespace Cuvara.UIToolkit.View
 {
     using System;
+    using System.Collections.Generic;
     using System.Linq;
     using System.Reflection;
     using Cuvara.UIToolkit.Core;
@@ -25,12 +26,24 @@ namespace Cuvara.UIToolkit.View
     public sealed class UIToolkitViewFactory
     {
         private readonly IVisualTreeAssetLoader loader;
+        private readonly Dictionary<string, VisualTreeAsset> cache = new();
 
         /// <summary>Builds views by loading their UXML through <paramref name="loader"/>.</summary>
         public UIToolkitViewFactory(IVisualTreeAssetLoader loader)
         {
             this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
         }
+
+        /// <summary>
+        /// Drops every cached <see cref="VisualTreeAsset"/>. Call on scene teardown.
+        /// </summary>
+        /// <remarks>
+        /// The cache holds assets, not views — <c>CloneTree</c> over a cached asset is
+        /// cheap, and the Addressables or <c>Resources</c> round trip is not. Clearing it
+        /// here means the navigator's <c>Dispose</c> is the single point that releases
+        /// everything the session accumulated.
+        /// </remarks>
+        public void ClearCache() { this.cache.Clear(); }
 
         /// <summary>Loads the UXML under <paramref name="key"/> and constructs <typeparamref name="TView"/> from it.</summary>
         public async UniTask<TView> CreateAsync<TView>(string key) where TView : IUIToolkitView
@@ -44,15 +57,16 @@ namespace Cuvara.UIToolkit.View
             if (viewType == null) throw new ArgumentNullException(nameof(viewType));
             if (string.IsNullOrEmpty(key)) throw new ArgumentException("A view key cannot be null or empty.", nameof(key));
 
-            var visualTreeAsset = await this.loader.LoadAsync(key);
-
-            if (visualTreeAsset == null)
+            if (!this.cache.TryGetValue(key, out var visualTreeAsset))
             {
-                // A loader that answers null rather than throwing is a real shape — a
-                // dictionary-backed one, say. Name the key here, because the alternative is
-                // an ArgumentNullException out of the constructor that says only
-                // "visualTreeAsset".
-                throw new InvalidOperationException($"The loader returned no {nameof(VisualTreeAsset)} for key '{key}'.");
+                visualTreeAsset = await this.loader.LoadAsync(key);
+
+                if (visualTreeAsset == null)
+                {
+                    throw new InvalidOperationException($"The loader returned no {nameof(VisualTreeAsset)} for key '{key}'.");
+                }
+
+                this.cache[key] = visualTreeAsset;
             }
 
             return Create(viewType, visualTreeAsset);

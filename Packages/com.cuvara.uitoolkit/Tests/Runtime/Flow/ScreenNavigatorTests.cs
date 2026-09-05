@@ -507,6 +507,59 @@ namespace Cuvara.UIToolkit.Flow.Tests
 
         #endregion
 
+        #region CloseOnTapOutside
+
+        [UnityTest]
+        public IEnumerator CloseOnTapOutside_ScrimIsInsertedInOverlayLayer() => UniTask.ToCoroutine(async () =>
+        {
+            this.registry.Register(typeof(TapOutsideModalPresenter), typeof(TestScreenView), ModalKey,
+                ScreenOptions.Modal | ScreenOptions.CloseOnTapOutside);
+            this.scopes.Bind<TapOutsideModalPresenter>(() => new TapOutsideModalPresenter());
+
+            await this.nav.PushAsync<TestScreenPresenter>();
+            await this.nav.PushAsync<TapOutsideModalPresenter>();
+
+            // Overlay should have: scrim + modal view
+            Assert.That(this.overlayLayer.childCount, Is.EqualTo(2), "scrim + modal view");
+            Assert.That(this.overlayLayer[0].name, Is.EqualTo("cuvara-scrim"));
+        });
+
+        [UnityTest]
+        public IEnumerator CloseOnTapOutside_ScrimIsRemovedOnPop() => UniTask.ToCoroutine(async () =>
+        {
+            this.registry.Register(typeof(TapOutsideModalPresenter), typeof(TestScreenView), ModalKey,
+                ScreenOptions.Modal | ScreenOptions.CloseOnTapOutside);
+            this.scopes.Bind<TapOutsideModalPresenter>(() => new TapOutsideModalPresenter());
+
+            await this.nav.PushAsync<TestScreenPresenter>();
+            await this.nav.PushAsync<TapOutsideModalPresenter>();
+
+            await this.nav.PopAsync();
+
+            Assert.That(this.overlayLayer.childCount, Is.Zero, "scrim and view must both be gone");
+            Assert.That(this.nav.Depth, Is.EqualTo(1));
+        });
+
+        [UnityTest]
+        public IEnumerator CloseOnTapOutside_WithDimsBelow_ScrimIsSemiTransparent() => UniTask.ToCoroutine(async () =>
+        {
+            this.registry.Register(typeof(TapOutsideDimPresenter), typeof(TestScreenView), ModalKey,
+                ScreenOptions.Modal | ScreenOptions.CloseOnTapOutside | ScreenOptions.DimsBelow);
+            this.scopes.Bind<TapOutsideDimPresenter>(() => new TapOutsideDimPresenter());
+
+            await this.nav.PushAsync<TapOutsideDimPresenter>();
+
+            var scrim = this.overlayLayer[0];
+            Assert.That(scrim.name, Is.EqualTo("cuvara-scrim"));
+            Assert.That(scrim.resolvedStyle.backgroundColor.a, Is.GreaterThan(0f),
+                "DimsBelow scrim must be semi-transparent");
+        });
+
+        internal sealed class TapOutsideModalPresenter : TestScreenPresenter { }
+        internal sealed class TapOutsideDimPresenter : TestScreenPresenter { }
+
+        #endregion
+
         #region A failed open
 
         [UnityTest]
@@ -799,6 +852,72 @@ namespace Cuvara.UIToolkit.Flow.Tests
             Assert.Throws<InvalidOperationException>(() =>
                 this.registry.Register(typeof(TestScreenPresenter), typeof(TestScreenView), "other"));
         }
+
+        #endregion
+
+        #region Retain
+
+        [UnityTest]
+        public IEnumerator Retain_PopDoesNotDisposeTheScope() => UniTask.ToCoroutine(async () =>
+        {
+            this.registry.Register(typeof(RetainedPresenter), typeof(TestScreenView), ScreenKey,
+                ScreenOptions.Retain);
+            this.scopes.Bind<RetainedPresenter>(() => new RetainedPresenter());
+
+            await this.nav.PushAsync<RetainedPresenter>();
+            await this.nav.PopAsync();
+
+            Assert.That(this.scopes.Disposed, Is.Zero, "a retained screen's scope must survive pop");
+            Assert.That(this.nav.Depth, Is.Zero);
+        });
+
+        [UnityTest]
+        public IEnumerator Retain_SecondPushReusesTheInstance() => UniTask.ToCoroutine(async () =>
+        {
+            this.registry.Register(typeof(RetainedPresenter), typeof(TestScreenView), ScreenKey,
+                ScreenOptions.Retain);
+            var instance = new RetainedPresenter();
+            this.scopes.Bind<RetainedPresenter>(() => instance);
+
+            var first = await this.nav.PushAsync<RetainedPresenter>();
+            await this.nav.PopAsync();
+            var second = await this.nav.PushAsync<RetainedPresenter>();
+
+            Assert.That(second, Is.SameAs(first), "the retained instance must be reused");
+        });
+
+        [UnityTest]
+        public IEnumerator Retain_OnBindAsyncReRunsOnEachPush() => UniTask.ToCoroutine(async () =>
+        {
+            this.registry.Register(typeof(RetainedPresenter), typeof(TestScreenView), ScreenKey,
+                ScreenOptions.Retain);
+            this.scopes.Bind<RetainedPresenter>(() => new RetainedPresenter());
+
+            var presenter = await this.nav.PushAsync<RetainedPresenter>();
+            Assert.That(presenter.BindCount, Is.EqualTo(1));
+
+            await this.nav.PopAsync();
+            await this.nav.PushAsync<RetainedPresenter>();
+
+            Assert.That(presenter.BindCount, Is.EqualTo(2), "OnBindAsync must re-run on every push");
+        });
+
+        [UnityTest]
+        public IEnumerator Retain_DisposeReleasesRetainedEntries() => UniTask.ToCoroutine(async () =>
+        {
+            this.registry.Register(typeof(RetainedPresenter), typeof(TestScreenView), ScreenKey,
+                ScreenOptions.Retain);
+            this.scopes.Bind<RetainedPresenter>(() => new RetainedPresenter());
+
+            await this.nav.PushAsync<RetainedPresenter>();
+            await this.nav.PopAsync();
+
+            this.nav.Dispose();
+
+            Assert.That(this.scopes.Disposed, Is.EqualTo(1), "navigator dispose must release retained scopes");
+        });
+
+        internal sealed class RetainedPresenter : TestScreenPresenter { }
 
         #endregion
 

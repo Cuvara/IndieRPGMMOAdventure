@@ -28,7 +28,7 @@ namespace Cuvara.UIToolkit.Samples.ScreenFlow
             builder.RegisterScreen<RootScreenPresenter,   RootScreenView>  ("RootScreen");
             builder.RegisterScreen<SecondScreenPresenter, SecondScreenView>("SecondScreen");
             builder.RegisterPopup <ConfirmPopupPresenter, ConfirmPopupView>("ConfirmPopup",
-                ScreenOptions.Modal | ScreenOptions.DimsBelow);
+                ScreenOptions.Modal | ScreenOptions.DimsBelow | ScreenOptions.CloseOnTapOutside);
 
             builder.RegisterEntryPoint<ScreenFlowSampleBootstrap>();
         }
