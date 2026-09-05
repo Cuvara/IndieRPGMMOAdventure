@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="True">
+    <Style src="ScreenCreatorWizard.uss" />
+    <ui:ScrollView>
+        <ui:VisualElement class="section">
+            <ui:Label text="Settings" class="section-header" />
+            <ui:DropdownField label="Type" name="type-dropdown" />
+            <ui:Toggle label="Has Model" name="has-model-toggle" value="true" />
+            <ui:TextField label="Name" name="name-field" value="MyScreen" />
+            <ui:TextField label="Output Path" name="output-path-field" value="Assets">
+                <ui:Button name="browse-button" text="..." class="browse-btn" />
+            </ui:TextField>
+        </ui:VisualElement>
+        <ui:Button text="Generate" name="generate-button" class="generate-btn" />
+    </ui:ScrollView>
+</ui:UXML>

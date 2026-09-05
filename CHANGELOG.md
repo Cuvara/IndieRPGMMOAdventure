@@ -5,6 +5,23 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-06
+
+### Added
+
+- **Screen Creator Wizard** (`Editor/ScreenCreator/`). An Editor window
+  (`Assets/Cuvara/Create Screen`) that scaffolds a new screen, popup or collection item in
+  one click: the UXML (with `SafeAreaElement` for screens/popups, not items), a USS skeleton,
+  the C# file (view interface + view + presenter with `OnBindAsync(subs, ct)`, no `Dispose`
+  override, `Require<T>` queries), and a test skeleton with the `subs.LiveCount == 0`
+  assertion. Replaces the frozen GameFoundation wizard: no `SignalBus`, no `ILoggerManager`,
+  no `[Preserve]`, no `ISurfaceScreenView`, no `BindData` — every line emitted matches the
+  package's own v0.5.0 API. Templates are pure string constants, testable with NUnit alone.
+  21 EditMode tests cover: no banned host-framework tokens, correct base classes, correct
+  `OnBindAsync` signature, `ScreenSubscriptions` parameter, `CancellationToken` parameter,
+  `Require<T>` instead of `Q<T>`, UXML well-formed XML, SafeArea on screens not items,
+  element names match view queries, placeholder substitution, kebab-case conversion.
+
 ## [0.5.0] - 2026-09-05
 
 ### Added
