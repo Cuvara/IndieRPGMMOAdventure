@@ -3,7 +3,7 @@
   "projectName": "IndieRPGMMOAdventure",
   "companyName": "Cuvara",
   "productName": "IndieRPGMMOAdventure",
-  "bundleVersion": "1.0.0",
+  "bundleVersion": "0.5.0",
   "buildNumberStrategy": "github_run_number",
 
   "outputDirectory": "Builds",
