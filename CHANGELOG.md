@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-05 to 2026-09-06)
+
+- Cuvara packages switched to git URL dependencies with gitignored local clones
+- com.cuvara.dots v0.27.1: pooling, archetype presets, camera follow, lifecycle events, minimap, physics, overlay anchors, editor window, 42 new tests
+- com.cuvara.netcode v0.30.0: connection state events, diagnostics, reconnection progress, server time, content ready, ability protocol, status effects, 15 new tests
+- com.cuvara.uitoolkit v0.7.2: loading progress, confirm dialog, toast service, screen transitions, settings model, 26 new tests
+- rpg-mmo-server: golden vectors, pgstore cleanup, drawio labels, TEAM.md, tagged v0.9.0
+- Go 1.27, .NET SDK 10.0, GitHub CLI installed
+- Workspace hygiene: BuildConfig, modules, stale samples, CI fixes
+
+### Fixed
+
+- All CI pipelines green across 5 repos
+- ADR-3 sid check and ADR-7 entity leak confirmed resolved
+
 ## [0.5.0] - 2026-09-05
 
 ### Added
