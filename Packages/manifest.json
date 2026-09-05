@@ -20,8 +20,8 @@
   ],
   "dependencies": {
     "com.company.build-pipeline": "https://github.com/Cuvara/unity-build-workflows.git?path=/unity-package/Packages/com.company.build-pipeline#v1.1.3",
-    "com.cuvara.dots": "https://github.com/Cuvara/UnityDots.git#v0.25.0",
-    "com.cuvara.netcode": "https://github.com/Cuvara/Netcode.git#v0.28.2",
+    "com.cuvara.dots": "https://github.com/Cuvara/UnityDots.git#v0.26.0",
+    "com.cuvara.netcode": "https://github.com/Cuvara/Netcode.git#v0.29.0",
     "com.cuvara.uitoolkit": "https://github.com/Cuvara/UIToolkit.git#v0.6.0",
     "com.cysharp.messagepipe": "1.8.1",
     "com.cysharp.messagepipe.vcontainer": "1.8.1",
