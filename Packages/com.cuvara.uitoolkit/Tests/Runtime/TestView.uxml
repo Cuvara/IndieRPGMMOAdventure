@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <!-- The smallest thing a view can be cloned from. Content is irrelevant here; the
-         lifecycle around it is what the tests assert. -->
-    <ui:VisualElement name="test-view">
-        <ui:Label name="title" text="Test view" />
-    </ui:VisualElement>
-</ui:UXML>

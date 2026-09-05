@@ -1,6 +1,0 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <ui:VisualElement name="root" style="flex-grow: 1; flex-direction: row; height: 30px;">
-        <ui:Label name="label" text="row" />
-        <ui:Button name="button" text="go" />
-    </ui:VisualElement>
-</ui:UXML>
