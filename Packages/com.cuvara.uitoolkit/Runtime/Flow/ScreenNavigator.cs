@@ -43,10 +43,13 @@ namespace Cuvara.UIToolkit.Flow
             public ScreenSubscriptions        Subscriptions;
             public CancellationTokenSource    Cancellation;
             public ScreenOptions              Options;
+            public UnityEngine.UIElements.VisualElement Scrim;
 
             public bool IsModal => (this.Options & ScreenOptions.Modal) != 0;
 
             public bool LeavesBelowActive => this.IsModal && (this.Options & ScreenOptions.DimsBelow) != 0;
+
+            public bool ClosesOnTapOutside => this.IsModal && (this.Options & ScreenOptions.CloseOnTapOutside) != 0;
         }
 
         private readonly ScreenRegistry         registry;
@@ -55,6 +58,9 @@ namespace Cuvara.UIToolkit.Flow
         private readonly Func<ViewLayers>       layersProvider;
 
         private readonly List<ScreenEntry> stack = new();
+
+        /// <summary>Retained screen entries, keyed by presenter type.</summary>
+        private readonly Dictionary<Type, ScreenEntry> retained = new();
 
         /// <summary>
         /// The entry currently being built, which is NOT yet in <see cref="stack"/>.
@@ -204,7 +210,29 @@ namespace Cuvara.UIToolkit.Flow
                 // underneath is never resumed and therefore never flashes into view for a frame.
                 if (replaceTop && this.stack.Count > 0) await this.CloseTopAsync(resumeBelow: false);
 
-                var entry = await this.BuildAsync(registration, applyModel);
+                ScreenEntry entry;
+
+                // A retained screen is reused: its scope is alive, its view exists, but its
+                // subscriptions are fresh and OnBindAsync re-runs. This is what prevents the
+                // stale-data class of bug that retention would otherwise introduce.
+                if (this.retained.Remove(typeof(TPresenter), out var retainedEntry))
+                {
+                    entry = retainedEntry;
+                    applyModel?.Invoke(entry.Presenter);
+
+                    // Old subscriptions are disposed; a fresh set is created so
+                    // OnBindAsync cannot double-register.
+                    entry.Subscriptions?.Dispose();
+                    entry.Subscriptions = new();
+                    entry.Cancellation  = new CancellationTokenSource();
+
+                    SetState(entry.Presenter, ScreenLifecycleState.Binding);
+                    await Bind(entry.Presenter, entry.Subscriptions, entry.Cancellation.Token);
+                }
+                else
+                {
+                    entry = await this.BuildAsync(registration, applyModel);
+                }
 
                 this.SuspendOrDeactivateBelow(entry);
 
@@ -280,6 +308,13 @@ namespace Cuvara.UIToolkit.Flow
         {
             var layer = entry.IsModal ? this.Layers.Overlay : this.Layers.Screen;
 
+            if (entry.ClosesOnTapOutside)
+            {
+                entry.Scrim = CreateScrim(entry);
+                if (layer is Cuvara.UIToolkit.View.VisualElementViewLayer vel)
+                    vel.Element.Add(entry.Scrim);
+            }
+
             entry.View.ViewSurface.SetParent(layer);
 
             SetState(entry.Presenter, ScreenLifecycleState.Opening);
@@ -298,6 +333,7 @@ namespace Cuvara.UIToolkit.Flow
             }
 
             Activate(entry.Presenter);
+            entry.View?.Root?.Focus();
             this.ScreenActivated?.Invoke(entry.Presenter);
         }
 
@@ -381,7 +417,9 @@ namespace Cuvara.UIToolkit.Flow
             this.ScreenDeactivated?.Invoke(entry.Presenter);
             Deactivate(entry.Presenter);
 
-            SetState(entry.Presenter, ScreenLifecycleState.Closing);
+            var isRetained = (entry.Options & ScreenOptions.Retain) != 0;
+
+            SetState(entry.Presenter, isRetained ? ScreenLifecycleState.Suspended : ScreenLifecycleState.Closing);
 
             try
             {
@@ -389,9 +427,22 @@ namespace Cuvara.UIToolkit.Flow
             }
             finally
             {
-                // Teardown never aborts. A failing outro must not leave a screen on screen with
-                // its scope disposed, so the detach and the disposal happen regardless.
-                this.DisposeEntry(entry);
+                if (isRetained)
+                {
+                    // The scope stays alive. Move the entry to the retained pool. The view is
+                    // hidden and detached from its layer; next push will re-parent and re-bind.
+                    RemoveScrim(entry);
+                    entry.View.Hide();
+                    entry.View.ViewSurface.SetParent(this.Layers.Hidden);
+                    entry.Cancellation?.Cancel();
+                    entry.Cancellation?.Dispose();
+                    entry.Cancellation = null;
+                    this.retained[entry.Presenter.GetType()] = entry;
+                }
+                else
+                {
+                    this.DisposeEntry(entry);
+                }
             }
 
             if (this.stack.Count == 0) return;
@@ -405,6 +456,7 @@ namespace Cuvara.UIToolkit.Flow
             if (below.Presenter.State == ScreenLifecycleState.Suspended) this.Resume(below);
 
             Activate(below.Presenter);
+            below.View?.Root?.Focus();
             this.ScreenActivated?.Invoke(below.Presenter);
         }
 
@@ -552,10 +604,43 @@ namespace Cuvara.UIToolkit.Flow
 
         #endregion
 
+        #region Scrim
+
+        private UnityEngine.UIElements.VisualElement CreateScrim(ScreenEntry entry)
+        {
+            var scrim = new UnityEngine.UIElements.VisualElement();
+            scrim.name = "cuvara-scrim";
+            scrim.style.position = UnityEngine.UIElements.Position.Absolute;
+            scrim.style.left     = 0;
+            scrim.style.top      = 0;
+            scrim.style.right    = 0;
+            scrim.style.bottom   = 0;
+
+            if ((entry.Options & ScreenOptions.DimsBelow) != 0)
+                scrim.style.backgroundColor = new UnityEngine.Color(0f, 0f, 0f, 0.5f);
+
+            scrim.pickingMode = UnityEngine.UIElements.PickingMode.Position;
+            scrim.RegisterCallback<UnityEngine.UIElements.PointerDownEvent>(
+                _ => this.PopAsync().Forget(),
+                UnityEngine.UIElements.TrickleDown.NoTrickleDown);
+
+            return scrim;
+        }
+
+        private static void RemoveScrim(ScreenEntry entry)
+        {
+            if (entry.Scrim == null) return;
+            entry.Scrim.RemoveFromHierarchy();
+            entry.Scrim = null;
+        }
+
+        #endregion
+
         #region Teardown
 
         private void DisposeEntry(ScreenEntry entry)
         {
+            RemoveScrim(entry);
             // Order matters and is not arbitrary: cancel first so anything awaiting the token
             // unwinds, then release subscriptions, then detach the view, then dispose the scope
             // that owns the presenter. Disposing the scope first would tear the presenter out
@@ -648,6 +733,12 @@ namespace Cuvara.UIToolkit.Flow
             for (var i = this.stack.Count - 1; i >= 0; --i) this.DisposeEntry(this.stack[i]);
 
             this.stack.Clear();
+
+            foreach (var entry in this.retained.Values) this.DisposeEntry(entry);
+
+            this.retained.Clear();
+
+            this.viewFactory.ClearCache();
         }
 
         private void ThrowIfDisposed()

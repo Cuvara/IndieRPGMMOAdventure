@@ -1,6 +1,6 @@
 {
   "name": "com.cuvara.uitoolkit",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "displayName": "Cuvara UI Toolkit",
   "description": "A standalone UI Toolkit screen layer: view lifecycle, layer/surface parenting into a UIDocument, list/grid/multi-template collection adapters, safe-area and panel-scale utilities, a back-navigation event source, and an optional DOTS/ECS presentation adapter. It owns its own contracts and depends on no UI framework of its own — a host binds it to whatever screen flow it already has.",
   "unity": "6000.3",

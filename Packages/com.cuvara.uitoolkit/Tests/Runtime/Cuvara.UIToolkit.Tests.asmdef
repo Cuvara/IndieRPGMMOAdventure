@@ -3,6 +3,7 @@
   "rootNamespace": "Cuvara.UIToolkit.Tests",
   "references": [
     "Cuvara.UIToolkit",
+    "Cuvara.UIToolkit.TestSupport",
     "UniTask",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
