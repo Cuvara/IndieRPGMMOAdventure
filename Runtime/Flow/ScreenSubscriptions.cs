@@ -101,6 +101,43 @@ namespace Cuvara.UIToolkit.Flow
             this.AddAction(() => element.UnregisterCallback(callback, trickleDown));
         }
 
+        /// <summary>
+        /// Calls <paramref name="callback"/> on the first <see cref="GeometryChangedEvent"/>
+        /// from <paramref name="element"/>, then unregisters itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>Under a <c>display:none</c> ancestor, descendants have no resolved layout —
+        /// <c>resolvedStyle.width</c>, <c>element.layout</c>, <c>worldBound</c> are zero or
+        /// stale until one layout pass after the ancestor shows. A screen that measures during
+        /// <c>OnBindAsync</c> measures nothing; this is the convenience that defers the
+        /// measurement to the first real layout pass.</para>
+        ///
+        /// <para>If the subscriptions are disposed before the event fires, the callback never
+        /// runs and the handler is unregistered — no stale closure, no surprise call after
+        /// teardown.</para>
+        /// </remarks>
+        public void OnFirstGeometry(VisualElement element, Action<GeometryChangedEvent> callback)
+        {
+            if (element == null) throw new ArgumentNullException(nameof(element));
+            if (callback == null) throw new ArgumentNullException(nameof(callback));
+
+            var fired = false;
+
+            void Handler(GeometryChangedEvent evt)
+            {
+                if (fired) return;
+                fired = true;
+                element.UnregisterCallback<GeometryChangedEvent>(Handler);
+                callback(evt);
+            }
+
+            element.RegisterCallback<GeometryChangedEvent>(Handler);
+            this.AddAction(() =>
+            {
+                if (!fired) element.UnregisterCallback<GeometryChangedEvent>(Handler);
+            });
+        }
+
         /// <summary>Releases everything registered, in reverse order of registration.</summary>
         /// <remarks>
         /// <para>Reverse order because registrations often nest — an adapter built over a control

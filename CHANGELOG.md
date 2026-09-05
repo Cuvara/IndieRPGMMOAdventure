@@ -5,6 +5,46 @@ All notable changes to this package are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-05
+
+### Added
+
+- **`ScreenOptions.CloseOnTapOutside`** — a modal with this flag gets a full-screen scrim
+  element behind it; a `PointerDownEvent` on the scrim pops the modal. When combined with
+  `DimsBelow`, the scrim is semi-transparent (`rgba(0,0,0,0.5)`); otherwise fully
+  transparent. The scrim is removed on close or dispose. One test per behaviour.
+- **`ScreenOptions.Retain`** — opt-in instance retention. A retained screen's scope survives
+  pop and the instance is reused on the next push. `OnBindAsync` re-runs with a fresh
+  `ScreenSubscriptions` on every push, so double-registration is structurally impossible.
+  `ScreenNavigator.Dispose()` releases all retained entries. Four tests cover retain, reuse,
+  re-bind, and dispose.
+- **`subs.OnFirstGeometry(element, callback)`** on `ScreenSubscriptions` — defers a callback
+  to the first `GeometryChangedEvent` from an element, then unregisters itself. For the
+  measure-after-resume pattern: a screen suspended under `display:none` has no resolved
+  layout, and this is the convenience that waits for the first real layout pass.
+- **Focus-on-activate** — the navigator focuses the top screen's root element on activate
+  (push and resume), so `NavigationCancelEvent` (Escape, gamepad B, Android back) always
+  reaches the root even with no focused element. Without this, Back silently stops working
+  after a push if nothing in the screen is focusable.
+- **`BackNavigationSource.SeenCount`** — counts every Back press that reached the source
+  while enabled, whether handled or not. `SeenCount - HandledCount` is "how many presses
+  reached the platform's own Back".
+- **`VisualTreeAsset` caching in `UIToolkitViewFactory`** — the factory caches loaded assets
+  by key so destroy-on-close does not re-hit the loader on every push of the same screen.
+  `ClearCache()` is called on navigator dispose (scene teardown).
+- **`EcsAutoSinkBinder`** (`Runtime/Ecs/`) — hooks into `IScreenNavigator.ScreenActivated`/
+  `ScreenDeactivated` events and auto-binds every `IViewModelSink<T>` interface on a
+  presenter to its matching `EcsViewModelBridge` in the world. The author writes zero
+  registration code — just implement the interface. Binds on activate, unbinds on
+  deactivate, so a suspended screen stops receiving pushes.
+- **TestSupport doubles** (`Runtime/TestSupport/`) — shipped for consumers:
+  `FakeVisualTreeAssetLoader` (dictionary-backed, `FailFor`, `DelayFrames`, `LoadCount`),
+  `FakeScopeFactory` (`Created`/`Disposed` counters),
+  `FakeViewLayer` / `RecordingViewSurface` (assert parenting without a panel),
+  `SpyViewModelSink<T>` (records pushes),
+  `FakeBackSource` (simulates Back, reports consumed/unhandled),
+  `ScreenSubscriptionsAssertions.AssertAllReleased()` extension.
+
 ## [0.4.0] - 2026-09-03
 
 ### Added

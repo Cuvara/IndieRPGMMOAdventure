@@ -94,6 +94,18 @@ namespace Cuvara.UIToolkit.Input
         /// <summary>How many Back presses this source has raised. For tests and telemetry.</summary>
         public int HandledCount { get; private set; }
 
+        /// <summary>
+        /// How many Back presses this source saw, whether handled or not.
+        /// </summary>
+        /// <remarks>
+        /// <para><see cref="HandledCount"/> counts presses that were acted on.
+        /// <see cref="SeenCount"/> counts every press that reached this source while it was
+        /// enabled and not disposed — including those where no handler was set, or where the
+        /// handler returned false. The difference is "how many presses reached the platform's
+        /// own Back" — on Android, that is how many exit-the-app presses landed.</para>
+        /// </remarks>
+        public int SeenCount { get; private set; }
+
         /// <summary>Registers a cancel handler on <paramref name="root"/>.</summary>
         public BackNavigationSource(VisualElement root)
         {
@@ -105,6 +117,8 @@ namespace Cuvara.UIToolkit.Input
         private void OnNavigationCancel(NavigationCancelEvent evt)
         {
             if (this.disposed || !this.Enabled) return;
+
+            ++this.SeenCount;
 
             // The handler path, when a host supplied one. It is the only path that can tell
             // "I closed something" from "there was nothing to close", which is the whole

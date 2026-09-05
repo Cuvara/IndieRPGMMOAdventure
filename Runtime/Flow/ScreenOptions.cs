@@ -42,21 +42,31 @@ namespace Cuvara.UIToolkit.Flow
         /// <summary>Dim and disable interaction on what is below, without suspending it.</summary>
         DimsBelow = 1 << 1,
 
-        // CloseOnTapOutside deliberately does not exist yet. It was declared here with no
-        // code reading it and no test pinning it, on the understanding that behaviour would
-        // follow — which is exactly the excuse this enum's rule refuses. The flag it replaced in
-        // the framework this package came from was doubtless also going to be implemented later;
-        // it shipped for years, read zero times, silently doing nothing to anyone who set it.
-        // It comes back in the commit that gives it behaviour and a test that fails when the
-        // behaviour is removed, and it takes bit 2 when it does.
+        /// <summary>
+        /// Tapping outside the modal's view closes it. Only meaningful when combined with
+        /// <see cref="Modal"/>.
+        /// </summary>
+        /// <remarks>
+        /// The navigator inserts a full-screen scrim element into the overlay layer behind the
+        /// modal's view. A <c>PointerDownEvent</c> on that scrim pops the modal. When
+        /// <see cref="DimsBelow"/> is also set, the scrim is semi-transparent; otherwise it is
+        /// fully transparent. The scrim is removed when the modal is closed or disposed.
+        /// </remarks>
+        CloseOnTapOutside = 1 << 2,
 
-        // Retain deliberately does not exist yet either, and for the same reason — the
-        // navigator has exactly one teardown path and nothing reads this. Its argument is real
-        // ("do not rebuild a two-thousand-element world map on every open"), and it is answered
-        // first by caching the VisualTreeAsset rather than the view, which is the cheap half.
-        // If that turns out to be insufficient, Retain returns WITH the branch in the navigator
-        // that honours it and a test asserting the bind path still re-runs on every push —
-        // because retention reintroduces precisely the stale-state problems destroy-on-close
-        // exists to avoid, and a flag that silently does nothing about them is worse than none.
+        /// <summary>
+        /// The screen's scope survives pop and the instance is reused on next push.
+        /// </summary>
+        /// <remarks>
+        /// <para>Destroy-on-close is the default, and is right for most screens. Retain is
+        /// for screens where rebuilding is genuinely visible — a very large tree, or a screen
+        /// holding expensive derived state (a rendered minimap texture). It buys latency with
+        /// memory and with the stale-data hazard.</para>
+        ///
+        /// <para><b><c>OnBindAsync</c> re-runs on every push</b> even for a retained screen,
+        /// with a fresh <see cref="ScreenSubscriptions"/> (old ones disposed first). This is
+        /// what makes double-registration structurally impossible, even under retention.</para>
+        /// </remarks>
+        Retain = 1 << 3,
     }
 }
