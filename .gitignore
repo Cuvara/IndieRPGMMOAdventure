@@ -119,3 +119,18 @@ UnityEntitlementLicense.xml
 # bare `git add -A` otherwise stages one as an embedded git repository, which
 # produces a commit that no clone can resolve.
 /.claude/worktrees/
+
+# Cuvara packages — developed in their own repos, resolved via git URL in manifest.json.
+# Kept locally (as git clones in Packages/) for direct editing, but NOT tracked by the
+# Unity project repo. Push changes from inside each package folder to its own remote.
+#
+# To develop locally: clone the repos into Packages/
+#   git clone https://github.com/Cuvara/UnityDots.git Packages/com.cuvara.dots
+#   git clone https://github.com/Cuvara/Netcode.git Packages/com.cuvara.netcode
+#   git clone https://github.com/Cuvara/UIToolkit.git Packages/com.cuvara.uitoolkit
+#
+# Unity resolves embedded (local folder) over git URL, so local clones take priority.
+# CI and fresh clones resolve from the git URLs in manifest.json.
+Packages/com.cuvara.dots/
+Packages/com.cuvara.netcode/
+Packages/com.cuvara.uitoolkit/
