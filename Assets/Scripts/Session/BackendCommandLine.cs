@@ -85,19 +85,29 @@ namespace Scripts.Session
             return s;
         }
 
+        private static int generatedDeviceIds;
+
         /// <summary>
         /// The device id this process authenticates with, or null to let the Nakama layer use
         /// the machine's own identifier: an explicit <c>-cuvara-device</c> wins; an instance
-        /// label alone yields a per-process id so several instances on one machine are
-        /// different accounts; neither means a single ordinary player.
+        /// label alone yields a generated id so several instances on one machine are different
+        /// accounts; neither means a single ordinary player.
         /// </summary>
+        /// <remarks>
+        /// Generated format: <c>{prefix}-{label}-{pid}-{ticks}-{n}</c>, where <c>n</c> is a
+        /// process-wide counter. The guarantee is uniqueness per call within a process and per
+        /// process on a machine (pid); two processes on different machines that share a pid and
+        /// a tick are not a case this needs to cover. The id is NOT stable across launches —
+        /// every launch is a fresh account — which is what a throwaway harness instance wants.
+        /// </remarks>
         public static string ResolveDeviceIdOrNull(in Settings settings, string fallbackPrefix)
         {
             if (!string.IsNullOrEmpty(settings.DeviceId)) return settings.DeviceId;
             if (string.IsNullOrEmpty(settings.InstanceLabel)) return null;
 
             var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
-            return $"{fallbackPrefix}-{settings.InstanceLabel}-{pid}-{DateTime.UtcNow.Ticks}";
+            var sequence = System.Threading.Interlocked.Increment(ref generatedDeviceIds);
+            return $"{fallbackPrefix}-{settings.InstanceLabel}-{pid}-{DateTime.UtcNow.Ticks}-{sequence}";
         }
 
         private static string[] SafeArgs()

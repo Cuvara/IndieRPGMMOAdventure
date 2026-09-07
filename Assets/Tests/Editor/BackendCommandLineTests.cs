@@ -122,10 +122,13 @@ namespace Tests.Editor
             Assert.That(BackendCommandLine.ResolveDeviceIdOrNull(explicitId, "mainscene"), Is.EqualTo("dev-7"));
 
             var labelled = Resolve(new[] { "x", "-cuvara-instance", "3" });
-            var generated = BackendCommandLine.ResolveDeviceIdOrNull(labelled, "mainscene");
-            StringAssert.StartsWith("mainscene-3-", generated);
-            Assert.That(generated, Is.Not.EqualTo(BackendCommandLine.ResolveDeviceIdOrNull(labelled, "mainscene")),
-                "each resolution is unique per process and moment");
+            var generated = new System.Collections.Generic.HashSet<string>();
+            for (var i = 0; i < 50; i++)
+            {
+                var id = BackendCommandLine.ResolveDeviceIdOrNull(labelled, "mainscene");
+                StringAssert.StartsWith("mainscene-3-", id);
+                Assert.That(generated.Add(id), Is.True, "every call yields a distinct id, even within one clock tick");
+            }
 
             Assert.That(BackendCommandLine.ResolveDeviceIdOrNull(Resolve(), "mainscene"), Is.Null,
                 "a plain player authenticates as the machine");
