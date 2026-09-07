@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-09-07)
+
+- `Packages/packages-lock.json` recorded the three Cuvara packages as `embedded`
+  (`file:com.cuvara.*`) while `Packages/com.cuvara.*/` is gitignored, so every fresh clone
+  resolved them from the manifest's git URLs at first open and rewrote the lock. The lock now
+  pins the resolved commits (`dots` v0.27.1 `dfcfddc`, `netcode` v0.30.0 `051f787`,
+  `uitoolkit` v0.7.2 `3c6fde9`) — the lock is what resolves, a manifest-only pin is not
+  enough.
+- Addressables `Default Local Group` dropped eight entries (`InventoryPopup`, `SettingsPopup`,
+  `ConfirmPopup`, `MainScreen`, `InfoPopup`, `InventoryItem`, `LoadingScreen`, `SecondScreen`)
+  whose GUIDs no longer exist anywhere in the project; the Addressables build had been
+  cleaning them on every player build. HUD `Hud.uss.meta` / `HudView.uxml.meta` importer
+  fileIDs filled in by the Unity 6 importer.
 ### Added (2026-09-07)
 
 - `tools/verify-multiclient.sh --redis-container NAME`: the two Redis rows (N session keys,
