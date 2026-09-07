@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-07)
+
+- `com.cuvara.dots` v0.27.1 → v0.28.0 (manifest + lock): the DOTS improvement plan phases A–E
+  (pool ownership, chunk epochs, module install/uninstall, config validation, lifecycle events,
+  physics collector, minimap/overlay, camera policies, ingestion generations). Required by the
+  production view provider and `DotsWorldBridge` on this branch.
 ### Added (2026-09-07) — DOTS host provider adoption (plan D12)
 
 Requires `com.cuvara.dots` at the release cut from `integration/dots-phase-b` (>= 63bfa52:
