@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-07) — DOTS host provider adoption (plan D12)
+
+Requires `com.cuvara.dots` at the release cut from `integration/dots-phase-b` (>= 63bfa52:
+`PooledViewAssetProvider` ownership contract + `IsRegistered`, `DotsModules`,
+`ViewConfigCatalog.TryBuild`/`ViewConfigValidator`, `DotsEntityView.BeginGeneration`,
+`CameraFollowBootstrap.ResetSmoothing`, `MinimapBootstrap`) and `com.cuvara.netcode` >= 0.31.0
+(`NetworkClient.Reconnected`). The manifest/lock bump to that tag is a separate change; until it
+lands this code does not compile against the pinned v0.27.1 and the `CUVARA_DOTS` assemblies
+will report the missing members.
+
+- **Production view provider**: `LeasedViewAssetProvider` (`Assets/Scripts/DI/Dots/`) — the
+  package's `PooledViewAssetProvider` for pooling, an `IViewPrefabLoader` for prefabs, and a
+  lease per key between them: loaded once on first prewarm (concurrent callers share the load),
+  the Addressables handle held while any instance exists, `Release(key)` dropping pooled
+  instances now and the handle only after the last acquired instance returns, `Dispose` destroying
+  instances before releasing handles. `Acquire` never loads synchronously (returns `null`,
+  `UnloadedAcquires`). `AddressableViewPrefabLoader` resolves view keys through the library
+  asset's `AssetReferenceGameObject`s — one handle per key, released once.
+- **`DotsViewLibraryAsset`** (`Assets > Create > Cuvara > DOTS View Library`, expected at
+  `Assets/Resources/DotsViews/DotsViewLibrary.asset`): one entry per archetype with view key,
+  Addressable prefab, pool size, scale and offsets; `BuildLibrary` generates the package's
+  `ViewArchetypeLibrary`/`ViewConfig`s at session start. `DotsViewLibraryValidation` runs the
+  package validator plus this game's rules (every `DotsViewArchetypes.All` archetype present,
+  every server kind mapped, every entry referencing a prefab).
+- **Build gate**: `Assets/BuildScripts/Editor/DotsViewLibraryBuildCheck` — `IPreprocessBuildWithReport`
+  and an explicit call at the top of `PlayerBuilder.Build` — fails the build with the offending
+  entries named when the library has a missing/mismatched key or a reference that does not
+  resolve to a prefab. No asset at all is a warning (primitive fallback), so sample/benchmark
+  players still build.
+- `RegisterDots(viewRoot, world, mode, library, loader, maxActivePerKey)`:
+  `DotsViewProviderMode.Production` (default) leases Addressables prefabs from the library into
+  the pooled provider; `Primitive` keeps the capsule/sphere placeholder for the sample and
+  benchmark scenes. A missing library asset in Production logs an error and falls back to
+  primitive rather than failing every scene's container. `DotsViewLibraryReference` is
+  registered so the bridge can read the chosen mode/asset.
+- Tests (`Assets/Tests/Editor`): `LeasedViewAssetProviderTests` (10, fake loader — lease
+  refcount contract), `DotsViewLibraryValidationTests` (8), `DotsRegistrationTests` gains the
+  production-mode wiring test.
+
+### Changed (2026-09-07)
+
+- **`DotsWorldBridge`** now builds its catalog from the `DotsViewLibraryAsset` through
+  `ViewConfigCatalog.TryBuild` with the provider's own `prefabExists` (`LeasedViewAssetProvider.CanProvide`
+  or the primitive provider's shape table) plus `ValidateMappings` against
+  `DotsViewArchetypes.ServerKindMappings`; an invalid library logs every issue and disables the
+  component. Prewarm is asynchronous and the binder starts ticking only when every key is warm.
+  Session modules install with `DotsModuleScope.Session`: CameraFollow (targets the local
+  player's mirror via `NetworkEntitySpawned`) and, opt-in, Minimap (with a category resolver on
+  the `DotsEntityView`). Teardown: prediction → `DotsNetcodeBootstrap.Uninstall(destroyMirrors: true)`
+  → `DotsModules.UninstallScope(Session)` → catalog → `Release(key)` for every catalog key
+  (handles drop once the view layer recycled the last instance). On `NetworkClient.Reconnected`:
+  `view.BeginGeneration()`, `predictor.Reset()`, `CameraFollowBootstrap.ResetSmoothing`.
+- `DotsViewArchetypes` gains `All` and `ServerKindMappings`, the single table the resolver, the
+  validator and the build gate all read.
+- asmdefs: `NDC.Scripts.DI` and `NDC.Tests.Editor` reference `Unity.Addressables` +
+  `Unity.ResourceManager`; `BuildScript.Editor` references `NDC.Scripts.DI` + `Cuvara.DOTS.Runtime`
+  under a `CUVARA_DOTS` version define.
+
 ### Changed (2026-09-07)
 
 - `com.cuvara.netcode` v0.30.0 → v0.31.0 (manifest + lock, hash `40b3e4f`): reconnect policy by

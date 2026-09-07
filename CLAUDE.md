@@ -241,6 +241,19 @@ Two related traps when driving builds from the Unity MCP tools:
 ### Addressables
 Enabled with default profile. Build addressables step is optional in CI workflow.
 
+### DOTS view library (what a build needs)
+
+`MainScene` presents replicated entities through `com.cuvara.dots` with real prefabs leased from
+Addressables. The list of archetypes lives in **one asset**:
+`Assets/Resources/DotsViews/DotsViewLibrary.asset` (create via
+`Assets > Create > Cuvara > DOTS View Library`), one entry per name in
+`Scripts.DI.Dots.DotsViewArchetypes.All` (`player-local`, `player-remote`, `mob`) with an
+Addressable prefab each. `PlayerBuilder.Build` — and any build started from the Editor — runs
+`DotsViewLibraryBuildCheck` first and **fails the build** naming the entry when an archetype is
+missing, a key is malformed or a prefab reference does not resolve. No asset at all is only a
+warning: the player falls back to capsule/sphere placeholders (`DotsViewProviderMode.Primitive`),
+which is what the netcode-sample and benchmark players use.
+
 ## Architecture
 
 ### Git Submodules (3)

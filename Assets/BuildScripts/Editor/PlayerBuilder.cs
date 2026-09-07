@@ -41,6 +41,12 @@ public static class PlayerBuilder
 
         scenes = ApplyBootSceneOverride(scenes, ReadArg("-bootScene"));
 
+#if CUVARA_DOTS
+        // Before the expensive part: a view library with a missing or mismatched key is a
+        // player whose entities never appear, and the message should not wait for a full build.
+        DotsViewLibraryBuildCheck.Run();
+#endif
+
         string outputRoot = ReadArg("-buildOutput")
                             ?? Environment.GetEnvironmentVariable("BUILD_OUTPUT_DIR");
         if (string.IsNullOrEmpty(outputRoot))
