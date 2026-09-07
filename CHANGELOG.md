@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-07)
+
+- `tools/verify-multiclient.sh --redis-container NAME`: the two Redis rows (N session keys,
+  exactly one `servers:map:<id>` member — ADR-2) now run against the docker compose stack via
+  `docker exec`, not only against a k3d cluster via `--kube-context`. Against `stack.sh up` they
+  were printed NOT CHECKED on every run and walked by hand. The two flags are mutually exclusive;
+  the SKIP message names both. CLAUDE.md gains the compose-stack invocation.
+
 ### Added (2026-09-05 to 2026-09-06)
 
 - Cuvara packages switched to git URL dependencies with gitignored local clones

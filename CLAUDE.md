@@ -126,9 +126,21 @@ Tools/verify-multiclient.sh \
   --kube-context k3d-rpg-dev
 ```
 
+Against the docker compose stack (`rpg-mmo-server/backend/deploy/stack.sh up`: gateway
+8000, Nakama 7350, game server status 9101, key `defaultkey`) the Redis rows come from the
+container instead of a cluster:
+
+```bash
+Tools/verify-multiclient.sh \
+  --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
+  --count 3 --gateway-port 8000 --nakama-port 7350 --nakama-key defaultkey \
+  --map map_01 --status-url http://127.0.0.1:9101/status \
+  --redis-container rpg-redis
+```
+
 It exits non-zero only when an asserted row fails. Rows it could not run — the Redis ones
-without `--kube-context`, and mutual visibility always — are printed as **NOT CHECKED** and
-never folded into the pass.
+without `--kube-context` or `--redis-container`, and mutual visibility always — are printed
+as **NOT CHECKED** and never folded into the pass.
 
 The table is what it asserts, kept here because the reasoning is the useful part:
 
