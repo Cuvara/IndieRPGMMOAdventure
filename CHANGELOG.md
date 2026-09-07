@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-07)
+
+- `com.cuvara.netcode` v0.31.0 → v0.31.1 (manifest + lock): `RegisterNetworking()` now resolves
+  `NetworkClient` from a scope (VContainer ignored `DefaultTransportFactory`'s default `string`
+  parameter). Required for `MainSessionDriver` / `DotsWorldBridge` injection in MainScene.
 ### Added (2026-09-07) — MainScene session driver
 
 - **`MainSessionDriver`** (`Assets/Scripts/DI/`, VContainer entry point registered by
