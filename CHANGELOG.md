@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the default device id and `NakamaAuthProvider` skips the PlayerPrefs session restore when it is
   set — three clients on one machine share PlayerPrefs and `SystemInfo.deviceUniqueIdentifier`,
   which made their logins evict each other.
+- `NakamaSessionService` constructs its `Client` with `UnityWebRequestAdapter.Instance` (the Unity
+  package's documented adapter) instead of the .NET SDK's default `HttpClient` adapter, which in a
+  Mono player surfaces fast connection failures as `TaskCanceledException`.
 - `MainSessionFlow` reports "Cancelled" only when the session's own token is cancelled; any other
   `OperationCanceledException` (a superseded login generation, a foreign timeout token) is
   `FATAL` with its message. `MainSessionDriver` logs a probe line at start (instance, disposed,

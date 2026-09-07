@@ -95,7 +95,11 @@ namespace Scripts.Nakama
         public NakamaSessionService(NakamaSettings settings)
         {
             _settings = settings;
-            _client = new Client(settings.Scheme, settings.Host, settings.Port, settings.ServerKey);
+            // The Unity adapter, explicitly: without it the .NET SDK uses HttpClient, which in a
+            // Mono player reports fast connection failures as TaskCanceledException — a session
+            // that logs "Cancelled" straight after "Authenticating" while Nakama never saw a
+            // request. UnityWebRequest is what the netcode DOTS sample authenticates with.
+            _client = new Client(settings.Scheme, settings.Host, settings.Port, settings.ServerKey, UnityWebRequestAdapter.Instance);
         }
 
         /// <summary>
