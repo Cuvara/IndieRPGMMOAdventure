@@ -2,19 +2,28 @@ name: UXML Codegen Drift
 
 # Committed Generated/<Name>.uxml.g.cs files must match what the codegen produces from
 # their .uxml. The check compiles the codegen's pure core (no Unity) with plain dotnet,
-# regenerates every enrolled UXML in memory and byte-compares — see
-# Packages/com.cuvara.uitoolkit/Documentation~/UXML-CODEGEN.md.
+# regenerates every enrolled UXML in memory and byte-compares — see the uitoolkit
+# package's Documentation~/UXML-CODEGEN.md.
 #
 # Standalone on purpose: no Unity license, no unity-build-workflows involvement.
+#
+# The codegen CLI lives in com.cuvara.uitoolkit, which is a git-URL dependency rather
+# than an in-tree package since 2026-09-05, so this workflow fetches the package at the
+# commit packages-lock.json pins. Before that it ran the CLI from Packages/, which had
+# silently been a path that no longer exists — the job only fires on UXML changes, so the
+# breakage stayed hidden until a PR added one (2026-09-07).
 
 on:
   pull_request:
     paths:
       - "**/*.uxml"
       - "**/*.uxml.g.cs"
-      - "Packages/com.cuvara.uitoolkit/Editor/Codegen/**"
-      - "Packages/com.cuvara.uitoolkit/Tools~/UxmlCodegenCli/**"
+      - "Packages/packages-lock.json"
       - ".github/workflows/uxml-codegen-drift.yml"
+      # Imported package samples are the package's own content, generated and checked
+      # in the package's repository; re-running the client's codegen over them proves
+      # nothing and fails on files this project does not own.
+      - "!Assets/Samples/**"
   workflow_dispatch:
 
 jobs:
@@ -23,13 +32,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # No submodules: the check only needs the uitoolkit package and Assets, both in-tree.
+        # No submodules: the check needs Assets and the uitoolkit package, fetched below.
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
+      - name: Fetch the uitoolkit package at the pinned commit
+        id: pkg
+        run: |
+          set -euo pipefail
+          URL=$(python3 -c "import json;d=json.load(open('Packages/packages-lock.json'))['dependencies']['com.cuvara.uitoolkit'];print(d['version'].split('#')[0])")
+          REF=$(python3 -c "import json;d=json.load(open('Packages/packages-lock.json'))['dependencies']['com.cuvara.uitoolkit'];print(d.get('hash') or d['version'].split('#')[1])")
+          echo "package $URL @ $REF"
+          git clone --quiet --no-checkout "$URL" /tmp/uitoolkit
+          git -C /tmp/uitoolkit checkout --quiet "$REF"
+          test -f /tmp/uitoolkit/Tools~/UxmlCodegenCli/UxmlCodegenCli.csproj
+          echo "path=/tmp/uitoolkit" >> "$GITHUB_OUTPUT"
+
       - name: Run drift check
         run: |
-          dotnet run --project Packages/com.cuvara.uitoolkit/Tools~/UxmlCodegenCli/UxmlCodegenCli.csproj \
-            -- Packages/com.cuvara.uitoolkit Assets
+          dotnet run --project "${{ steps.pkg.outputs.path }}/Tools~/UxmlCodegenCli/UxmlCodegenCli.csproj" \
+            -- "${{ steps.pkg.outputs.path }}" Assets
