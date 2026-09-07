@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Add a Cuvara DOTS improvement plan covering verified pooling ownership risks,
+  incomplete modules, integration boundaries, profiling, acceptance tests and
+  conditional gameplay-driven extensions. Planning only; no runtime changes.
 ### Fixed (2026-09-07)
 
 - `Packages/packages-lock.json` recorded the three Cuvara packages as `embedded`
