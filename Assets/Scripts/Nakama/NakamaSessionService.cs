@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using Nakama;
+using Scripts.Nakama.Auth;
 using UnityEngine;
 
 namespace Scripts.Nakama
@@ -32,6 +33,16 @@ namespace Scripts.Nakama
     /// <see cref="DI.NakamaRegistration.RegisterNakama"/>.
     /// </para>
     /// <para>
+    /// <b>Cancellation and the newest login wins.</b> Every SDK call receives the
+    /// caller's token, and every login re-checks it <i>after</i> the call returns,
+    /// before <c>ApplySession</c>: an HTTP round trip that completes in the same
+    /// frame as the cancel must not install a session the player backed out of.
+    /// Logins also run under an <see cref="OperationGeneration"/> — a login that
+    /// completes after a newer login started, or after <see cref="SignOut"/>, is
+    /// discarded with <see cref="OperationCanceledException"/> rather than
+    /// overwriting the newer outcome.
+    /// </para>
+    /// <para>
     /// <b>Two different tokens, do not confuse them.</b>
     /// <see cref="Session"/>'s <c>AuthToken</c> is the <b>Nakama session</b> token: it
     /// authenticates calls to Nakama itself (RPCs, storage, social) and nothing else.
@@ -54,6 +65,7 @@ namespace Scripts.Nakama
         const string PrefKeyRefreshToken = "nakama.refresh_token";
 
         readonly IClient _client;
+        readonly OperationGeneration _logins = new OperationGeneration();
 
         /// <summary>The underlying Nakama SDK client.</summary>
         public IClient Client => _client;
@@ -70,6 +82,14 @@ namespace Scripts.Nakama
         /// </summary>
         public bool IsSessionValid => Session != null && !Session.IsExpired;
 
+        /// <summary>
+        /// The login generation that produced <see cref="Session"/>. Bumped by every
+        /// login and by <see cref="SignOut"/>. A caller that derives something from the
+        /// session across an await (<see cref="Auth.NakamaAuthProvider"/> minting a
+        /// gateway token) captures this first and discards its result if it moved.
+        /// </summary>
+        public int LoginGeneration => _logins.Current;
+
         public NakamaSessionService(NakamaSettings settings)
         {
             _client = new Client(settings.Scheme, settings.Host, settings.Port, settings.ServerKey);
@@ -82,8 +102,10 @@ namespace Scripts.Nakama
         public async UniTask<ISession> AuthenticateDeviceAsync(string deviceId = null, CancellationToken ct = default)
         {
             deviceId ??= SystemInfo.deviceUniqueIdentifier;
+            var generation = _logins.Begin();
             ct.ThrowIfCancellationRequested();
-            var session = await _client.AuthenticateDeviceAsync(deviceId, create: true);
+            var session = await _client.AuthenticateDeviceAsync(deviceId, create: true, canceller: ct);
+            _logins.ThrowIfStale(generation, ct);
             ApplySession(session);
             return session;
         }
@@ -114,8 +136,10 @@ namespace Scripts.Nakama
             CancellationToken ct = default)
         {
             RequireEmailAndPassword(email, password);
+            var generation = _logins.Begin();
             ct.ThrowIfCancellationRequested();
-            var session = await _client.AuthenticateEmailAsync(email, password, create: create);
+            var session = await _client.AuthenticateEmailAsync(email, password, create: create, canceller: ct);
+            _logins.ThrowIfStale(generation, ct);
             ApplySession(session);
             return session;
         }
@@ -163,7 +187,8 @@ namespace Scripts.Nakama
             RequireEmailAndPassword(email, password);
             RequireSession(nameof(LinkEmailAsync));
             ct.ThrowIfCancellationRequested();
-            await _client.LinkEmailAsync(Session, email, password);
+            await _client.LinkEmailAsync(Session, email, password, canceller: ct);
+            ct.ThrowIfCancellationRequested();
             Debug.Log($"[Nakama] Recovery email linked to {Session.UserId}. Account is now recoverable.");
         }
 
@@ -179,7 +204,8 @@ namespace Scripts.Nakama
             RequireEmailAndPassword(email, password);
             RequireSession(nameof(UnlinkEmailAsync));
             ct.ThrowIfCancellationRequested();
-            await _client.UnlinkEmailAsync(Session, email, password);
+            await _client.UnlinkEmailAsync(Session, email, password, canceller: ct);
+            ct.ThrowIfCancellationRequested();
             Debug.LogWarning($"[Nakama] Recovery email unlinked from {Session.UserId}. " +
                              "This account can no longer be recovered on another device.");
         }
@@ -197,7 +223,8 @@ namespace Scripts.Nakama
         {
             RequireSession(nameof(GetRecoveryEmailAsync));
             ct.ThrowIfCancellationRequested();
-            var account = await _client.GetAccountAsync(Session);
+            var account = await _client.GetAccountAsync(Session, canceller: ct);
+            ct.ThrowIfCancellationRequested();
             var email = account?.Email;
             return string.IsNullOrEmpty(email) ? null : email;
         }
@@ -220,6 +247,7 @@ namespace Scripts.Nakama
                 return false;
 
             var session = global::Nakama.Session.Restore(authToken, refreshToken);
+            var generation = _logins.Begin();
 
             if (session.IsExpired)
             {
@@ -230,15 +258,19 @@ namespace Scripts.Nakama
                 try
                 {
                     ct.ThrowIfCancellationRequested();
-                    session = await _client.SessionRefreshAsync(session);
+                    session = await _client.SessionRefreshAsync(session, canceller: ct);
                 }
                 catch (ApiResponseException)
                 {
-                    ClearPersistedSession();
+                    // Only the operation that still owns the outcome may clear the
+                    // persisted tokens: a newer login may have written its own.
+                    if (_logins.IsCurrent(generation))
+                        ClearPersistedSession();
                     return false;
                 }
             }
 
+            _logins.ThrowIfStale(generation, ct);
             ApplySession(session);
             return true;
         }
@@ -246,6 +278,9 @@ namespace Scripts.Nakama
         /// <summary>Sign out: clear the in-memory session and persisted tokens.</summary>
         public void SignOut()
         {
+            // Anything still in flight completes into a signed-out account and is
+            // discarded by its ThrowIfStale.
+            _logins.Invalidate();
             Session = null;
             ClearPersistedSession();
         }

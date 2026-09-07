@@ -8,6 +8,7 @@
         "NDC.Scripts.UI",
         "NDC.Scripts.Benchmark",
         "NDC.Scripts.UI.Hud.Ecs",
+        "NDC.Scripts.Nakama",
         "Cuvara.UIToolkit",
         "Cuvara.UIToolkit.Ecs",
         "VContainer",

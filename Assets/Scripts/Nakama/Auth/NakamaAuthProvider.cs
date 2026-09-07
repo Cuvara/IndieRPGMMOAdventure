@@ -3,6 +3,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using Cuvara.Netcode.Auth;
 using Cuvara.Netcode.Json;
+using Nakama;
 
 namespace Scripts.Nakama.Auth
 {
@@ -53,14 +54,27 @@ namespace Scripts.Nakama.Auth
                 await _nakama.AuthenticateDeviceAsync(ct: ct);
             }
 
-            if (_nakama.Session == null)
+            var session = _nakama.Session;
+            if (session == null)
             {
                 throw new InvalidOperationException(
                     "Nakama authentication completed but no session was produced. " +
                     "Check the Nakama server is reachable at the configured address.");
             }
 
-            return await FetchGatewayTokenAsync(ct);
+            // The token is minted FOR this session. If the session changes underneath
+            // the RPC — sign-out, a newer login — the token names the wrong account
+            // and must not be handed to the gateway.
+            var generation = _nakama.LoginGeneration;
+            var token = await FetchGatewayTokenAsync(session, ct);
+            ct.ThrowIfCancellationRequested();
+            if (generation != _nakama.LoginGeneration || !ReferenceEquals(session, _nakama.Session))
+            {
+                throw new OperationCanceledException(
+                    "the Nakama session changed while the gateway token was being minted; the token is discarded");
+            }
+
+            return token;
         }
 
         /// <summary>
@@ -72,15 +86,20 @@ namespace Scripts.Nakama.Auth
         /// unwrapping twice — but the Unity SDK has already unwrapped the envelope, so
         /// <c>IApiRpc.Payload</c> is the inner JSON object. Parsing twice here fails.
         /// </remarks>
-        async UniTask<string> FetchGatewayTokenAsync(CancellationToken ct)
+        async UniTask<string> FetchGatewayTokenAsync(ISession session, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
 
             string payload;
             try
             {
-                var rpc = await _nakama.Client.RpcAsync(_nakama.Session, GatewayTokenRpc, "{}");
+                var rpc = await _nakama.Client.RpcAsync(session, GatewayTokenRpc, "{}", canceller: ct);
                 payload = rpc?.Payload;
+            }
+            catch (OperationCanceledException)
+            {
+                // A cancel is a cancel, not a "Nakama RPC failed".
+                throw;
             }
             catch (Exception ex)
             {
