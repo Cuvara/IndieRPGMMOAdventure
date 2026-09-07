@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Login cancellation and stale completions** (`NakamaSessionService`, `NakamaAuthProvider`,
+  workspace audit F09). Every Nakama SDK call now receives the caller's `CancellationToken`
+  (`canceller:`), and every login re-checks it *after* the HTTP call returns, before
+  `ApplySession`: a round trip that completes in the same frame as the cancel no longer
+  installs a session the player backed out of. Logins run under a new
+  `Scripts.Nakama.Auth.OperationGeneration`: the newest login wins, an older one that
+  completes later is discarded with `OperationCanceledException`, and `SignOut()`
+  invalidates anything in flight. `RestoreSessionAsync` only clears persisted tokens when it
+  still owns the outcome. `NakamaAuthProvider` mints the gateway token for the session it
+  captured and discards the token if the session or login generation changed underneath the
+  RPC; a cancelled RPC surfaces as a cancel, not as "Nakama RPC failed".
+  `Assets/Tests/Editor/OperationGenerationTests.cs` pins the guard (7 EditMode tests, pure
+  C#, no delays). The netcode half of F09 — one operation guard and try/finally ownership of
+  both connections in `NetworkClient` — lives in the `com.cuvara.netcode` package
+  (0.31.0) and reaches this repo with the next manifest + lock bump.
 ### Documentation
 
 - Add a Cuvara DOTS improvement plan covering verified pooling ownership risks,
