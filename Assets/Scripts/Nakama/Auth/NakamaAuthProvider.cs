@@ -42,8 +42,10 @@ namespace Scripts.Nakama.Auth
 
         public async UniTask<string> GetJwtAsync(CancellationToken ct)
         {
-            // Try restoring a persisted session first.
-            if (!_nakama.IsSessionValid)
+            // Try restoring a persisted session first — unless this process was given its own
+            // device id: PlayerPrefs is shared by every instance on the machine, and restoring
+            // would hand this client the account of whichever instance logged in last.
+            if (!_nakama.IsSessionValid && !_nakama.HasExplicitDeviceId)
             {
                 await _nakama.RestoreSessionAsync(ct);
             }

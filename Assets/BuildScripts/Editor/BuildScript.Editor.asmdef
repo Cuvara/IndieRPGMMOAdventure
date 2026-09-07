@@ -4,7 +4,10 @@
     "references": [
         "Unity.Addressables.Editor",
         "Unity.Addressables",
-        "Unity.ResourceManager"
+        "Unity.ResourceManager",
+        "NDC.Scripts.DI",
+        "Cuvara.DOTS.Runtime",
+        "VContainer"
     ],
     "includePlatforms": [
         "Editor"
@@ -15,6 +18,12 @@
     "precompiledReferences": [],
     "autoReferenced": false,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.dots",
+            "expression": "",
+            "define": "CUVARA_DOTS"
+        }
+    ],
     "noEngineReferences": false
 }

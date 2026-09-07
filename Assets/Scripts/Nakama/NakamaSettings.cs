@@ -21,5 +21,12 @@ namespace Scripts.Nakama
         /// unauthenticated client access — it is not a secret.
         /// </summary>
         public string ServerKey { get; set; } = "defaultkey";
+
+        /// <summary>
+        /// Device id for device authentication. Null uses <c>SystemInfo.deviceUniqueIdentifier</c>.
+        /// Set per process when several clients run on one machine — the identifier is the same
+        /// for all of them, and shared identity makes the logins evict each other.
+        /// </summary>
+        public string DeviceId { get; set; }
     }
 }

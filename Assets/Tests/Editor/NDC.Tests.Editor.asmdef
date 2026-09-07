@@ -23,7 +23,10 @@
         "Unity.Entities",
         "Unity.Collections",
         "Unity.Mathematics",
-        "Unity.Transforms"
+        "Unity.Transforms",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "NDC.Scripts.Session"
     ],
     "includePlatforms": [
         "Editor"
