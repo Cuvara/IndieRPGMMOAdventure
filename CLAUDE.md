@@ -243,6 +243,33 @@ Two related traps when driving builds from the Unity MCP tools:
   sentinel file, or you get several concurrent builds and no indication of it. Read
   progress from `Editor.log` instead; the log stays available while MCP does not.
 
+### Importing a package sample to test it
+
+Every feature in `com.cuvara.netcode` / `com.cuvara.dots` ships a scene under the package's
+`Samples~`, and the way to exercise it here is to import that sample and build a player that
+boots its scene. `Assets/BuildScripts/Editor/SampleImporter.cs` does the import headlessly:
+
+```bash
+U="/mnt/c/Program Files/Unity/Hub/Editor/6000.3.9f1/Editor/Unity.exe"
+"$U" -quit -batchmode -nographics -projectPath 'E:\SecretProject\IndieRPGMMOAdventure' \
+  -executeMethod SampleImporter.Import \
+  -importPackage com.cuvara.dots -importSample "Phase B Showcase" -addToBuild 1 \
+  -logFile 'E:\SecretProject\IndieRPGMMOAdventure\Builds\import.log'
+```
+
+It lands in `Assets/Samples/<package displayName>/<version>/<sample>/` (overriding a previous
+import of the same sample) and, with `-addToBuild 1`, appends the sample's scenes to
+`EditorBuildSettings` so `PlayerBuilder -bootScene` can boot one. **Do not commit that build-settings
+change** — the release player must boot `MainScene`; the entry is a local test artefact. The imported
+sample folder itself is committed, so the version on disk records which package release was exercised.
+
+The DOTS `Phase B Showcase` scenes also run themselves: pass `-showcaseAutorun` (optionally
+`-showcaseAutorunDelay <seconds>`) to a player built from one of them and it clicks its own buttons,
+asserts the documented outcomes, prints `[PhaseB] <Scene> step=… PASS|FAIL` per step and
+`[PhaseB] <Scene>: N passed, M failed`, then exits non-zero if anything failed. The netcode
+`Reconnect Policy Demo` is driven by hand instead: build it, run two instances, and break the link
+(its buttons, or `docker pause rpg-gameserver`) to watch the reconnect policy work.
+
 ### Addressables
 Enabled with default profile. Build addressables step is optional in CI workflow.
 
