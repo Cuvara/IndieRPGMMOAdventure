@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-07)
+
+- `com.cuvara.netcode` v0.30.0 → v0.31.0 (manifest + lock, hash `40b3e4f`): reconnect policy by
+  disconnect cause (60 s budget anchored to the server's clock, verified live with a 45 s game-server
+  freeze), operation-generation guard, monotonic heartbeat clock; ability-protocol types held back
+  until wired. EditMode 722/722 on this project with that package.
 ### Fixed
 
 - **Login cancellation and stale completions** (`NakamaSessionService`, `NakamaAuthProvider`,
