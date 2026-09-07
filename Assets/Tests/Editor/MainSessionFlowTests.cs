@@ -174,6 +174,24 @@ namespace Tests.Editor
         }
 
         [Test]
+        public void ForeignCancellation_IsFatal_NotCancelled()
+        {
+            // A superseded login generation or a library's own timeout token throws
+            // OperationCanceledException while the session token is fine. That is a failure with
+            // a cause to print, not a quiet "Cancelled".
+            this.endpoint.AuthError = new OperationCanceledException("operation 1 was superseded by operation 2");
+            var flow = new MainSessionFlow();
+
+            this.Run(flow).GetAwaiter().GetResult();
+
+            Assert.That(flow.CurrentPhase, Is.EqualTo(MainSessionFlow.Phase.Failed));
+            Assert.That(this.errors.Count, Is.EqualTo(1));
+            StringAssert.Contains("superseded by operation 2", this.errors[0]);
+            StringAssert.Contains("session token was NOT cancelled", this.errors[0]);
+            Assert.That(this.log.Exists(l => l == "[DOTSNet] Cancelled"), Is.False);
+        }
+
+        [Test]
         public void PreCancelled_DoesNothing()
         {
             using var cts = new CancellationTokenSource();

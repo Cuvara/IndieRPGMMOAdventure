@@ -31,9 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the default device id and `NakamaAuthProvider` skips the PlayerPrefs session restore when it is
   set — three clients on one machine share PlayerPrefs and `SystemInfo.deviceUniqueIdentifier`,
   which made their logins evict each other.
-- Tests: `MainSessionFlowTests` (9, fake endpoint: phases, marker lines, auth/connect failure,
-  cancel), `BackendCommandLineTests` (6: precedence, the exact harness flag set, bad port,
-  device-id resolution).
+- `MainSessionFlow` reports "Cancelled" only when the session's own token is cancelled; any other
+  `OperationCanceledException` (a superseded login generation, a foreign timeout token) is
+  `FATAL` with its message. `MainSessionDriver` logs a probe line at start (instance, disposed,
+  token cancelled, client state) and at dispose (phase + stack trace), kept for player-log
+  diagnosis.
+- Tests: `MainSessionFlowTests` (10, fake endpoint: phases, marker lines, auth/connect failure,
+  cancel vs. foreign cancellation), `BackendCommandLineTests` (6: precedence, the exact harness
+  flag set, bad port, device-id resolution).
 - `com.cuvara.netcode` v0.31.1 (RegisterNetworking resolves `NetworkClient`) is required for the
   container to build; the tag did not exist at commit time, so the manifest stays at v0.31.0.
 

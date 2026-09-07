@@ -106,8 +106,11 @@ namespace Scripts.Session
                 var inWorldAs = string.IsNullOrEmpty(endpoint.UserId) ? UserId : endpoint.UserId;
                 log($"{InWorldPrefix}{inWorldAs}");
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                // Only the session's own token makes this a cancel. An OperationCanceledException
+                // from anywhere else — a superseded login generation, a library's internal
+                // timeout token — is a failure with a cause worth printing, not a quiet exit.
                 CurrentPhase = Phase.Cancelled;
                 log(CancelledLine);
             }
@@ -115,7 +118,10 @@ namespace Scripts.Session
             {
                 CurrentPhase = Phase.Failed;
                 Error = exception;
-                logError($"{FatalPrefix}{exception}");
+                var cause = exception is OperationCanceledException
+                    ? " (an OperationCanceledException while the session token was NOT cancelled — a superseded login or a foreign token)"
+                    : string.Empty;
+                logError($"{FatalPrefix}{exception}{cause}");
             }
         }
     }

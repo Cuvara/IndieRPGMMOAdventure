@@ -53,6 +53,8 @@ namespace Scripts.DI
         private readonly NakamaSessionService nakama;
         private readonly BackendSettings backend;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
+        private readonly int instanceId = Interlocked.Increment(ref instances);
+        private static int instances;
         private bool disposed;
 
         public MainSessionDriver(NetworkClient client, NakamaSessionService nakama, BackendSettings backend)
@@ -71,6 +73,13 @@ namespace Scripts.DI
             Debug.Log(
                 $"{MainSessionFlow.Tag} backend gateway={settings.GatewayHost}:{settings.GatewayPort} " +
                 $"nakama={settings.NakamaBaseUrl} map={settings.MapId} device={this.backend.DeviceId ?? "<machine>"}");
+
+            // Probe, kept on purpose: a session that logs "Cancelled" straight after starting is
+            // either a token cancelled before its first await or a cancel from somewhere else,
+            // and this line plus the one in Dispose tell the two apart from a player log.
+            Debug.Log(
+                $"{MainSessionFlow.Tag} session driver #{this.instanceId} start: disposed={this.disposed} " +
+                $"tokenCancelled={this.lifetime.IsCancellationRequested} clientState={this.client.State}");
 
             this.client.Reconnected += this.OnReconnected;
             this.client.ReconnectFailed += this.OnReconnectFailed;
@@ -102,6 +111,10 @@ namespace Scripts.DI
         {
             if (this.disposed) return;
             this.disposed = true;
+
+            Debug.Log(
+                $"{MainSessionFlow.Tag} session driver #{this.instanceId} disposed (phase {this.Flow?.CurrentPhase.ToString() ?? "not started"}) at:\n" +
+                Environment.StackTrace);
 
             this.client.Reconnected -= this.OnReconnected;
             this.client.ReconnectFailed -= this.OnReconnectFailed;
