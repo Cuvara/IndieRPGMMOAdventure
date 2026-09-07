@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-07) — MainScene session driver
+
+- **`MainSessionDriver`** (`Assets/Scripts/DI/`, VContainer entry point registered by
+  `MainSceneScope`): on scene start authenticates the device with Nakama
+  (`NakamaSessionService.AuthenticateDeviceAsync`), connects through the gateway
+  (`NetworkClient.ConnectAsync(map)` via the registered `NakamaAuthProvider`), and logs the
+  markers `Tools/verify-multiclient.sh` asserts on — `[DOTSNet] Auth OK, user_id=<id>` and
+  `[DOTSNet] IN WORLD as <id>` — byte-identical to the netcode DOTS sample. Disposing the scope
+  cancels the sequence and disconnects. MainScene therefore authenticates and joins on its own;
+  `-bootScene` is no longer required for a real-path multi-client run.
+- **`Scripts.Session`** assembly (`Assets/Scripts/Session/`): `BackendCommandLine` (the sample's
+  flag/`CUVARA_*` resolution, now with an injectable overload) and `MainSessionFlow` (the pure
+  sequence with an endpoint seam). `GameLifetimeScope` resolves the backend once and registers
+  `NetworkSettings`/`NakamaSettings` from it plus a `BackendSettings` instance.
+- **Per-process identity**: `NakamaSettings.DeviceId` (from `-cuvara-device`, else a per-process
+  id when `-cuvara-instance` is given, else null = machine id). `NakamaSessionService` uses it as
+  the default device id and `NakamaAuthProvider` skips the PlayerPrefs session restore when it is
+  set — three clients on one machine share PlayerPrefs and `SystemInfo.deviceUniqueIdentifier`,
+  which made their logins evict each other.
+- Tests: `MainSessionFlowTests` (9, fake endpoint: phases, marker lines, auth/connect failure,
+  cancel), `BackendCommandLineTests` (6: precedence, the exact harness flag set, bad port,
+  device-id resolution).
+- `com.cuvara.netcode` v0.31.1 (RegisterNetworking resolves `NetworkClient`) is required for the
+  container to build; the tag did not exist at commit time, so the manifest stays at v0.31.0.
+
 ### Changed (2026-09-07)
 
 - `com.cuvara.dots` v0.27.1 → v0.28.0 (manifest + lock): the DOTS improvement plan phases A–E

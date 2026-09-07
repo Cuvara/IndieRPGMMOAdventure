@@ -25,7 +25,8 @@
         "Unity.Mathematics",
         "Unity.Transforms",
         "Unity.Addressables",
-        "Unity.ResourceManager"
+        "Unity.ResourceManager",
+        "NDC.Scripts.Session"
     ],
     "includePlatforms": [
         "Editor"

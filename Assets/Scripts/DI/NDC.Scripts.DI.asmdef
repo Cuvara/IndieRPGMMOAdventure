@@ -22,7 +22,9 @@
         "Unity.Addressables",
         "Unity.ResourceManager",
         "Unity.Mathematics",
-        "Unity.Transforms"
+        "Unity.Transforms",
+        "NDC.Scripts.Session",
+        "UniTask"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

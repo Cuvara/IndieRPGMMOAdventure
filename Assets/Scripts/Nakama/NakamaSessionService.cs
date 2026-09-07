@@ -90,10 +90,19 @@ namespace Scripts.Nakama
         /// </summary>
         public int LoginGeneration => _logins.Current;
 
+        readonly NakamaSettings _settings;
+
         public NakamaSessionService(NakamaSettings settings)
         {
+            _settings = settings;
             _client = new Client(settings.Scheme, settings.Host, settings.Port, settings.ServerKey);
         }
+
+        /// <summary>
+        /// True when the settings pin a device id. A pinned id means this process is one of
+        /// several on the machine, so a session persisted by another must not be restored.
+        /// </summary>
+        public bool HasExplicitDeviceId => !string.IsNullOrEmpty(_settings.DeviceId);
 
         /// <summary>
         /// Authenticate with a device ID. Creates the account on first use.
@@ -101,7 +110,7 @@ namespace Scripts.Nakama
         /// </summary>
         public async UniTask<ISession> AuthenticateDeviceAsync(string deviceId = null, CancellationToken ct = default)
         {
-            deviceId ??= SystemInfo.deviceUniqueIdentifier;
+            deviceId ??= _settings.DeviceId ?? SystemInfo.deviceUniqueIdentifier;
             var generation = _logins.Begin();
             ct.ThrowIfCancellationRequested();
             var session = await _client.AuthenticateDeviceAsync(deviceId, create: true, canceller: ct);

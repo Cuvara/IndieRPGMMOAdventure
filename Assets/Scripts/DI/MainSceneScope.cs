@@ -1,4 +1,4 @@
-﻿namespace Scripts.DI
+namespace Scripts.DI
 {
     using VContainer;
     using VContainer.Unity;
@@ -12,6 +12,10 @@
         protected override void Configure(IContainerBuilder builder)
         {
             base.Configure(builder);
+
+            // The session: device auth, gateway connect, harness markers. An entry point so the
+            // scene carries no object for it and the scope's disposal ends the session.
+            builder.RegisterEntryPoint<MainSessionDriver>();
 
 #if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER && CUVARA_NETCODE && CUVARA_SHARED_GAMELOGIC
             // Same pattern, same reason as GameLifetimeScope's NetworkBootstrap callback: a build

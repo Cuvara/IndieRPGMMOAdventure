@@ -52,14 +52,19 @@ Windows paths for the same reason. The player lands in
 `Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe`. (`BuildConfig/*.json`
 lists only `MainScene`; that path is the CI toolkit's, not this one.)
 
-**`-bootScene` is what makes this a netcode-sample player, and omitting it gives you the
-wrong game.** `PlayerBuilder` builds every enabled scene in `EditorBuildSettings` and the
+**MainScene authenticates and joins on its own** (`MainSessionDriver`, an entry point of
+`MainSceneScope`): it reads the same `-cuvara-*` flags / `CUVARA_*` variables `run-clients.sh`
+passes, device-authenticates with Nakama, connects through the gateway and prints the same
+`[DOTSNet] Auth OK, user_id=` / `[DOTSNet] IN WORLD as` markers the harness asserts on. So the
+real-path player is the default build — **omit `-bootScene`** — and `-bootScene` is only for
+running the netcode DOTS *sample* instead:
+
+**`-bootScene` is what makes this a netcode-sample player.** `PlayerBuilder` builds every enabled scene in `EditorBuildSettings` and the
 player boots index 0 — which is `Assets/Scenes/MainScene.unity`, because that is what a
 release build must boot. `-bootScene` moves the named scene to index 0 for this build
 only; the enabled set, and therefore what ships inside the player, is unchanged, and
-nothing is committed. Without the flag the three windows come up in MainScene, never
-authenticate, and the harness looks broken for a reason that has nothing to do with
-networking.
+nothing is committed. Before `MainSessionDriver` existed, omitting the flag left three windows in a MainScene that
+never authenticated; that is no longer the case.
 
 The path must match the enabled scene path exactly — an unmatched value is a hard build
 error, not a silent fall-back to index 0. Note the version number in it: the sample lives
