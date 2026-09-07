@@ -111,6 +111,46 @@ public static class DotsViewLibraryAuthoring
             : $"{summary}\nValidation passed with warnings:\n{DotsViewLibraryValidation.Describe(report)}");
     }
 
+    /// <summary>
+    /// Ensures <c>Assets/Scenes/MainScene.unity</c> carries one <c>DotsWorldBridge</c> with its
+    /// default settings (camera follow on, minimap off, library from Resources) and saves the
+    /// scene. Headless: <c>-executeMethod DotsViewLibraryAuthoring.EnsureMainSceneBridge</c>.
+    /// </summary>
+    /// <remarks>
+    /// The bridge is injected by <c>MainSceneScope</c>'s build callback, so the scene must also
+    /// hold a <c>MainSceneScope</c>; this method reports rather than creates one, because a
+    /// scene scope's parent wiring is a project decision (VContainer settings / scope prefab).
+    /// </remarks>
+    [MenuItem("Cuvara/DOTS/Ensure MainScene DotsWorldBridge")]
+    public static void EnsureMainSceneBridge()
+    {
+        const string scenePath = "Assets/Scenes/MainScene.unity";
+        var scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(scenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+
+        var bridge = Object.FindAnyObjectByType<DotsWorldBridge>(FindObjectsInactive.Include);
+        if (bridge == null)
+        {
+            var host = new GameObject("DotsWorldBridge");
+            host.AddComponent<DotsWorldBridge>();
+            Undo.RegisterCreatedObjectUndo(host, "Add DotsWorldBridge");
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
+            UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene);
+            Debug.Log($"[DotsViewLibraryAuthoring] Added DotsWorldBridge (defaults) to '{scenePath}' and saved.");
+        }
+        else
+        {
+            Debug.Log($"[DotsViewLibraryAuthoring] '{scenePath}' already has a DotsWorldBridge on '{bridge.gameObject.name}'.");
+        }
+
+        var scope = Object.FindAnyObjectByType<Scripts.DI.MainSceneScope>(FindObjectsInactive.Include);
+        if (scope == null)
+        {
+            Debug.LogWarning(
+                $"[DotsViewLibraryAuthoring] '{scenePath}' has no MainSceneScope; the bridge will not be injected " +
+                "and stays inert. Add a MainSceneScope (VContainer LifetimeScope) to the scene.");
+        }
+    }
+
     /// <summary>Creates the prefab if missing; returns its asset guid either way.</summary>
     private static string EnsurePrefab(string prefabPath, in Placeholder placeholder)
     {

@@ -6,7 +6,8 @@
         "Unity.Addressables",
         "Unity.ResourceManager",
         "NDC.Scripts.DI",
-        "Cuvara.DOTS.Runtime"
+        "Cuvara.DOTS.Runtime",
+        "VContainer"
     ],
     "includePlatforms": [
         "Editor"
