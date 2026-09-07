@@ -42,6 +42,14 @@ will report the missing members.
   benchmark scenes. A missing library asset in Production logs an error and falls back to
   primitive rather than failing every scene's container. `DotsViewLibraryReference` is
   registered so the bridge can read the chosen mode/asset.
+- **Authoring tool** `Assets/BuildScripts/Editor/DotsViewLibraryAuthoring.cs`: menu
+  `Cuvara > DOTS > Create Placeholder View Library`, or headless
+  `-executeMethod DotsViewLibraryAuthoring.CreatePlaceholderLibrary`. Creates
+  `Assets/DotsViews/Prefabs/{PlayerLocal,PlayerRemote,Mob}.prefab` (blue/green capsules, red
+  sphere, own materials, no colliders), marks them Addressable in the default group as
+  `dots/view/<archetype>`, writes `Assets/Resources/DotsViews/DotsViewLibrary.asset` with pool
+  sizes 4/32/64 and half-height lifts, validates and logs. Idempotent; throws on validation
+  errors so a batchmode run fails loudly.
 - Tests (`Assets/Tests/Editor`): `LeasedViewAssetProviderTests` (10, fake loader — lease
   refcount contract), `DotsViewLibraryValidationTests` (8), `DotsRegistrationTests` gains the
   production-mode wiring test.
