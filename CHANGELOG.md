@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-08)
+
+- `com.cuvara.netcode` v0.32.0 → **v0.33.0** (manifest and lock): client prediction now steers on the
+  measured snapshot age instead of a whole snapshot interval during the estimator's ~8 s warm-up, and
+  runs its base-tick clock on the server's timebase using the already-fitted skew. Live against the dev
+  stack this took the target lead from 4 base ticks to 0 and the standing clock error from 3 ticks to −1,
+  halving the correction the local avatar took on every input. Sample folder re-imported at the new
+  version.
+- `.gitignore`: the Addressables platform folder and its `.meta` (an untracked entry in every status).
+
 ### Changed (2026-09-07)
 
 - `com.cuvara.dots` v0.28.0 → **v0.29.0** and `com.cuvara.netcode` v0.31.1 → **v0.32.0** (manifest and
