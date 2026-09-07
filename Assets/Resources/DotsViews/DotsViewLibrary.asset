@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6eb111d541b5d74c68ec7f9eccef9aa2, type: 3}
+  m_Name: DotsViewLibrary
+  m_EditorClassIdentifier: NDC.Scripts.DI::Scripts.DI.Dots.DotsViewLibraryAsset
+  entries:
+  - Archetype: player-local
+    ViewKey: 
+    Prefab:
+      m_AssetGUID: a4c40d02462e2a843bebb2137974445e
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    PoolSize: 4
+    Scale: 1
+    PositionOffset: {x: 0, y: 1, z: 0}
+    RotationOffsetEuler: {x: 0, y: 0, z: 0}
+  - Archetype: player-remote
+    ViewKey: 
+    Prefab:
+      m_AssetGUID: a11faec5046385d40a2b723d619d3686
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    PoolSize: 32
+    Scale: 1
+    PositionOffset: {x: 0, y: 1, z: 0}
+    RotationOffsetEuler: {x: 0, y: 0, z: 0}
+  - Archetype: mob
+    ViewKey: 
+    Prefab:
+      m_AssetGUID: 11a28d6a9f8e1dd47bd566dd6fb9490e
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    PoolSize: 64
+    Scale: 0.8
+    PositionOffset: {x: 0, y: 0.4, z: 0}
+    RotationOffsetEuler: {x: 0, y: 0, z: 0}
