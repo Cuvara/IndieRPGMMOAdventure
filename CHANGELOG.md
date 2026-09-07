@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (2026-09-07)
 
+- `com.cuvara.dots` v0.28.0 → **v0.29.0** and `com.cuvara.netcode` v0.31.1 → **v0.32.0** (manifest and
+  lock together). Netcode v0.32.0 makes `RegisterNetworking()` take its dependencies, fixing a v0.31.1
+  regression that made the container unbuildable for any consumer wanting its own `ITransportFactory`.
+  DOTS v0.29.0 adds the Phase B Showcase sample.
+- Both packages' sample scenes are imported into `Assets/Samples/` and committed, so the folder version
+  records which release was exercised: `Cuvara DOTS/0.29.0/Phase B Showcase` (four offline scenes, each
+  self-testing under `-showcaseAutorun`) and `Cuvara Netcode/0.32.0/Reconnect Policy Demo`.
+
+### Added (2026-09-07)
+
+- `Assets/BuildScripts/Editor/SampleImporter.cs` — headless UPM sample import
+  (`-executeMethod SampleImporter.Import -importPackage <id> -importSample <name> [-addToBuild 1]`),
+  so a package feature's sample scene can be built and run from batch mode. Documented in CLAUDE.md.
+
+### Changed (2026-09-07)
+
 - `com.cuvara.netcode` v0.31.0 → v0.31.1 (manifest + lock): `RegisterNetworking()` now resolves
   `NetworkClient` from a scope (VContainer ignored `DefaultTransportFactory`'s default `string`
   parameter). Required for `MainSessionDriver` / `DotsWorldBridge` injection in MainScene.

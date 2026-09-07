@@ -10,7 +10,7 @@
       "hash": "7ac909f81c1c3bb8f3651c7d2b59d7f6f0b2be6b"
     },
     "com.cuvara.dots": {
-      "version": "https://github.com/Cuvara/UnityDots.git#v0.28.0",
+      "version": "https://github.com/Cuvara/UnityDots.git#v0.29.0",
       "depth": 0,
       "source": "git",
       "dependencies": {
@@ -19,10 +19,10 @@
         "com.unity.collections": "2.6.8",
         "com.unity.mathematics": "1.3.2"
       },
-      "hash": "bd600d59630a769de8238fb9a58b3b987404b798"
+      "hash": "def09265c7d9f916926556961ffd4c4caeffe912"
     },
     "com.cuvara.netcode": {
-      "version": "https://github.com/Cuvara/Netcode.git#v0.31.1",
+      "version": "https://github.com/Cuvara/Netcode.git#v0.32.0",
       "depth": 0,
       "source": "git",
       "dependencies": {
@@ -30,7 +30,7 @@
         "com.unity.modules.unitywebrequest": "1.0.0",
         "com.unity.modules.physics": "1.0.0"
       },
-      "hash": "b75db6c878443fe3fa3d0f5f510a6cdfb804f82a"
+      "hash": "a26c8a9022827d7294ddd4df9fc61172c7bcd880"
     },
     "com.cuvara.uitoolkit": {
       "version": "https://github.com/Cuvara/UIToolkit.git#v0.7.2",
