@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (2026-09-08)
 
+- `com.cuvara.netcode` v0.34.0 → **v0.35.0** (manifest and lock): the client's input send
+  cadence is no longer anchored to `GameConstants.DefaultTickRate`. That constant is the
+  server's SNAPSHOT rate, not its simulation rate, so the client was sending at exactly the
+  snapshot cadence — the one rate at which the acknowledgement floor cannot be measured,
+  because the wait term never sweeps. The cadence is now derived from the snapshot rate
+  (13 Hz against 15) and the send schedule is pinned, without which the choice is unreachable
+  on a frame grid. Cost: ~13% fewer uplink packets, and a direction change waits up to 76.9 ms
+  instead of 66.7 ms to reach the server.
+- The release also lands the floor-statistic correction, the sweep guard's sample floor, two
+  reconcile counter fixes, the ack-floor rate conversion, and assembly definitions for five
+  package samples. Full detail in the package CHANGELOG under 0.35.0.
+
 - `com.cuvara.netcode` v0.33.0 → **v0.34.0** (manifest and lock): nine guards against an
   untrustworthy timebase. The staleness estimator fits a rate through two best-case anchors, a
   construction valid only if the minimum achievable delay is the same at both ends; nothing
