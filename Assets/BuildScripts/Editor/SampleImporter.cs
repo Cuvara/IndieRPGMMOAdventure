@@ -12,7 +12,7 @@ using UnityEngine;
 /// <remarks>
 /// <code>
 /// Unity.exe -quit -batchmode -projectPath ... -executeMethod SampleImporter.Import
-///   -importPackage com.cuvara.netcode -importSample "Reconnect Policy Demo" [-addToBuild 1]
+///   -samplePackage com.cuvara.netcode -importSample "Reconnect Policy Demo" [-addToBuild 1]
 /// </code>
 /// Imports (overriding a previous import of the same sample) into
 /// <c>Assets/Samples/&lt;package displayName&gt;/&lt;version&gt;/&lt;sample&gt;/</c>, and with
@@ -25,11 +25,16 @@ public static class SampleImporter
     public static void Import()
     {
         var args = Environment.GetCommandLineArgs();
-        var package = Arg(args, "-importPackage");
+        // NOT -importPackage: that is a BUILT-IN Unity batch-mode flag expecting a
+        // .unitypackage path. Unity acts on it as well as us, fails to decompress the
+        // package name as an archive ("Couldn't decompress package"), and exits 1 AFTER
+        // this method has already imported the sample successfully. The sample lands on
+        // disk and the run still reports failure.
+        var package = Arg(args, "-samplePackage");
         var sampleName = Arg(args, "-importSample");
         var addToBuild = Arg(args, "-addToBuild") == "1";
         if (string.IsNullOrEmpty(package) || string.IsNullOrEmpty(sampleName))
-            throw new InvalidOperationException("SampleImporter.Import needs -importPackage <name> -importSample <displayName>.");
+            throw new InvalidOperationException("SampleImporter.Import needs -samplePackage <name> -importSample <displayName>.");
 
         var samples = Sample.FindByPackage(package, string.Empty).ToList();
         var sample = samples.FirstOrDefault(s => string.Equals(s.displayName, sampleName, StringComparison.Ordinal));

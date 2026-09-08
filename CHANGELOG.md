@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (2026-09-08)
 
+- `com.cuvara.netcode` v0.33.0 → **v0.34.0** (manifest and lock): nine guards against an
+  untrustworthy timebase. The staleness estimator fits a rate through two best-case anchors, a
+  construction valid only if the minimum achievable delay is the same at both ends; nothing
+  checked that before the result reached `SetClockRateScale`, so a displaced fit ran the client's
+  base-tick clock 8.3% slow. A fitted rate must now reproduce over a doubled baseline before it
+  steers the clock, the age is refused when its slope is, and a provisional age that saturates its
+  clamp contributes zero instead of delivering the warm-up fallback.
+- `Assets/Samples/Cuvara Netcode/0.28.1/Clock Sync Probe` removed and re-imported at 0.34.0. The
+  committed 0.28.1 copy had no assembly definition, so importing the sample a second time was a
+  hard compile error (CS0101) that only appears **after** a version bump - it lands on the first
+  person to update, never on the person who imported. The 0.34.0 copy ships `ClockSyncProbe.asmdef`.
+- `SampleImporter` takes `-samplePackage` instead of `-importPackage`. The latter is a built-in
+  Unity batch-mode flag expecting a `.unitypackage` path: Unity acted on it too, failed to
+  decompress the package *name* as an archive, and exited 1 **after** the sample had imported
+  successfully - an exit code reporting failure for a run that worked.
+
 - `com.cuvara.netcode` v0.32.0 → **v0.33.0** (manifest and lock): client prediction now steers on the
   measured snapshot age instead of a whole snapshot interval during the estimator's ~8 s warm-up, and
   runs its base-tick clock on the server's timebase using the already-fitted skew. Live against the dev
