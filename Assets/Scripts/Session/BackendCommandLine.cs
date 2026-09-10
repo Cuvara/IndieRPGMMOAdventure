@@ -28,6 +28,15 @@ namespace Scripts.Session
             public int NakamaPort;
             public string NakamaServerKey;
             public bool NakamaExplicit;
+
+            /// <summary><c>-cuvara-gateway-tls</c> / <c>CUVARA_GATEWAY_TLS</c>. The gateway
+            /// terminates TLS itself (ADR-23); off unless the deployment turned it on.</summary>
+            public bool GatewayTls;
+
+            /// <summary><c>-cuvara-gateway-tls-cert</c> / <c>CUVARA_GATEWAY_TLS_CERT</c>: path to a
+            /// PEM certificate to pin, for a gateway holding a self-signed one. Null pins nothing
+            /// and leaves the platform trust store deciding, which is the stronger default.</summary>
+            public string GatewayTlsCertPath;
             public string StatusUrl;
             public bool StatusUrlExplicit;
 
@@ -66,6 +75,8 @@ namespace Scripts.Session
                 NakamaHost = Str(args, env, "-cuvara-nakama-host", "CUVARA_NAKAMA_HOST", "127.0.0.1"),
                 NakamaPort = Int(args, env, "-cuvara-nakama-port", "CUVARA_NAKAMA_PORT", 7350),
                 NakamaServerKey = Str(args, env, "-cuvara-nakama-key", "CUVARA_NAKAMA_SERVER_KEY", "defaultkey"),
+                GatewayTls = Bool(args, env, "-cuvara-gateway-tls", "CUVARA_GATEWAY_TLS", false),
+                GatewayTlsCertPath = Str(args, env, "-cuvara-gateway-tls-cert", "CUVARA_GATEWAY_TLS_CERT", null),
                 NakamaExplicit =
                     Str(args, env, "-cuvara-nakama-scheme", "CUVARA_NAKAMA_SCHEME", null) != null ||
                     Str(args, env, "-cuvara-nakama-host", "CUVARA_NAKAMA_HOST", null) != null ||
@@ -147,6 +158,39 @@ namespace Scripts.Session
 
             Debug.LogWarning($"[backend-args] {flag}='{raw}' is not a usable port — keeping {fallback}.");
             return fallback;
+        }
+
+        /// <summary>
+        /// Reads a boolean flag. Accepts the spellings a shell script and a CI variable
+        /// actually produce; anything else warns and keeps the fallback.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately does NOT treat an unrecognised value as true. This gates TLS, and
+        /// "CUVARA_GATEWAY_TLS=maybe" quietly meaning "on" would be no better than it
+        /// quietly meaning "off" — either way the operator's intent is guessed. Warning and
+        /// keeping the documented default at least says so out loud.
+        /// </remarks>
+        private static bool Bool(string[] args, Func<string, string> env, string flag, string envName, bool fallback)
+        {
+            var raw = Str(args, env, flag, envName, null);
+            if (string.IsNullOrEmpty(raw)) return fallback;
+
+            switch (raw.Trim().ToLowerInvariant())
+            {
+                case "1":
+                case "true":
+                case "yes":
+                case "on":
+                    return true;
+                case "0":
+                case "false":
+                case "no":
+                case "off":
+                    return false;
+                default:
+                    Debug.LogWarning($"[backend-args] {flag}='{raw}' is not a boolean — keeping {fallback}.");
+                    return fallback;
+            }
         }
 
         private static string SafeEnv(string name)
