@@ -133,5 +133,69 @@ namespace Tests.Editor
             Assert.That(BackendCommandLine.ResolveDeviceIdOrNull(Resolve(), "mainscene"), Is.Null,
                 "a plain player authenticates as the machine");
         }
+        [Test]
+        public void Sealing_IsOffUnlessAskedFor_AndEncodingDefaultsToProtobuf()
+        {
+            var s = Resolve();
+
+            Assert.That(s.Sealed, Is.False,
+                "every deployed environment runs GAMESERVER_SEALED=off; a client that seals by " +
+                "default would stall the join everywhere");
+            Assert.That(s.Encoding, Is.EqualTo(BackendCommandLine.EncodingProtobuf));
+            Assert.That(s.EncodingIsProtobuf, Is.True);
+            Assert.That(s.SealedOverJsonIsImpossible, Is.False);
+        }
+
+        [Test]
+        public void Sealing_ReadsTheFlagThenTheEnvironment()
+        {
+            Assert.That(Resolve(new[] { "x", "-cuvara-sealed", "1" }).Sealed, Is.True);
+            Assert.That(Resolve(new[] { "x", "-cuvara-sealed", "on" }).Sealed, Is.True);
+            Assert.That(Resolve(null, new Dictionary<string, string> { ["CUVARA_SEALED"] = "true" }).Sealed, Is.True);
+
+            Assert.That(
+                Resolve(new[] { "x", "-cuvara-sealed", "0" },
+                    new Dictionary<string, string> { ["CUVARA_SEALED"] = "1" }).Sealed,
+                Is.False,
+                "the command line wins over the environment");
+        }
+
+        [Test]
+        public void Encoding_AcceptsTheSpellingsAScriptProduces()
+        {
+            Assert.That(Resolve(new[] { "x", "-cuvara-encoding", "json" }).Encoding,
+                Is.EqualTo(BackendCommandLine.EncodingJson));
+            Assert.That(Resolve(new[] { "x", "-cuvara-encoding", "JSON" }).Encoding,
+                Is.EqualTo(BackendCommandLine.EncodingJson));
+            Assert.That(Resolve(new[] { "x", "-cuvara-encoding", "protobuf" }).EncodingIsProtobuf, Is.True);
+            Assert.That(Resolve(new[] { "x", "-cuvara-encoding", "pb" }).EncodingIsProtobuf, Is.True);
+            Assert.That(Resolve(null, new Dictionary<string, string> { ["CUVARA_ENCODING"] = "json" }).Encoding,
+                Is.EqualTo(BackendCommandLine.EncodingJson));
+        }
+
+        [Test]
+        public void Encoding_UnknownValue_WarnsAndKeepsTheDefault()
+        {
+            LogAssert.Expect(LogType.Warning,
+                new System.Text.RegularExpressions.Regex("not a known encoding"));
+
+            var s = Resolve(new[] { "x", "-cuvara-encoding", "cbor" });
+
+            Assert.That(s.EncodingIsProtobuf, Is.True,
+                "an unrecognised encoding must not be guessed into one of the two");
+        }
+
+        [Test]
+        public void SealedOverJson_IsFlaggedAsImpossible()
+        {
+            var s = Resolve(new[] { "x", "-cuvara-sealed", "1", "-cuvara-encoding", "json" });
+
+            Assert.That(s.Sealed, Is.True);
+            Assert.That(s.EncodingIsProtobuf, Is.False);
+            Assert.That(s.SealedOverJsonIsImpossible, Is.True,
+                "the JSON message set has no sealed handshake, so the server refuses this at the join");
+
+            Assert.That(Resolve(new[] { "x", "-cuvara-sealed", "1" }).SealedOverJsonIsImpossible, Is.False);
+        }
     }
 }

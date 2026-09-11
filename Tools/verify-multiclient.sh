@@ -58,6 +58,7 @@ NAKAMA_PORT=""
 NAKAMA_KEY=""
 MAP_ID="map_01"
 STATUS_URL=""
+EXTRA_ARGS=()
 KUBE_CONTEXT=""
 REDIS_CONTAINER=""
 REDIS_NS="rpg-k8s-data"
@@ -116,6 +117,7 @@ while [ $# -gt 0 ]; do
         --shots) SHOT_DIR="$2"; shift 2 ;;
         --settle) SETTLE="$2"; shift 2 ;;
         --keep) KEEP=1; shift ;;
+        --) shift; EXTRA_ARGS=("$@"); break ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -161,13 +163,23 @@ trap cleanup EXIT
 # assuming one.
 "$HERE/run-clients.sh" --exe "$EXE" --kill >/dev/null 2>&1 || true
 
-"$HERE/run-clients.sh" \
-    --exe "$EXE" --count "$COUNT" --tag "$TAG" --log-dir "$LOG_DIR" \
-    --gateway-host "$GATEWAY_HOST" --gateway-port "$GATEWAY_PORT" \
-    --nakama-host "$NAKAMA_HOST" --nakama-port "$NAKAMA_PORT" \
-    --nakama-key "$NAKAMA_KEY" --map "$MAP_ID" \
-    ${STATUS_URL:+--status-url "$STATUS_URL"} \
-    --tile >/dev/null
+LAUNCH=(
+    "$HERE/run-clients.sh"
+    --exe "$EXE" --count "$COUNT" --tag "$TAG" --log-dir "$LOG_DIR"
+    --gateway-host "$GATEWAY_HOST" --gateway-port "$GATEWAY_PORT"
+    --nakama-host "$NAKAMA_HOST" --nakama-port "$NAKAMA_PORT"
+    --nakama-key "$NAKAMA_KEY" --map "$MAP_ID"
+)
+if [ -n "$STATUS_URL" ]; then
+    LAUNCH+=(--status-url "$STATUS_URL")
+fi
+LAUNCH+=(--tile)
+if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then
+    LAUNCH+=(-- "${EXTRA_ARGS[@]}")
+    echo "player args  ${EXTRA_ARGS[*]}"
+fi
+
+"${LAUNCH[@]}" >/dev/null
 
 echo "launched, settling for ${SETTLE}s"
 sleep "$SETTLE"

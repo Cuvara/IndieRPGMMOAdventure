@@ -2,6 +2,7 @@ namespace Scripts.DI
 {
     using Cuvara.Netcode.Bootstrap;
     using Cuvara.Netcode.Client;
+    using Cuvara.Netcode.Codec;
     using Cuvara.Netcode.DI;
     using Scripts.Nakama;
     using Scripts.Nakama.DI;
@@ -29,13 +30,23 @@ namespace Scripts.DI
 
             TransportSecurityReport.Warn(backend);
 
-            builder.RegisterNetworking(new NetworkSettings
-            {
-                GatewayHost = backend.GatewayHost,
-                GatewayPort = backend.GatewayPort,
-                GatewayUseTls = backend.GatewayTls,
-                GatewayTlsPinnedCertificate = TransportSecurityReport.LoadPinOrNull(backend),
-            });
+            // The encoding is an argument, not a property on NetworkSettings: RegisterNetworking
+            // picks the codec from it and registers one IWireCodec. Registering a second one
+            // afterwards does not override it — it makes VContainer fail the whole container
+            // build with "Conflict implementation type" — so this is the only place it can be
+            // decided. Its default in the package is Json, for source compatibility; this client
+            // asks for protobuf, because that is what the golden vectors cover and the only
+            // encoding a sealed session can use.
+            builder.RegisterNetworking(
+                new NetworkSettings
+                {
+                    GatewayHost = backend.GatewayHost,
+                    GatewayPort = backend.GatewayPort,
+                    GatewayUseTls = backend.GatewayTls,
+                    GatewayTlsPinnedCertificate = TransportSecurityReport.LoadPinOrNull(backend),
+                    RequireSealedSession = backend.Sealed,
+                },
+                encoding: backend.EncodingIsProtobuf ? WireEncoding.Protobuf : WireEncoding.Json);
 
             // The device id is pinned on the settings, not only used once: the auth provider
             // re-authenticates on a cold reconnect and must land on the same account.

@@ -17,6 +17,12 @@ namespace Scripts.Session
     /// </remarks>
     public static class BackendCommandLine
     {
+        /// <summary>Legacy <c>{"type":N,...}</c> wire encoding. First body byte <c>0x7B</c>.</summary>
+        public const string EncodingJson = "json";
+
+        /// <summary>Protobuf wire encoding, the backend's default. First body byte <c>0x08</c>.</summary>
+        public const string EncodingProtobuf = "proto";
+
         public struct Settings
         {
             public string GatewayHost;
@@ -37,6 +43,64 @@ namespace Scripts.Session
             /// PEM certificate to pin, for a gateway holding a self-signed one. Null pins nothing
             /// and leaves the platform trust store deciding, which is the stronger default.</summary>
             public string GatewayTlsCertPath;
+
+            /// <summary>
+            /// <c>-cuvara-sealed</c> / <c>CUVARA_SEALED</c>. Ask the game server for a sealed
+            /// session (ADR-22) instead of a cleartext one. <b>Off unless asked for</b>, and
+            /// that default is not timidity: there is no negotiation and no fallback, so a
+            /// client that seals against a server running <c>GAMESERVER_SEALED=off</c> waits
+            /// for a hello that never comes and the join times out. Every deployed environment
+            /// pins the server to <c>off</c> today, so defaulting this to on would break every
+            /// dev run to make one environment work.
+            /// </summary>
+            public bool Sealed;
+
+            /// <summary>
+            /// <c>-cuvara-encoding</c> / <c>CUVARA_ENCODING</c>, normalised to
+            /// <see cref="EncodingJson"/> or <see cref="EncodingProtobuf"/>.
+            /// </summary>
+            /// <remarks>
+            /// <para>
+            /// <b>Defaults to protobuf</b>, which is a deliberate change of what a plain run
+            /// does. Three reasons, in order of weight:
+            /// </para>
+            /// <list type="number">
+            /// <item><description>
+            /// A JSON client can never seal. The sealed handshake messages are absent from the
+            /// JSON message set on purpose, so a server running <c>GAMESERVER_SEALED=require</c>
+            /// refuses a JSON client at the join with <c>encoding_cannot_seal</c>. Leaving the
+            /// default at JSON would make <see cref="Sealed"/> a flag that cannot work unless a
+            /// second flag is remembered alongside it.
+            /// </description></item>
+            /// <item><description>
+            /// Protobuf is what the backend defaults to and what the package's golden vectors
+            /// cover; it is ~81% smaller on the wire once id interning is counted.
+            /// </description></item>
+            /// <item><description>
+            /// It costs no server change. Both servers sniff the first body byte
+            /// (<c>0x08</c> protobuf, <c>0x7B</c> JSON) and answer in kind, so an <c>off</c>
+            /// server serves a protobuf client exactly as it served a JSON one. That is the
+            /// claim the unsealed acceptance run exists to check.
+            /// </description></item>
+            /// </list>
+            /// <para>
+            /// <c>-cuvara-encoding json</c> puts the old behaviour back for anyone who needs a
+            /// readable capture.
+            /// </para>
+            /// </remarks>
+            public string Encoding;
+
+            /// <summary>True when <see cref="Encoding"/> resolved to protobuf.</summary>
+            public bool EncodingIsProtobuf =>
+                string.Equals(Encoding, EncodingProtobuf, StringComparison.Ordinal);
+
+            /// <summary>
+            /// True for the one combination that cannot work: sealing asked for over JSON.
+            /// Reported rather than silently corrected — forcing protobuf here would be
+            /// guessing which of the two flags the operator meant.
+            /// </summary>
+            public bool SealedOverJsonIsImpossible => Sealed && !EncodingIsProtobuf;
+
             public string StatusUrl;
             public bool StatusUrlExplicit;
 
@@ -77,6 +141,8 @@ namespace Scripts.Session
                 NakamaServerKey = Str(args, env, "-cuvara-nakama-key", "CUVARA_NAKAMA_SERVER_KEY", "defaultkey"),
                 GatewayTls = Bool(args, env, "-cuvara-gateway-tls", "CUVARA_GATEWAY_TLS", false),
                 GatewayTlsCertPath = Str(args, env, "-cuvara-gateway-tls-cert", "CUVARA_GATEWAY_TLS_CERT", null),
+                Sealed = Bool(args, env, "-cuvara-sealed", "CUVARA_SEALED", false),
+                Encoding = EncodingOf(args, env, "-cuvara-encoding", "CUVARA_ENCODING", EncodingProtobuf),
                 NakamaExplicit =
                     Str(args, env, "-cuvara-nakama-scheme", "CUVARA_NAKAMA_SCHEME", null) != null ||
                     Str(args, env, "-cuvara-nakama-host", "CUVARA_NAKAMA_HOST", null) != null ||
@@ -189,6 +255,33 @@ namespace Scripts.Session
                     return false;
                 default:
                     Debug.LogWarning($"[backend-args] {flag}='{raw}' is not a boolean — keeping {fallback}.");
+                    return fallback;
+            }
+        }
+
+        /// <summary>
+        /// Reads the wire encoding, normalising the spellings a script or a CI variable
+        /// actually produces. Same refusal-to-guess rule as <see cref="Bool"/>: an
+        /// unrecognised value warns and keeps the fallback rather than being read as one of
+        /// the two, because picking wrong here does not fail loudly — it fails at the join,
+        /// several steps away from the typo.
+        /// </summary>
+        private static string EncodingOf(string[] args, Func<string, string> env, string flag, string envName, string fallback)
+        {
+            var raw = Str(args, env, flag, envName, null);
+            if (string.IsNullOrEmpty(raw)) return fallback;
+
+            switch (raw.Trim().ToLowerInvariant())
+            {
+                case "json":
+                    return EncodingJson;
+                case "proto":
+                case "protobuf":
+                case "pb":
+                    return EncodingProtobuf;
+                default:
+                    Debug.LogWarning(
+                        $"[backend-args] {flag}='{raw}' is not a known encoding (json|proto) — keeping {fallback}.");
                     return fallback;
             }
         }

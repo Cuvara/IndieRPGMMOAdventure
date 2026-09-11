@@ -9,6 +9,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (2026-09-11)
 
+- **The shipped client can run against a game server that requires a sealed session, and
+  speaks Protobuf on the wire by default.** Two flags, in the existing `-cuvara-*` /
+  `CUVARA_*` style:
+
+  | Flag | Environment | Values | Default |
+  |---|---|---|---|
+  | `-cuvara-sealed` | `CUVARA_SEALED` | the usual boolean spellings | **off** |
+  | `-cuvara-encoding` | `CUVARA_ENCODING` | `json` \| `proto` | **`proto`** |
+
+  `-cuvara-sealed` sets `NetworkSettings.RequireSealedSession` (ADR-22: ChaCha20-Poly1305
+  over authenticated X25519, HKDF-SHA256, sequence doubling as the replay counter).
+  `-cuvara-encoding` selects the codec `RegisterNetworking` registers; it has to be an
+  argument to that call, because registering a second `IWireCodec` afterwards does not
+  override the first — it makes VContainer fail the whole container build with "Conflict
+  implementation type".
+
+  **Why this was needed.** `GAMESERVER_SEALED` defaults to `require` on the C# game
+  server and every deployed environment pins it to `off`. Turning it on for the live
+  `k3d-rpg-dev` fleet on 2026-09-11 passed the Go smoketest with `-sealed -encoding proto`
+  and correctly refused the JSON smoketest — and killed the real Unity client outright:
+  `[DOTSNet] FATAL: Cuvara.Netcode.Client.NetworkException: gateway closed the connection
+  during the handshake`, then twelve refused reconnects, 4 of 8 acceptance rows failing.
+  `GameLifetimeScope` called `RegisterNetworking` with no `encoding` argument, so it took
+  the package default of `WireEncoding.Json`, and `RequireSealedSession` was never set at
+  all. **A JSON client can never seal** — the sealed handshake messages are absent from
+  the JSON message set on purpose, so key material cannot be rendered into a
+  human-readable payload — so a `require` server refuses it at the join with
+  `encoding_cannot_seal`, which arrives at the client as a bare closed connection.
+
+  **Why these defaults.** Sealing is **off** unless asked for: there is no negotiation and
+  no fallback, so a client that seals against a server with sealing off waits for a hello
+  that never comes and the join times out. Defaulting it on would break every dev run to
+  make one environment work. Encoding defaults to **`proto`**, which does change what a
+  plain run does, because (a) leaving it at JSON would make `-cuvara-sealed` a flag that
+  cannot work unless a second flag is remembered alongside it, (b) Protobuf is what the
+  backend defaults to and what the package's golden vectors cover, ~81% smaller on the
+  wire once id interning is counted, and (c) it costs no server change — both servers
+  sniff the first body byte (`0x08` Protobuf, `0x7B` JSON) and answer in kind. That last
+  claim is what the unsealed acceptance run below exists to check rather than assert.
+  `-cuvara-encoding json` puts the old behaviour back for a readable capture.
+
+  The one combination that cannot work — sealing over JSON — is reported as an **error**
+  at startup naming both flags, rather than silently corrected: forcing Protobuf there
+  would be guessing which of the two the operator meant.
+
+- **`TransportSecurityReport` now reports the gameplay hop too — as a request, not an
+  outcome.** It previously said nothing about it, deliberately, because whether the
+  session is sealed is decided at the join. That is still true and the new lines still say
+  so; what changed is that the client now *asks* for something, and the request is a real
+  knowable fact at startup. It logs `will REQUEST a sealed session (ADR-22) over
+  protobuf` / `will NOT request sealing — gameplay frames cross this hop in the clear`,
+  names the address as *assigned at join* rather than pretending to know it, and leaves
+  the line that says the session **is** sealed to the netcode client, which carries the
+  caveat this one cannot: the server's binding is not verified, so the session is
+  confidential against a passive eavesdropper and offers nothing against an active one
+  until ADR-22's pinned identity key lands.
+
+- **`Tools/verify-multiclient.sh` takes a `--` passthrough**, the same one
+  `run-clients.sh` already had, so the harness can exercise the sealed hop:
+  `… -- -cuvara-sealed 1`. Without it there was no way to reach the new flags through the
+  verification script at all.
+
+  **Acceptance, run here against the live `k3d-rpg-dev` fleet — not unit tests.** A fresh
+  Windows player (Mono2x, `-executeMethod PlayerBuilder.Build`, no `-bootScene`, so the
+  real MainScene path) reported `[PlayerBuilder] Build succeeded: 131072079 bytes`, which
+  is the line `PlayerBuilder` only prints when `BuildReport.summary.result` is
+  `Succeeded`. `Tools/verify-multiclient.sh --count 3` was then run three ways:
+
+  | Run | Fleet | Client | Result |
+  |---|---|---|---|
+  | (a) regression | `GAMESERVER_SEALED=off` | protobuf, unsealed | **7 passed, 0 failed, 1 not checked** |
+  | (b) sealed | `GAMESERVER_SEALED=require` | protobuf, `-cuvara-sealed 1` | **7 passed, 0 failed, 1 not checked** |
+  | control | `GAMESERVER_SEALED=require` | protobuf, **no** `-cuvara-sealed` | join/kick loop |
+
+  The seven asserted rows in (a) and (b) are identical: all 3 clients reached IN WORLD, 3
+  distinct Nakama user ids, all assigned the same game server, no FATAL in any log,
+  `players_online=3`, 3 Redis session keys, `servers:map:map_01` holding exactly one
+  member. The eighth row — mutual visibility — is the one only a human can settle and is
+  reported NOT CHECKED, never folded into the pass.
+
+  Run (a) is what makes the encoding default defensible: it is the same harness that
+  passed before this change, now passing with the client speaking protobuf against an
+  unchanged `off` server.
+
+  Run (b)'s client log carries the two lines that say what actually happened, rather than
+  leaving it to the exit code:
+
+  ```
+  [transport-security] game server (address assigned at join): will REQUEST a sealed session (ADR-22) over protobuf. …
+  [Net] sealed session established; the server's binding was NOT verified, so this session is
+        confidential against a passive eavesdropper and offers no man-in-the-middle protection
+  ```
+
+  The control exists because (b) passing does not by itself prove the flag did anything.
+  It shows the flag is load-bearing, and it also **corrects the failure shape recorded
+  above**: a protobuf client that does not seal is not refused *at* the join by a
+  `require` server — it reaches `InWorld` and is then closed (`PeerClosed`) and
+  reconnects, 21 such lines in 45 seconds, where the sealed run logged **zero**. Only the
+  *JSON* client is refused outright. So the original `gateway closed the connection during
+  the handshake` was the encoding, and `-cuvara-sealed` is what buys a session that
+  survives.
+
+  Fleet handling: `GAMESERVER_SEALED` is env index 5 and was patched by replacing the
+  **whole** env entry object, never `/value` — index 6 is `GAMESERVER_ADVERTISE_HOST`, a
+  `configMapKeyRef`, and a `/value` patch on an entry with `valueFrom` corrupts it. The
+  fleet was returned to `off` and recycled afterwards; index 6 was verified intact both
+  times.
+
+### Added (2026-09-11)
+
 - **Gateway TLS is wired to the command line, and every hop says what protects it at
   startup.** `-cuvara-gateway-tls` / `CUVARA_GATEWAY_TLS` turns on ADR-23's TLS for the
   gateway connection, and `-cuvara-gateway-tls-cert` / `CUVARA_GATEWAY_TLS_CERT` pins a PEM
