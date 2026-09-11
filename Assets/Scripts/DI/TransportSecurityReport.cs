@@ -118,11 +118,20 @@ namespace Scripts.DI
                 return;
             }
 
+            // Deliberately says what this client will REQUEST, and no more. As of
+            // 2026-09-11 dev and staging run GAMESERVER_SEALED=require, so "not requesting"
+            // no longer means "will not be sealed": the server refuses the first join by
+            // name and the client reconnects WITH sealing (netcode v0.36.2). Claiming the
+            // hop is in the clear here would therefore be wrong on exactly the environments
+            // that matter -- which is what the previous wording did, one deploy after it
+            // was written.
             Debug.Log(
-                "[transport-security] game server (address assigned at join): will NOT request sealing — " +
-                $"gameplay frames cross this hop in the clear, over {encoding}. This matches every " +
-                "deployed environment today (GAMESERVER_SEALED=off). Turn it on with -cuvara-sealed 1, " +
-                "which requires the server to be set to require at the same time.");
+                "[transport-security] game server (address assigned at join): will NOT request sealing " +
+                $"up front — gameplay frames would cross this hop in the clear, over {encoding}. " +
+                "A server running GAMESERVER_SEALED=require (dev and staging do) refuses that join " +
+                "with no_sealed_session and this client then reconnects WITH sealing, so watch for " +
+                "'sealed session established' below. Pass -cuvara-sealed 1 to seal the first join " +
+                "instead of the second.");
         }
 
         /// <summary>
