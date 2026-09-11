@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-11)
+
+- `com.cuvara.netcode` v0.36.1 → **v0.36.2** (manifest and lock): a client refused for not
+  sealing now retries WITH sealing, so a default player build plays on the sealed dev fleet
+  **without any flag**. It escalates and never downgrades — the runtime has exactly one
+  assignment to `RequireSealedSession` and it is `= true`, with a test that scans for the
+  opposite.
+
+  Measured on k3d-rpg-dev with `GAMESERVER_SEALED=require`, three players, no flags:
+  **7 passed, 0 failed**. The client log shows the whole path:
+
+  ```
+  will NOT request sealing up front …
+  the game server requires a sealed session and refused this one (no_sealed_session);
+    reconnecting WITH sealing
+  sealed session established; the server's binding was NOT verified …
+  ```
+
+- **`TransportSecurityReport` no longer claims the gameplay hop is in the clear.** Its
+  startup line said "this matches every deployed environment today (GAMESERVER_SEALED=off)",
+  which stopped being true the same day dev and staging were flipped to `require` — a
+  sentence that was accurate when written and wrong one deploy later. It now describes what
+  the client will *request*, names what a `require` server does about it, and points the
+  reader at the `sealed session established` line that settles it.
+
 ### Added (2026-09-11)
 
 - **The shipped client can run against a game server that requires a sealed session, and

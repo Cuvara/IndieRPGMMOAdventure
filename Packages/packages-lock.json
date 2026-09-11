@@ -22,7 +22,7 @@
       "hash": "def09265c7d9f916926556961ffd4c4caeffe912"
     },
     "com.cuvara.netcode": {
-      "version": "https://github.com/Cuvara/Netcode.git#943240c9296c6eb2317aa0535b9d291e6f65f9d5",
+      "version": "https://github.com/Cuvara/Netcode.git#669116a7fcbe499a46a5740c2b33b2cec506ca08",
       "depth": 0,
       "source": "git",
       "dependencies": {
@@ -31,7 +31,7 @@
         "com.unity.modules.unitywebrequest": "1.0.0",
         "com.unity.modules.physics": "1.0.0"
       },
-      "hash": "943240c9296c6eb2317aa0535b9d291e6f65f9d5"
+      "hash": "669116a7fcbe499a46a5740c2b33b2cec506ca08"
     },
     "com.cuvara.uitoolkit": {
       "version": "https://github.com/Cuvara/UIToolkit.git#v0.7.2",
