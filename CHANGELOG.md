@@ -7,47 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (2026-09-11)
-
-- **Gateway TLS is wired to the command line, and every hop says what protects it at
-  startup.** `-cuvara-gateway-tls` / `CUVARA_GATEWAY_TLS` turns on ADR-23's TLS for the
-  gateway connection, and `-cuvara-gateway-tls-cert` / `CUVARA_GATEWAY_TLS_CERT` pins a PEM
-  certificate for a gateway holding a self-signed one. Off by default, matching the
-  gateway's own default. `-cuvara-nakama-scheme https` already existed and is unchanged.
-
-  `TransportSecurityReport` logs one line per hop when the container is built. The client
-  talks to three things — Nakama, the gateway, the game server — and each is protected by a
-  different mechanism configured independently, so "the connection is encrypted" is a
-  sentence that is true of one hop and believed about all three. A plaintext hop to
-  loopback logs at Info and says nothing more; a plaintext hop to a **remote** host logs an
-  **error** naming what crosses in the clear and the flag that fixes it, because that is a
-  build shipping credentials readable by anyone on the path. A host it does not recognise
-  counts as remote, so the failure direction is one warning too many rather than a silent
-  plaintext link to a real server.
-
-  It lives in `NDC.Scripts.DI` rather than beside `BackendCommandLine`: `NDC.Scripts.Session`
-  references no assemblies at all, so a `using Cuvara.Netcode.Transport` there compiles in a
-  hand-written csproj and fails in Unity.
-
-### Changed (2026-09-11)
-
-- `com.cuvara.netcode` v0.35.0 → **v0.36.1** (manifest and lock): TLS on the gateway hop
-  with certificate validation that cannot be turned off, plus the fix for a pending socket
-  read that ignored cancellation — which is why `NetworkSettings.ConnectTimeout` now
-  actually bounds the gateway handshake instead of hanging indefinitely when the gateway
-  never answers.
-
-  Acceptance, run here rather than taken from package CI: the full EditMode suite is
-  **1223/1223** against v0.36.1, and the sample's five cases were run in **play mode**
-  against a real `SslStream` listener — pinned connects over Tls12 and carries a frame, an
-  unpinned connection to a self-signed certificate is refused by the platform, a TLS client
-  does not downgrade to a plaintext gateway, a plaintext client against a TLS gateway
-  stalls rather than being refused, and the factory throws when asked for TLS with no
-  options. The first is a positive control, so "everything is refused now" cannot pass for
-  success.
-
-  The `Gateway TLS Probe` sample is imported at `Assets/Samples/Cuvara Netcode/0.36.1/`.
-
 ### Changed (2026-09-08)
 
 - `com.cuvara.netcode` v0.34.0 → **v0.35.0** (manifest and lock): the client's input send
