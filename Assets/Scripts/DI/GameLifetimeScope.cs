@@ -27,10 +27,14 @@ namespace Scripts.DI
             var deviceId = BackendCommandLine.ResolveDeviceIdOrNull(backend, "mainscene");
             builder.RegisterInstance(new BackendSettings { Value = backend, DeviceId = deviceId });
 
+            TransportSecurityReport.Warn(backend);
+
             builder.RegisterNetworking(new NetworkSettings
             {
                 GatewayHost = backend.GatewayHost,
                 GatewayPort = backend.GatewayPort,
+                GatewayUseTls = backend.GatewayTls,
+                GatewayTlsPinnedCertificate = TransportSecurityReport.LoadPinOrNull(backend),
             });
 
             // The device id is pinned on the settings, not only used once: the auth provider

@@ -22,15 +22,16 @@
       "hash": "def09265c7d9f916926556961ffd4c4caeffe912"
     },
     "com.cuvara.netcode": {
-      "version": "https://github.com/Cuvara/Netcode.git#v0.35.0",
+      "version": "https://github.com/Cuvara/Netcode.git#943240c9296c6eb2317aa0535b9d291e6f65f9d5",
       "depth": 0,
       "source": "git",
       "dependencies": {
         "com.cysharp.unitask": "2.5.10",
+        "org.nuget.system.runtime.compilerservices.unsafe": "6.0.0",
         "com.unity.modules.unitywebrequest": "1.0.0",
         "com.unity.modules.physics": "1.0.0"
       },
-      "hash": "271d1688cacf8eb7d8df4101a7a19ff06d249a27"
+      "hash": "943240c9296c6eb2317aa0535b9d291e6f65f9d5"
     },
     "com.cuvara.uitoolkit": {
       "version": "https://github.com/Cuvara/UIToolkit.git#v0.7.2",
@@ -167,11 +168,11 @@
       "url": "https://package.openupm.com"
     },
     "com.rpgmmo.shared-gamelogic": {
-      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.3.1",
+      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.4.1",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "fa99e5dd0f25862aa4c6be637f6049627ba27222"
+      "hash": "ea2799731541d8d41e746ccee5ab5eb199cfbc64"
     },
     "com.unity.addressables": {
       "version": "2.8.1",
@@ -577,7 +578,7 @@
     },
     "org.nuget.system.runtime.compilerservices.unsafe": {
       "version": "6.0.0",
-      "depth": 2,
+      "depth": 1,
       "source": "registry",
       "dependencies": {},
       "url": "https://package.openupm.com"
