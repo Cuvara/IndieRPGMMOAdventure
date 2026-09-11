@@ -84,6 +84,44 @@ No address is baked in. The game server is an Agones pod whose port is assigned 
 scheduling time, so every address is a parameter — see `BackendCommandLine` for the
 full flag set and the `CUVARA_*` environment fallbacks.
 
+#### What protects each hop, and what the client speaks on the wire
+
+The client talks to three things and each is configured separately, so none of these is
+implied by any other:
+
+| Hop | Flag | Default | Why that default |
+|---|---|---|---|
+| Nakama (auth, meta) | `-cuvara-nakama-scheme https` | `http` | plaintext is the dev case; the session token crosses this hop |
+| gateway | `-cuvara-gateway-tls 1`, `-cuvara-gateway-tls-cert PEM` | off | matches the gateway's own default (ADR-23) |
+| game server | `-cuvara-sealed 1` | **off** | every deployed environment pins `GAMESERVER_SEALED=off` (ADR-22) |
+
+**The client speaks Protobuf on the wire, not JSON.** `-cuvara-encoding json|proto`
+selects it (`CUVARA_ENCODING`), and it defaults to `proto`. Both servers sniff the first
+body byte — `0x08` Protobuf, `0x7B` JSON — and answer in kind, so this is a client-side
+choice needing no server change; `json` is still there for a readable capture. It is not
+a free choice when sealing, though: **a JSON client can never seal.** The sealed
+handshake messages are absent from the JSON message set on purpose, and a server running
+`GAMESERVER_SEALED=require` refuses a JSON client at the join with `encoding_cannot_seal`
+— which reaches the client as nothing more informative than a closed connection during
+the handshake. That is exactly the failure the shipped client hit on 2026-09-11 when the
+dev fleet was first switched to `require`, and it is why the encoding default moved.
+
+`-cuvara-sealed` has **no negotiation and no fallback**, so the two sides must be set
+together. Client on / server off stalls the join until the sealed-handshake timeout. The
+other direction is **not** a clean refusal, measured on 2026-09-11: a protobuf client that
+does not seal against a `require` server reaches `InWorld` and is then closed
+(`PeerClosed`) and reconnects — 21 such lines in 45 seconds — so the symptom is a
+join/kick loop rather than an error naming the cause. Only the JSON client is refused
+outright. `TransportSecurityReport` logs, at startup, what the client will *request* for
+all three hops — it deliberately does not claim the gameplay hop is sealed, because that
+is decided at the join by the server.
+
+`Tools/verify-multiclient.sh` takes a `--` passthrough for exactly this:
+
+```bash
+Tools/verify-multiclient.sh --exe … --gateway-port 7000 … -- -cuvara-sealed 1
+```
+
 **`--nakama-key` is not optional any more.** It defaults to `defaultkey`, which is
 what every backend used until the keys were rotated on 2026-08-20 — each cluster now
 has its own. Read the one for the backend you are pointing at:
