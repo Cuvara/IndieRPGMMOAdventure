@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-13)
+
+- **Parties and dungeon entry reach the player.** The backend half of ADR-26 shipped and was
+  proven with a Go probe, which proves a server and proves nothing about whether the shipped
+  client can reach it — and it could not: `party_id` existed nowhere in this client. This is
+  the half that was missing.
+
+  `Scripts/Nakama/Social/PartyService.cs` wraps the four Nakama RPCs (`party_create`,
+  `party_join`, `party_leave`, `party_get`). A **transport failure and a refusal throw
+  different types**: a caller that cannot tell "the party is full" from "Nakama is
+  unreachable" will either retry a refusal forever or report an outage as a game rule.
+
+  `MainSessionFlow` gains a party step **before** the world, because a dungeon instance is
+  keyed by the party (ADR-26 decision 2) — there is nothing to enter until the party exists.
+  A dungeon requested with **no party fails loudly** rather than falling back to the map: a
+  client configured for a dungeon and quietly dropped into the open world is a
+  misconfiguration that survives the test run that should have caught it.
+
+  Driven by `-cuvara-party create|<id>` and `-cuvara-dungeon <content id>` (or `CUVARA_PARTY`
+  / `CUVARA_DUNGEON`), so a **built** player can be put in a party from a script the way
+  `Tools/run-clients.sh` drives everything else. Without that, testing a two-player dungeon
+  needs two humans and two mice.
+
+### Changed (2026-09-13)
+
+- `com.cuvara.netcode` v0.36.2 → **v0.37.0** (manifest **and** lock): `EnterWorldRequest`
+  carries `party_id`, `NetworkClient.ConnectToDungeonAsync` exists, and **the party id is
+  replayed on reconnect** — a rejoin that forgot it would ask for a map named after the
+  dungeon content, so the player silently leaves their party behind. The JSON encoder omits
+  the field when empty, so a map entry is byte-identical to what a pre-party client sent.
+
 ### Changed (2026-09-11)
 
 - `com.cuvara.netcode` v0.36.1 → **v0.36.2** (manifest and lock): a client refused for not

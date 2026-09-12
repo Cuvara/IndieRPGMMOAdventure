@@ -22,7 +22,7 @@
       "hash": "def09265c7d9f916926556961ffd4c4caeffe912"
     },
     "com.cuvara.netcode": {
-      "version": "https://github.com/Cuvara/Netcode.git#669116a7fcbe499a46a5740c2b33b2cec506ca08",
+      "version": "https://github.com/Cuvara/Netcode.git#f1f0ca451709ff9e06750d45af4bc0e2a3f12721",
       "depth": 0,
       "source": "git",
       "dependencies": {

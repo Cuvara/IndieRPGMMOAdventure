@@ -29,6 +29,38 @@ namespace Scripts.Session
             public int GatewayPort;
             public string MapId;
             public bool MapExplicit;
+
+            /// <summary>
+            /// <c>-cuvara-party</c> / <c>CUVARA_PARTY</c>. What to do about a party before
+            /// entering the world: <c>create</c>, a party id to join, or absent for neither.
+            /// </summary>
+            /// <remarks>
+            /// This exists so a BUILT player can be driven into a party from a script, the way
+            /// Tools/run-clients.sh drives everything else. Without it the only way to test a
+            /// two-player dungeon is two humans and two mice.
+            /// </remarks>
+            public string Party;
+
+            /// <summary>
+            /// <c>-cuvara-dungeon</c> / <c>CUVARA_DUNGEON</c>. When set, the client enters a
+            /// DUNGEON INSTANCE of this content id for its party instead of a map.
+            /// </summary>
+            /// <remarks>
+            /// Requires a party: a dungeon instance is keyed by one (ADR-26 decision 2), and a
+            /// client asking for a dungeon with no party is a configuration mistake that must
+            /// fail loudly rather than quietly entering a map.
+            /// </remarks>
+            public string DungeonContentId;
+
+            /// <summary>Whether this client was told to enter a dungeon.</summary>
+            public bool WantsDungeon => !string.IsNullOrEmpty(DungeonContentId);
+
+            /// <summary>Whether this client was told to create a new party.</summary>
+            public bool CreatesParty =>
+                string.Equals(Party, "create", StringComparison.OrdinalIgnoreCase);
+
+            /// <summary>The party id to join, or null when creating or not partying.</summary>
+            public string PartyIdToJoin => CreatesParty || string.IsNullOrEmpty(Party) ? null : Party;
             public string NakamaScheme;
             public string NakamaHost;
             public int NakamaPort;
@@ -147,6 +179,8 @@ namespace Scripts.Session
                     Str(args, env, "-cuvara-nakama-scheme", "CUVARA_NAKAMA_SCHEME", null) != null ||
                     Str(args, env, "-cuvara-nakama-host", "CUVARA_NAKAMA_HOST", null) != null ||
                     Str(args, env, "-cuvara-nakama-port", "CUVARA_NAKAMA_PORT", null) != null,
+                Party = Str(args, env, "-cuvara-party", "CUVARA_PARTY", null),
+                DungeonContentId = Str(args, env, "-cuvara-dungeon", "CUVARA_DUNGEON", null),
                 DeviceId = Str(args, env, "-cuvara-device", "CUVARA_DEVICE_ID", null),
                 InstanceLabel = Str(args, env, "-cuvara-instance", "CUVARA_INSTANCE", null),
             };

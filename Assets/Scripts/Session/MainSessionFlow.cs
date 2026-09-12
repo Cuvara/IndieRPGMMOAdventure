@@ -29,6 +29,9 @@ namespace Scripts.Session
         public const string AuthenticatingPrefix = Tag + " Authenticating device=";
         public const string AuthOkPrefix = Tag + " Auth OK, user_id=";
         public const string InWorldPrefix = Tag + " IN WORLD as ";
+
+        /// <summary>Printed once the party exists, carrying the id a dungeon entry is keyed on.</summary>
+        public const string PartyPrefix = Tag + " party ready: ";
         public const string FatalPrefix = Tag + " FATAL: ";
         public const string CancelledLine = Tag + " Cancelled";
 
@@ -41,6 +44,15 @@ namespace Scripts.Session
             /// <summary>Authenticates to the gateway with the current session and joins the map.</summary>
             Task ConnectAsync(string mapId, CancellationToken cancellationToken);
 
+            /// <summary>
+            /// Creates a party (<paramref name="create"/>) or joins <paramref name="partyIdToJoin"/>,
+            /// returning the party id.
+            /// </summary>
+            Task<string> EnsurePartyAsync(bool create, string partyIdToJoin, CancellationToken cancellationToken);
+
+            /// <summary>Joins a dungeon instance of <paramref name="contentId"/> for the party.</summary>
+            Task ConnectToDungeonAsync(string contentId, string partyId, CancellationToken cancellationToken);
+
             /// <summary>The user id the session is in world as; empty until connected.</summary>
             string UserId { get; }
         }
@@ -49,6 +61,7 @@ namespace Scripts.Session
         {
             Idle,
             Authenticating,
+            Partying,
             Connecting,
             InWorld,
             Failed,
@@ -70,10 +83,19 @@ namespace Scripts.Session
         /// <param name="deviceId">Device id to authenticate with; null for the machine's own.</param>
         /// <param name="log">Sink for the marker lines; the driver passes <c>Debug.Log</c>.</param>
         /// <param name="logError">Sink for the fatal line; the driver passes <c>Debug.LogError</c>.</param>
+        /// <summary>
+        /// The party this run created or joined; empty when it did neither. A dungeon entry is
+        /// keyed on it (ADR-26 decision 2), so it is worth reading back rather than assuming.
+        /// </summary>
+        public string PartyId { get; private set; } = string.Empty;
+
         public async Task RunAsync(
             IEndpoint endpoint,
             string deviceId,
             string mapId,
+            bool createParty,
+            string partyIdToJoin,
+            string dungeonContentId,
             Action<string> log,
             Action<string> logError,
             CancellationToken cancellationToken)
@@ -98,8 +120,37 @@ namespace Scripts.Session
                 cancellationToken.ThrowIfCancellationRequested();
                 log($"{AuthOkPrefix}{UserId}");
 
+                // A party, if this run was told to want one. Before the world, because a
+                // dungeon instance is keyed by the party (ADR-26 decision 2) -- there is
+                // nothing to enter until the party exists.
+                if (createParty || !string.IsNullOrEmpty(partyIdToJoin))
+                {
+                    CurrentPhase = Phase.Partying;
+                    PartyId = await endpoint.EnsurePartyAsync(createParty, partyIdToJoin, cancellationToken)
+                              ?? string.Empty;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    log($"{PartyPrefix}{PartyId}");
+                }
+
                 CurrentPhase = Phase.Connecting;
-                await endpoint.ConnectAsync(mapId, cancellationToken);
+                if (!string.IsNullOrEmpty(dungeonContentId))
+                {
+                    if (string.IsNullOrEmpty(PartyId))
+                    {
+                        // Loud, not a fallback to the map. A client configured for a dungeon
+                        // with no party is a mistake in the configuration, and quietly putting
+                        // that player in the open world is how the mistake survives a test run.
+                        throw new InvalidOperationException(
+                            "a dungeon was requested but this client is in no party; " +
+                            "pass a party (create or an id) alongside the dungeon content id");
+                    }
+
+                    await endpoint.ConnectToDungeonAsync(dungeonContentId, PartyId, cancellationToken);
+                }
+                else
+                {
+                    await endpoint.ConnectAsync(mapId, cancellationToken);
+                }
                 cancellationToken.ThrowIfCancellationRequested();
 
                 CurrentPhase = Phase.InWorld;
