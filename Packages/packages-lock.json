@@ -31,7 +31,7 @@
         "com.unity.modules.unitywebrequest": "1.0.0",
         "com.unity.modules.physics": "1.0.0"
       },
-      "hash": "669116a7fcbe499a46a5740c2b33b2cec506ca08"
+      "hash": "f1f0ca451709ff9e06750d45af4bc0e2a3f12721"
     },
     "com.cuvara.uitoolkit": {
       "version": "https://github.com/Cuvara/UIToolkit.git#v0.7.2",

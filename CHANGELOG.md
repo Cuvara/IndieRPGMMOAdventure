@@ -45,11 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (2026-09-13)
 
-- `com.cuvara.netcode` v0.36.2 → **v0.37.0** (manifest **and** lock): `EnterWorldRequest`
+- `com.cuvara.netcode` v0.36.2 → **v0.37.0** (manifest, and the lock's **`version` AND
+  `hash`** — see below): `EnterWorldRequest`
   carries `party_id`, `NetworkClient.ConnectToDungeonAsync` exists, and **the party id is
   replayed on reconnect** — a rejoin that forgot it would ask for a map named after the
   dungeon content, so the player silently leaves their party behind. The JSON encoder omits
   the field when empty, so a map entry is byte-identical to what a pre-party client sent.
+
+  **Two fields in the lock, not one.** `packages-lock.json` carries both a `version` (the git
+  URL with its ref) and a `hash` (the resolved commit), and **UPM resolves the `hash`**.
+  Bumping only the URL is as silently ignored as bumping only the manifest: CI built the old
+  package and failed with `NetworkClient does not contain a definition for
+  ConnectToDungeonAsync` against a commit that plainly contains it. The known rule was
+  "manifest AND lock"; it is really "manifest AND both lock fields".
 ### Added (2026-09-12)
 
 - **An Android build can now be pointed at a backend at all.** Every override this client has
