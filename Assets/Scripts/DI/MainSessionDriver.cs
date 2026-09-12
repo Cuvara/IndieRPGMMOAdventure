@@ -6,6 +6,7 @@ namespace Scripts.DI
     using Cuvara.Netcode.Client;
     using Cysharp.Threading.Tasks;
     using Scripts.Nakama;
+    using Scripts.Nakama.Social;
     using Scripts.Session;
     using UnityEngine;
     using VContainer.Unity;
@@ -52,16 +53,19 @@ namespace Scripts.DI
         private readonly NetworkClient client;
         private readonly NakamaSessionService nakama;
         private readonly BackendSettings backend;
+        private readonly PartyService party;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         private readonly int instanceId = Interlocked.Increment(ref instances);
         private static int instances;
         private bool disposed;
 
-        public MainSessionDriver(NetworkClient client, NakamaSessionService nakama, BackendSettings backend)
+        public MainSessionDriver(
+            NetworkClient client, NakamaSessionService nakama, BackendSettings backend, PartyService party)
         {
             this.client = client ?? throw new ArgumentNullException(nameof(client));
             this.nakama = nakama ?? throw new ArgumentNullException(nameof(nakama));
             this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
+            this.party = party ?? throw new ArgumentNullException(nameof(party));
         }
 
         /// <summary>The sequence this driver ran; null until <see cref="Start"/>.</summary>
@@ -92,9 +96,12 @@ namespace Scripts.DI
         {
             this.Flow = new MainSessionFlow();
             await this.Flow.RunAsync(
-                new Endpoint(this.client, this.nakama),
+                new Endpoint(this.client, this.nakama, this.party),
                 this.backend.DeviceId,
                 this.backend.Value.MapId,
+                this.backend.Value.CreatesParty,
+                this.backend.Value.PartyIdToJoin,
+                this.backend.Value.DungeonContentId,
                 Debug.Log,
                 Debug.LogError,
                 cancellationToken);
@@ -133,11 +140,13 @@ namespace Scripts.DI
         {
             private readonly NetworkClient client;
             private readonly NakamaSessionService nakama;
+            private readonly PartyService party;
 
-            public Endpoint(NetworkClient client, NakamaSessionService nakama)
+            public Endpoint(NetworkClient client, NakamaSessionService nakama, PartyService party)
             {
                 this.client = client;
                 this.nakama = nakama;
+                this.party = party;
             }
 
             public string UserId => this.client.UserId;
@@ -155,6 +164,25 @@ namespace Scripts.DI
                 // The provider overload: the registered NakamaAuthProvider turns the session into
                 // a gateway JWT, and the client keeps the provider for its own reconnects.
                 await this.client.ConnectAsync(mapId, cancellationToken);
+            }
+
+            public async Task<string> EnsurePartyAsync(
+                bool create, string partyIdToJoin, CancellationToken cancellationToken)
+            {
+                var info = create
+                    ? await this.party.CreateAsync(cancellationToken)
+                    : await this.party.JoinAsync(partyIdToJoin, cancellationToken);
+                return info.PartyId;
+            }
+
+            public async Task ConnectToDungeonAsync(
+                string contentId, string partyId, CancellationToken cancellationToken)
+            {
+                // Same provider overload as ConnectAsync above, for the same reason: the client
+                // keeps the provider so its own reconnects re-authenticate -- and a dungeon
+                // reconnect must re-enter the SAME instance, which it does because the client
+                // remembers the party id alongside the map.
+                await this.client.ConnectToDungeonAsync(contentId, partyId, cancellationToken);
             }
         }
     }

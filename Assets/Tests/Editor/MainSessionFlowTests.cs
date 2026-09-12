@@ -52,6 +52,33 @@ namespace Tests.Editor
             }
 
             public string ConnectedUserId;
+
+            // ---- party / dungeon ----
+            public string PartyIdToReturn = "party-1";
+            public bool CreateSeen;
+            public string JoinIdSeen;
+            public string DungeonContentSeen;
+            public string DungeonPartySeen;
+            public Exception PartyError;
+
+            public Task<string> EnsurePartyAsync(bool create, string partyIdToJoin, CancellationToken cancellationToken)
+            {
+                this.Calls.Add(create ? "party-create" : "party-join");
+                this.CreateSeen = create;
+                this.JoinIdSeen = partyIdToJoin;
+                if (this.PartyError != null) return Task.FromException<string>(this.PartyError);
+                return Task.FromResult(this.PartyIdToReturn);
+            }
+
+            public Task ConnectToDungeonAsync(string contentId, string partyId, CancellationToken cancellationToken)
+            {
+                this.Calls.Add("connect-dungeon");
+                this.DungeonContentSeen = contentId;
+                this.DungeonPartySeen = partyId;
+                if (this.ConnectError != null) return Task.FromException(this.ConnectError);
+                this.UserId = this.ConnectedUserId ?? this.AuthUserId;
+                return Task.CompletedTask;
+            }
         }
 
         private FakeEndpoint endpoint;
@@ -74,8 +101,90 @@ namespace Tests.Editor
         [TearDown]
         public void TearDown() => SynchronizationContext.SetSynchronizationContext(this.savedContext);
 
-        private Task Run(MainSessionFlow flow, string deviceId = "dev-1", string map = "map_01", CancellationToken ct = default) =>
-            flow.RunAsync(this.endpoint, deviceId, map, this.log.Add, this.errors.Add, ct);
+        private Task Run(
+            MainSessionFlow flow,
+            string deviceId = "dev-1",
+            string map = "map_01",
+            bool createParty = false,
+            string partyIdToJoin = null,
+            string dungeon = null,
+            CancellationToken ct = default) =>
+            flow.RunAsync(
+                this.endpoint, deviceId, map, createParty, partyIdToJoin, dungeon,
+                this.log.Add, this.errors.Add, ct);
+
+        // ---- party and dungeon (ADR-26) -------------------------------------------------
+
+        /// <summary>
+        /// The default path must be untouched by the party work: no party call, and a map
+        /// connect. Every existing caller passes neither flag.
+        /// </summary>
+        [Test]
+        public void WithoutAPartyRequest_NoPartyCallIsMade()
+        {
+            var flow = new MainSessionFlow();
+
+            this.Run(flow).GetAwaiter().GetResult();
+
+            CollectionAssert.AreEqual(new[] { "auth", "connect" }, this.endpoint.Calls);
+            Assert.That(flow.PartyId, Is.Empty);
+        }
+
+        [Test]
+        public void CreatingAParty_HappensBeforeTheWorld_AndTheDungeonUsesIt()
+        {
+            var flow = new MainSessionFlow();
+            this.endpoint.PartyIdToReturn = "party-abc";
+
+            this.Run(flow, createParty: true, dungeon: "dungeon_01").GetAwaiter().GetResult();
+
+            // Order matters: a dungeon instance is keyed by the party, so there is nothing to
+            // enter until the party exists.
+            CollectionAssert.AreEqual(new[] { "auth", "party-create", "connect-dungeon" }, this.endpoint.Calls);
+            Assert.That(this.endpoint.DungeonContentSeen, Is.EqualTo("dungeon_01"));
+            Assert.That(this.endpoint.DungeonPartySeen, Is.EqualTo("party-abc"));
+            Assert.That(flow.PartyId, Is.EqualTo("party-abc"));
+        }
+
+        [Test]
+        public void JoiningAParty_PassesTheIdThrough()
+        {
+            var flow = new MainSessionFlow();
+
+            this.Run(flow, partyIdToJoin: "party-xyz", dungeon: "dungeon_01").GetAwaiter().GetResult();
+
+            CollectionAssert.AreEqual(new[] { "auth", "party-join", "connect-dungeon" }, this.endpoint.Calls);
+            Assert.That(this.endpoint.CreateSeen, Is.False);
+            Assert.That(this.endpoint.JoinIdSeen, Is.EqualTo("party-xyz"));
+        }
+
+        /// <summary>
+        /// A dungeon with no party FAILS. It must not fall back to the map: a client
+        /// configured for a dungeon and quietly dropped into the open world is a
+        /// misconfiguration that survives the test run that should have caught it.
+        /// </summary>
+        [Test]
+        public void ADungeonWithNoParty_FailsRatherThanEnteringTheMap()
+        {
+            var flow = new MainSessionFlow();
+
+            this.Run(flow, dungeon: "dungeon_01").GetAwaiter().GetResult();
+
+            Assert.That(flow.CurrentPhase, Is.EqualTo(MainSessionFlow.Phase.Failed));
+            CollectionAssert.DoesNotContain(this.endpoint.Calls, "connect");
+            CollectionAssert.DoesNotContain(this.endpoint.Calls, "connect-dungeon");
+        }
+
+        [Test]
+        public void APartyWithoutADungeon_StillEntersTheMap()
+        {
+            var flow = new MainSessionFlow();
+
+            this.Run(flow, createParty: true).GetAwaiter().GetResult();
+
+            // A party is not only for dungeons; forming one in the open world is legitimate.
+            CollectionAssert.AreEqual(new[] { "auth", "party-create", "connect" }, this.endpoint.Calls);
+        }
 
         [Test]
         public void HappyPath_AuthenticatesThenConnects_AndPrintsTheHarnessMarkers()

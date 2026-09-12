@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-09-13)
+
+- **Every pull request was failing CI with `android-export='apk' was given but no Android
+  build was selected`.** `unity-build.yml` passed `android-export` with a hard default of
+  `apk` on every call, including pushes and pull requests — which select their platforms from
+  the `*_BUILD_PLATFORMS` variables, and a PR selects none. The toolkit (referenced at
+  `@main`, so it moves under us) began validating that combination and refused it.
+
+  **The refusal is correct**, so this is fixed here rather than worked around there: an
+  Android-only output format on a run with no Android build is a request nobody can satisfy.
+  The input now passes through only what a manual dispatch actually chose, and passes nothing
+  otherwise.
+
+### Added (2026-09-13)
+
+- **Parties and dungeon entry reach the player.** The backend half of ADR-26 shipped and was
+  proven with a Go probe, which proves a server and proves nothing about whether the shipped
+  client can reach it — and it could not: `party_id` existed nowhere in this client. This is
+  the half that was missing.
+
+  `Scripts/Nakama/Social/PartyService.cs` wraps the four Nakama RPCs (`party_create`,
+  `party_join`, `party_leave`, `party_get`). A **transport failure and a refusal throw
+  different types**: a caller that cannot tell "the party is full" from "Nakama is
+  unreachable" will either retry a refusal forever or report an outage as a game rule.
+
+  `MainSessionFlow` gains a party step **before** the world, because a dungeon instance is
+  keyed by the party (ADR-26 decision 2) — there is nothing to enter until the party exists.
+  A dungeon requested with **no party fails loudly** rather than falling back to the map: a
+  client configured for a dungeon and quietly dropped into the open world is a
+  misconfiguration that survives the test run that should have caught it.
+
+  Driven by `-cuvara-party create|<id>` and `-cuvara-dungeon <content id>` (or `CUVARA_PARTY`
+  / `CUVARA_DUNGEON`), so a **built** player can be put in a party from a script the way
+  `Tools/run-clients.sh` drives everything else. Without that, testing a two-player dungeon
+  needs two humans and two mice.
+
+### Changed (2026-09-13)
+
+- `com.cuvara.netcode` v0.36.2 → **v0.37.0** (manifest, and the lock's **`version` AND
+  `hash`** — see below): `EnterWorldRequest`
+  carries `party_id`, `NetworkClient.ConnectToDungeonAsync` exists, and **the party id is
+  replayed on reconnect** — a rejoin that forgot it would ask for a map named after the
+  dungeon content, so the player silently leaves their party behind. The JSON encoder omits
+  the field when empty, so a map entry is byte-identical to what a pre-party client sent.
+
+  **Two fields in the lock, not one.** `packages-lock.json` carries both a `version` (the git
+  URL with its ref) and a `hash` (the resolved commit), and **UPM resolves the `hash`**.
+  Bumping only the URL is as silently ignored as bumping only the manifest: CI built the old
+  package and failed with `NetworkClient does not contain a definition for
+  ConnectToDungeonAsync` against a commit that plainly contains it. The known rule was
+  "manifest AND lock"; it is really "manifest AND both lock fields".
 ### Added (2026-09-12)
 
 - **An Android build can now be pointed at a backend at all.** Every override this client has
