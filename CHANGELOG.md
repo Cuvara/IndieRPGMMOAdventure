@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (2026-09-12)
 
+- **An Android build can now be pointed at a backend at all.** Every override this client has
+  is a command-line flag or a `CUVARA_*` environment variable, and an Android app has
+  **neither** — no argv, and no settable process environment without a debuggable `wrap.sh`.
+  The defaults are a developer loopback (`127.0.0.1:8000`, Nakama's published `defaultkey`),
+  so an Android player could only ever reach a backend that happened to match them: it could
+  be built and installed, it could not be **aimed**. Measured against the dev cluster, whose
+  Nakama server key is 32 characters and not `defaultkey`, so device auth could not succeed.
+
+  `BackendCommandLine` now falls back to a `KEY=VALUE` file at
+  `Application.persistentDataPath/backend.env`, using the **same `CUVARA_*` names** rather than
+  a second vocabulary. Precedence is unchanged and the file sits at the bottom: command line >
+  environment > file > default, so a desktop run is unaffected by a file someone forgot to
+  delete. A missing file is the normal case and is silent; an unreadable one warns and is
+  ignored, because a player that refuses to start over a config file is worse than one that
+  starts on its defaults and says so.
+
+  ```
+  adb push backend.env /sdcard/Android/data/<package>/files/backend.env
+  ```
+
 - **`ANDROID_ABIS` selects the native architectures an Android build emits** (`arm64`,
   `armv7`, `x86_64`, comma-separated; unset keeps the project's current setting, arm64 only).
   This exists because of the emulator: every Android emulator image that runs at usable speed
