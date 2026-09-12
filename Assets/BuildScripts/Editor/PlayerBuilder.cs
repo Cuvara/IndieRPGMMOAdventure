@@ -95,7 +95,25 @@ public static class PlayerBuilder
                 $"{summary.totalErrors} error(s).");
         }
 
-        Debug.Log($"[PlayerBuilder] Build succeeded: {summary.totalSize} bytes -> {locationPath}");
+        // summary.totalSize is the build's UNCOMPRESSED content, not the artefact. Reporting
+        // it as "N bytes -> <path>" said 2175682249 for a 70 MB apk -- a consistent number
+        // about the wrong object, which is the hardest kind of wrong to notice. Report both,
+        // each labelled, and read the artefact's size from disk.
+        long onDisk = File.Exists(locationPath) ? new FileInfo(locationPath).Length : -1;
+        string onDiskText = onDisk >= 0 ? $"{onDisk} bytes" : "MISSING";
+        Debug.Log(
+            $"[PlayerBuilder] Build succeeded: {locationPath} is {onDiskText} " +
+            $"(uncompressed content {summary.totalSize} bytes)");
+
+        // An apk or aab that the report called a success but that is not on disk has happened
+        // on this project in the Windows IL2CPP case (exit 0, plausible .exe, no
+        // GameAssembly.dll). Fail here rather than let a later step discover it.
+        if (onDisk < 0)
+        {
+            throw new Exception(
+                $"[PlayerBuilder] Build reported {summary.result} but produced no file at " +
+                $"{locationPath}.");
+        }
     }
 
     /// <summary>
@@ -226,6 +244,49 @@ public static class PlayerBuilder
         {
             EditorUserBuildSettings.buildAppBundle = true;
             Debug.Log("[PlayerBuilder] ANDROID_APP_BUNDLE set -> building .aab");
+        }
+
+        // ANDROID_ABIS picks the native architectures IL2CPP emits, comma-separated:
+        // arm64, armv7, x86_64. Unset keeps whatever the project has (arm64 only today).
+        //
+        // This exists because of the emulator. Every Android emulator image that runs at
+        // usable speed on an x86_64 host is x86_64, and an arm64-only apk simply will not
+        // install on one -- so without this flag the only way to run an Android build of this
+        // game is to own the phone. `ANDROID_ABIS=arm64,x86_64` produces an apk that installs
+        // on both, at the cost of a second IL2CPP pass and roughly double the native payload,
+        // which is why it is opt-in rather than the default for shipping builds.
+        string abis = Environment.GetEnvironmentVariable("ANDROID_ABIS");
+        if (!string.IsNullOrEmpty(abis))
+        {
+            AndroidArchitecture selected = AndroidArchitecture.None;
+            foreach (string raw in abis.Split(','))
+            {
+                switch (raw.Trim().ToLowerInvariant())
+                {
+                    case "arm64":
+                    case "arm64-v8a":
+                        selected |= AndroidArchitecture.ARM64;
+                        break;
+                    case "armv7":
+                    case "armeabi-v7a":
+                        selected |= AndroidArchitecture.ARMv7;
+                        break;
+                    case "x86_64":
+                    case "x64":
+                        selected |= AndroidArchitecture.X86_64;
+                        break;
+                    default:
+                        // Refuse rather than silently build the wrong architecture set: a
+                        // typo here produces an apk that installs nowhere, and the failure
+                        // appears at `adb install` time with no mention of this variable.
+                        throw new Exception(
+                            $"[PlayerBuilder] ANDROID_ABIS contains unknown architecture " +
+                            $"'{raw.Trim()}'. Known: arm64, armv7, x86_64.");
+                }
+            }
+
+            PlayerSettings.Android.targetArchitectures = selected;
+            Debug.Log($"[PlayerBuilder] ANDROID_ABIS={abis} -> targetArchitectures={selected}");
         }
 
         string keystorePath = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE");
