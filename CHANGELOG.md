@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-09-13)
+
+- **Every pull request was failing CI with `android-export='apk' was given but no Android
+  build was selected`.** `unity-build.yml` passed `android-export` with a hard default of
+  `apk` on every call, including pushes and pull requests — which select their platforms from
+  the `*_BUILD_PLATFORMS` variables, and a PR selects none. The toolkit (referenced at
+  `@main`, so it moves under us) began validating that combination and refused it.
+
+  **The refusal is correct**, so this is fixed here rather than worked around there: an
+  Android-only output format on a run with no Android build is a request nobody can satisfy.
+  The input now passes through only what a manual dispatch actually chose, and passes nothing
+  otherwise.
+
 ### Added (2026-09-13)
 
 - **Parties and dungeon entry reach the player.** The backend half of ADR-26 shipped and was

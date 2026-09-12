@@ -133,7 +133,17 @@ jobs:
       runner-labels:       ${{ inputs.runner-labels       || '' }}
       unity-version:       ${{ inputs.unity-version       || '' }}
       clean-build:         ${{ inputs.clean-build         || 'auto' }}
-      android-export:      ${{ inputs.android-export      || 'apk' }}
+      # NO DEFAULT. android-export names an Android OUTPUT FORMAT, and the toolkit
+      # refuses it when no Android build was selected -- which is every push and
+      # every pull request, because those pick their platforms from the
+      # *_BUILD_PLATFORMS variables and a PR selects none. Defaulting it to 'apk'
+      # therefore made every PR fail with
+      #   android-export='apk' was given but no Android build was selected
+      # once the toolkit started validating the combination. The refusal is right:
+      # an Android-only option on a run with no Android build is a request nobody
+      # can satisfy. So this passes through ONLY what a manual dispatch actually
+      # chose, and passes nothing otherwise.
+      android-export:      ${{ inputs.android-export      || '' }}
       define-symbols:      ${{ inputs.define-symbols      || '' }}
       project-path:        '.'
       toolkit-ref:         'main'
