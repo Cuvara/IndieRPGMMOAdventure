@@ -37,6 +37,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replayed on reconnect** — a rejoin that forgot it would ask for a map named after the
   dungeon content, so the player silently leaves their party behind. The JSON encoder omits
   the field when empty, so a map entry is byte-identical to what a pre-party client sent.
+### Added (2026-09-12)
+
+- **An Android build can now be pointed at a backend at all.** Every override this client has
+  is a command-line flag or a `CUVARA_*` environment variable, and an Android app has
+  **neither** — no argv, and no settable process environment without a debuggable `wrap.sh`.
+  The defaults are a developer loopback (`127.0.0.1:8000`, Nakama's published `defaultkey`),
+  so an Android player could only ever reach a backend that happened to match them: it could
+  be built and installed, it could not be **aimed**. Measured against the dev cluster, whose
+  Nakama server key is 32 characters and not `defaultkey`, so device auth could not succeed.
+
+  `BackendCommandLine` now falls back to a `KEY=VALUE` file at
+  `Application.persistentDataPath/backend.env`, using the **same `CUVARA_*` names** rather than
+  a second vocabulary. Precedence is unchanged and the file sits at the bottom: command line >
+  environment > file > default, so a desktop run is unaffected by a file someone forgot to
+  delete. A missing file is the normal case and is silent; an unreadable one warns and is
+  ignored, because a player that refuses to start over a config file is worse than one that
+  starts on its defaults and says so.
+
+  ```
+  adb push backend.env /sdcard/Android/data/<package>/files/backend.env
+  ```
+
+- **`ANDROID_ABIS` selects the native architectures an Android build emits** (`arm64`,
+  `armv7`, `x86_64`, comma-separated; unset keeps the project's current setting, arm64 only).
+  This exists because of the emulator: every Android emulator image that runs at usable speed
+  on an x86_64 host is x86_64, and the arm64-only apk this project produced **cannot install
+  on one** — so without this the only way to run an Android build of this game was to own the
+  phone. `ANDROID_ABIS=arm64,x86_64` installs on both, at the cost of a second IL2CPP pass and
+  roughly double the native payload, which is why it is opt-in rather than the shipping
+  default. An unrecognised value throws instead of silently building the wrong set: a typo
+  otherwise surfaces at `adb install` time with nothing pointing back at this variable.
+
+### Fixed (2026-09-12)
+
+- **`PlayerBuilder` reported the wrong object's size on success.** The line read
+  `Build succeeded: {summary.totalSize} bytes -> {path}`, and `summary.totalSize` is the
+  build's **uncompressed content**, not the artefact: it announced `2175682249 bytes` for an
+  apk that is 70 MB on disk. A consistent number about the wrong object is the hardest kind
+  of wrong to notice. Both figures are now printed, each labelled, with the artefact's size
+  read from disk — and a build the report calls a success while producing no file now throws,
+  which is the Windows IL2CPP failure this project has already hit once (exit 0, plausible
+  `.exe`, no `GameAssembly.dll`).
 
 ### Changed (2026-09-11)
 

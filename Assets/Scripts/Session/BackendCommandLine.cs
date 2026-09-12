@@ -1,6 +1,8 @@
 namespace Scripts.Session
 {
     using System;
+    using System.Collections.Generic;
+    using System.IO;
     using UnityEngine;
 
     /// <summary>
@@ -148,7 +150,7 @@ namespace Scripts.Session
         /// <summary>Resolves from the process command line and environment.</summary>
         public static Settings Resolve(string defaultGatewayHost, int defaultGatewayPort, string defaultMapId, string defaultStatusUrl)
         {
-            return Resolve(SafeArgs(), SafeEnv, defaultGatewayHost, defaultGatewayPort, defaultMapId, defaultStatusUrl);
+            return Resolve(SafeArgs(), EnvThenFile(), defaultGatewayHost, defaultGatewayPort, defaultMapId, defaultStatusUrl);
         }
 
         /// <summary>Resolves from explicit arguments and an environment lookup — the testable core.</summary>
@@ -318,6 +320,92 @@ namespace Scripts.Session
                         $"[backend-args] {flag}='{raw}' is not a known encoding (json|proto) — keeping {fallback}.");
                     return fallback;
             }
+        }
+
+        /// <summary>
+        /// The file name, inside <see cref="Application.persistentDataPath"/>, that supplies
+        /// <c>CUVARA_*</c> values on a platform with no command line and no settable environment.
+        /// </summary>
+        public const string ConfigFileName = "backend.env";
+
+        private static Dictionary<string, string> _fileValues;
+
+        /// <summary>
+        /// Environment lookup that falls back to a <c>KEY=VALUE</c> file on disk.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this exists: an Android build could not be pointed at a backend at all.</b>
+        /// Every override here is a command-line flag or a <c>CUVARA_*</c> environment variable,
+        /// and an Android app has neither — no argv to read, and no way to set the process
+        /// environment without a debuggable wrap.sh. The defaults are a developer loopback
+        /// (<c>127.0.0.1:8000</c>, Nakama's published <c>defaultkey</c>), so an Android player
+        /// could only ever reach a backend that happened to match them. It could be built and
+        /// installed; it could not be aimed.
+        /// </para>
+        /// <para>
+        /// <b>Same names, lowest precedence.</b> The file uses the <c>CUVARA_*</c> names rather
+        /// than inventing a second vocabulary, and it is consulted only when the real environment
+        /// has nothing — so command line beats environment beats file beats default, and a
+        /// desktop run is unaffected by a file someone forgot to delete.
+        /// </para>
+        /// <para>
+        /// Read once. A missing file is the normal case and is silent; an unreadable one warns
+        /// and is ignored, because a player that refuses to start over a config file is worse
+        /// than one that starts on its defaults and says so.
+        /// </para>
+        /// <example>
+        /// <code>
+        /// adb push backend.env /sdcard/Android/data/&lt;package&gt;/files/backend.env
+        /// </code>
+        /// </example>
+        /// </remarks>
+        private static Func<string, string> EnvThenFile()
+        {
+            Dictionary<string, string> file = LoadConfigFile();
+            if (file == null || file.Count == 0) return SafeEnv;
+
+            return name =>
+            {
+                string fromEnv = SafeEnv(name);
+                if (!string.IsNullOrEmpty(fromEnv)) return fromEnv;
+                return file.TryGetValue(name, out string v) ? v : null;
+            };
+        }
+
+        private static Dictionary<string, string> LoadConfigFile()
+        {
+            if (_fileValues != null) return _fileValues;
+            _fileValues = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            try
+            {
+                string path = Path.Combine(Application.persistentDataPath, ConfigFileName);
+                if (!File.Exists(path)) return _fileValues;
+
+                foreach (string raw in File.ReadAllLines(path))
+                {
+                    string line = raw.Trim();
+                    if (line.Length == 0 || line[0] == '#') continue;
+
+                    int eq = line.IndexOf('=');
+                    if (eq <= 0)
+                    {
+                        Debug.LogWarning($"[Backend] {ConfigFileName}: ignoring line without '=': {line}");
+                        continue;
+                    }
+
+                    _fileValues[line.Substring(0, eq).Trim()] = line.Substring(eq + 1).Trim();
+                }
+
+                Debug.Log($"[Backend] read {_fileValues.Count} override(s) from {path}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Backend] could not read {ConfigFileName}: {e.Message}");
+            }
+
+            return _fileValues;
         }
 
         private static string SafeEnv(string name)
