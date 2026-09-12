@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-12)
+
+- **`ANDROID_ABIS` selects the native architectures an Android build emits** (`arm64`,
+  `armv7`, `x86_64`, comma-separated; unset keeps the project's current setting, arm64 only).
+  This exists because of the emulator: every Android emulator image that runs at usable speed
+  on an x86_64 host is x86_64, and the arm64-only apk this project produced **cannot install
+  on one** — so without this the only way to run an Android build of this game was to own the
+  phone. `ANDROID_ABIS=arm64,x86_64` installs on both, at the cost of a second IL2CPP pass and
+  roughly double the native payload, which is why it is opt-in rather than the shipping
+  default. An unrecognised value throws instead of silently building the wrong set: a typo
+  otherwise surfaces at `adb install` time with nothing pointing back at this variable.
+
+### Fixed (2026-09-12)
+
+- **`PlayerBuilder` reported the wrong object's size on success.** The line read
+  `Build succeeded: {summary.totalSize} bytes -> {path}`, and `summary.totalSize` is the
+  build's **uncompressed content**, not the artefact: it announced `2175682249 bytes` for an
+  apk that is 70 MB on disk. A consistent number about the wrong object is the hardest kind
+  of wrong to notice. Both figures are now printed, each labelled, with the artefact's size
+  read from disk — and a build the report calls a success while producing no file now throws,
+  which is the Windows IL2CPP failure this project has already hit once (exit 0, plausible
+  `.exe`, no `GameAssembly.dll`).
+
 ### Changed (2026-09-11)
 
 - `com.cuvara.netcode` v0.36.1 → **v0.36.2** (manifest and lock): a client refused for not
