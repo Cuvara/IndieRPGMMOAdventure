@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-13)
+- **The client can reach a Nakama that terminates its own TLS with a self-signed certificate
+  — by PINNING it, not by skipping validation (ADR-24).** Pointed at `https://`, the player
+  used to fail every request with `Curl error 60: Cert verify failed … UnityTls error code:
+  7`. That refusal is correct, and it was the second of the two blockers keeping the meta
+  hop's TLS off everywhere.
+
+  `-cuvara-nakama-tls-cert <PEM>` / `CUVARA_NAKAMA_TLS_CERT` (and `backend.env` on Android)
+  now names a certificate the client compares byte for byte against what Nakama presents.
+  **This is stricter than the platform trust store, not looser**: an attacker must hold that
+  certificate's private key rather than any certificate a CA will sign. Without the flag,
+  Unity's own validation still decides and still refuses a self-signed Nakama — that is the
+  default and it did not change.
+
+  **There is no accept-anything mode and one cannot be configured.** `PinnedCertificateHandler`
+  throws on an empty pin, `Matches` returns false for an absent one, and nothing exposes a
+  "trust all" flag. A `CertificateHandler` returning `true` is `InsecureSkipVerify` with a
+  Unity spelling, which ADR-24 decision 4 rules out in every environment including dev.
+
+  **The gateway hop's answer did not transfer, which is why this is new code rather than a
+  setting.** That hop is `SslStream` inside `TcpTransport`, where
+  `TlsOptions.PinnedCertificate` pins a DER; this one goes through Nakama's SDK on Unity's
+  HTTP stack. A Unity `CertificateHandler` is **per-request**, and the SDK's stock
+  `UnityWebRequestAdapter` never assigns one and offers no hook — so the client also ships
+  `PinnedHttpAdapter`, its own Nakama `IHttpAdapter`, which installs the handler on every
+  request. It sets `disposeCertificateHandlerOnDispose = false`, without which the shared
+  handler would be disposed after the first request and the pin would work exactly once.
+
+  **Two limits, recorded because they are not obvious.** `CertificateHandler` is **not called
+  on WebGL** — the browser performs the handshake — so a WebGL player needs a CA-issued
+  certificate and pinning must not be claimed for it. And the pin is the leaf, so rotating
+  Nakama's certificate is a client change, exactly as on the gateway hop.
+
+  Pinning with the scheme left at `http` is reported as an error by
+  `TransportSecurityReport` and the pin is not loaded: a pin on a plaintext hop reads as
+  protection that is not there. The startup line for this hop now says which of the three
+  states it is in — plaintext, https with the trust store, or https pinned to a named file.
+- **Ten EditMode tests** in `Assets/Tests/Editor/NakamaCertificatePinTests.cs`, weighted
+  towards **refusal**, because a pin that accepts is visible in any working deploy and a pin
+  that accepts too much is visible in none. The certificate that must be rejected is a real
+  second self-signed certificate **with the same subject** as the pinned one; a flipped byte
+  and a truncated DER are rejected too, and the constructor is asserted to refuse an empty
+  pin. What no EditMode test can cover, and so is not claimed: that Unity itself calls
+  `ValidateCertificate` on a real handshake.
+
+
 ### Fixed (2026-09-13)
 
 - **Every pull request was failing CI with `android-export='apk' was given but no Android

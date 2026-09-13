@@ -69,6 +69,36 @@ namespace Scripts.Session
             public string NakamaServerKey;
             public bool NakamaExplicit;
 
+            /// <summary>
+            /// <c>-cuvara-nakama-tls-cert</c> / <c>CUVARA_NAKAMA_TLS_CERT</c>: path to a PEM
+            /// certificate to PIN on the Nakama hop, for a Nakama terminating its own TLS
+            /// (ADR-24) with a certificate no CA signed.
+            /// </summary>
+            /// <remarks>
+            /// <para>
+            /// Null pins nothing and leaves Unity's own validation deciding, which is the
+            /// stronger default and which correctly REFUSES a self-signed Nakama. The
+            /// gateway hop's <see cref="GatewayTlsCertPath"/> is the same idea; the two are
+            /// separate flags because they are separate certificates on separate hops, and
+            /// neither implies the other.
+            /// </para>
+            /// <para>
+            /// There is no accept-anything option to go with it. Pinning is how a self-signed
+            /// certificate is reached, and it is stricter than the trust store, not looser.
+            /// </para>
+            /// </remarks>
+            public string NakamaTlsCertPath;
+
+            /// <summary>
+            /// True for the combination that cannot work: a Nakama certificate pinned while
+            /// the scheme is still <c>http</c>. Reported rather than corrected — flipping the
+            /// scheme would guess which of the two the operator meant, and guessing wrong
+            /// means a plaintext hop that reads as pinned.
+            /// </summary>
+            public bool NakamaPinWithoutHttps =>
+                !string.IsNullOrEmpty(NakamaTlsCertPath) &&
+                !string.Equals(NakamaScheme, "https", StringComparison.OrdinalIgnoreCase);
+
             /// <summary><c>-cuvara-gateway-tls</c> / <c>CUVARA_GATEWAY_TLS</c>. The gateway
             /// terminates TLS itself (ADR-23); off unless the deployment turned it on.</summary>
             public bool GatewayTls;
@@ -173,6 +203,7 @@ namespace Scripts.Session
                 NakamaHost = Str(args, env, "-cuvara-nakama-host", "CUVARA_NAKAMA_HOST", "127.0.0.1"),
                 NakamaPort = Int(args, env, "-cuvara-nakama-port", "CUVARA_NAKAMA_PORT", 7350),
                 NakamaServerKey = Str(args, env, "-cuvara-nakama-key", "CUVARA_NAKAMA_SERVER_KEY", "defaultkey"),
+                NakamaTlsCertPath = Str(args, env, "-cuvara-nakama-tls-cert", "CUVARA_NAKAMA_TLS_CERT", null),
                 GatewayTls = Bool(args, env, "-cuvara-gateway-tls", "CUVARA_GATEWAY_TLS", false),
                 GatewayTlsCertPath = Str(args, env, "-cuvara-gateway-tls-cert", "CUVARA_GATEWAY_TLS_CERT", null),
                 Sealed = Bool(args, env, "-cuvara-sealed", "CUVARA_SEALED", false),

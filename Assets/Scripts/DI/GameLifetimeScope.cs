@@ -56,6 +56,10 @@ namespace Scripts.DI
                 Host = backend.NakamaHost,
                 Port = backend.NakamaPort,
                 ServerKey = backend.NakamaServerKey,
+                // Null unless -cuvara-nakama-tls-cert named a PEM. Null means Unity's own
+                // validation, which is right for http and for a CA-issued certificate on
+                // https, and which refuses a self-signed one -- see ADR-24.
+                PinnedCertificate = TransportSecurityReport.LoadNakamaPinOrNull(backend),
                 DeviceId = deviceId,
             });
 

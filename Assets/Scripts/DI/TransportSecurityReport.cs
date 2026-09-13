@@ -35,11 +35,21 @@ namespace Scripts.DI
         /// <summary>Logs one line per hop, escalating to an error for plaintext to a remote host.</summary>
         public static void Warn(BackendCommandLine.Settings backend)
         {
+            if (backend.NakamaPinWithoutHttps)
+            {
+                Debug.LogError(
+                    $"[transport-security] Nakama: a certificate was pinned ({backend.NakamaTlsCertPath}) but " +
+                    "-cuvara-nakama-scheme is http, so this hop is PLAINTEXT and the pin does nothing. " +
+                    "Add -cuvara-nakama-scheme https, or drop the certificate.");
+            }
+
             ReportHop(
                 "Nakama (auth, meta)",
                 backend.NakamaHost,
                 secure: IsHttps(backend.NakamaScheme),
-                secureDetail: "https",
+                secureDetail: string.IsNullOrEmpty(backend.NakamaTlsCertPath)
+                    ? "https, platform trust store — a self-signed Nakama will be REFUSED"
+                    : "https, pinned to " + backend.NakamaTlsCertPath,
                 plainDetail: "http — the session token crosses this hop in the clear",
                 howToFix: "-cuvara-nakama-scheme https");
 
@@ -170,6 +180,53 @@ namespace Scripts.DI
                     $"[transport-security] could not load the pinned gateway certificate from '{path}': " +
                     $"{ex.GetType().Name}: {ex.Message}. Falling back to the platform trust store, which " +
                     "will REFUSE a self-signed gateway — the refusal you see next is this, not the gateway.");
+                return null;
+            }
+        }
+
+
+        /// <summary>
+        /// Loads the certificate to pin on the <b>Nakama</b> hop, or returns null to leave
+        /// Unity's own validation deciding.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Same shape as <see cref="LoadPinOrNull"/> for the gateway, and separate from it for
+        /// the same reason the flags are separate: two hops, two certificates, and one being
+        /// pinned says nothing about the other.
+        /// </para>
+        /// <para>
+        /// A path that cannot be read is an <b>error</b> and returns null, which means platform
+        /// validation. That fails closed against a self-signed Nakama rather than open — but it
+        /// is not what the operator asked for, so it must not pass quietly. The refusal that
+        /// follows will be Unity's <c>Curl error 60</c>, which names the certificate and not the
+        /// pin that was never loaded; this line is what connects the two.
+        /// </para>
+        /// </remarks>
+        public static byte[] LoadNakamaPinOrNull(BackendCommandLine.Settings backend)
+        {
+            var path = backend.NakamaTlsCertPath;
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
+
+            if (!IsHttps(backend.NakamaScheme))
+            {
+                // Already reported as an error by Warn; no second shout, just no pin.
+                return null;
+            }
+
+            try
+            {
+                return TlsOptions.FromPem(File.ReadAllText(path));
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"[transport-security] could not load the pinned Nakama certificate from '{path}': " +
+                    $"{ex.GetType().Name}: {ex.Message}. Falling back to the platform trust store, which " +
+                    "will REFUSE a self-signed Nakama — the Curl error 60 you see next is this, not Nakama.");
                 return null;
             }
         }

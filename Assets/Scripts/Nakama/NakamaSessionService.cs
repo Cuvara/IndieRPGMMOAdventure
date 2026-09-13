@@ -65,6 +65,7 @@ namespace Scripts.Nakama
         const string PrefKeyRefreshToken = "nakama.refresh_token";
 
         readonly IClient _client;
+        readonly IHttpAdapter _adapter;
         readonly OperationGeneration _logins = new OperationGeneration();
 
         /// <summary>The underlying Nakama SDK client.</summary>
@@ -99,7 +100,16 @@ namespace Scripts.Nakama
             // Mono player reports fast connection failures as TaskCanceledException — a session
             // that logs "Cancelled" straight after "Authenticating" while Nakama never saw a
             // request. UnityWebRequest is what the netcode DOTS sample authenticates with.
-            _client = new Client(settings.Scheme, settings.Host, settings.Port, settings.ServerKey, UnityWebRequestAdapter.Instance);
+            //
+            // The adapter is also where this hop's certificate is pinned, because a Unity
+            // CertificateHandler is per-REQUEST and the stock adapter never sets one. With no
+            // pin the stock adapter stays, and Unity's own validation decides -- the stronger
+            // default, and the one that correctly refuses a self-signed Nakama. See ADR-24.
+            var adapter = settings.PinnedCertificate != null && settings.PinnedCertificate.Length > 0
+                ? (IHttpAdapter)new Tls.PinnedHttpAdapter(settings.PinnedCertificate)
+                : UnityWebRequestAdapter.Instance;
+            _adapter = adapter;
+            _client = new Client(settings.Scheme, settings.Host, settings.Port, settings.ServerKey, adapter);
         }
 
         /// <summary>
@@ -300,7 +310,10 @@ namespace Scripts.Nakama
 
         public void Dispose()
         {
-            // IClient is not IDisposable in the Nakama SDK, nothing to tear down.
+            // IClient is not IDisposable in the Nakama SDK. The pinning adapter is, though --
+            // it owns a CertificateHandler that UnityWebRequest is explicitly told not to
+            // dispose, since one handler is shared across every request.
+            (_adapter as IDisposable)?.Dispose();
         }
 
         /// <summary>

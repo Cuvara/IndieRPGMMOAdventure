@@ -91,9 +91,34 @@ implied by any other:
 
 | Hop | Flag | Default | Why that default |
 |---|---|---|---|
-| Nakama (auth, meta) | `-cuvara-nakama-scheme https` | `http` | plaintext is the dev case; the session token crosses this hop |
+| Nakama (auth, meta) | `-cuvara-nakama-scheme https`, `-cuvara-nakama-tls-cert PEM` | `http`, no pin | plaintext is the dev case; the session token crosses this hop (ADR-24) |
 | gateway | `-cuvara-gateway-tls 1`, `-cuvara-gateway-tls-cert PEM` | off | matches the gateway's own default (ADR-23) |
 | game server | `-cuvara-sealed 1` | **off** | every deployed environment pins `GAMESERVER_SEALED=off` (ADR-22) |
+
+**The Nakama hop needs the certificate as well as the scheme, and the two are separate
+flags on purpose.** `-cuvara-nakama-scheme https` alone leaves Unity's own validation
+deciding — right for a CA-issued certificate, and a correct refusal of the self-signed one
+a dev or staging Nakama holds:
+
+```
+Curl error 60: Cert verify failed. Certificate is not correctly signed by a trusted CA.
+UnityTls error code: 7
+```
+
+That is not a bug to work around. `-cuvara-nakama-tls-cert <path-to-PEM>` (or
+`CUVARA_NAKAMA_TLS_CERT`) **pins** that certificate: the client compares what Nakama
+presents against the file byte for byte and accepts nothing else. Pinning is *stricter*
+than the trust store, not looser, which is why it is the answer rather than an
+accept-anything switch — **there is none, in this client or on any other hop**, and
+`PinnedCertificateHandler` refuses to construct with an empty pin so one cannot be added by
+configuration (ADR-24 decision 4).
+
+Pinning with the scheme left at `http` is an error line at startup and the pin is ignored;
+the hop is plaintext and must not read as protected. **WebGL cannot pin at all** — the
+browser performs the handshake and Unity never calls the handler — so a WebGL player needs
+a CA-issued certificate on this hop. The server side of the same decision, including how to
+generate the certificate and which four files move together, is
+`rpg-mmo-server/backend/deploy/k8s/data/README.md` §"Turning the meta hop's TLS on".
 
 **The client speaks Protobuf on the wire, not JSON.** `-cuvara-encoding json|proto`
 selects it (`CUVARA_ENCODING`), and it defaults to `proto`. Both servers sniff the first
