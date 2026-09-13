@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-14)
+- **`com.cuvara.netcode` → v0.39.0.** Two prediction fixes that had sat unmerged since
+  2026-09-09 with no pull request ever opened: `AckIntervalSeconds` read the snapshot cadence
+  **25% low** and now measures over a ring of gaps, and `PredictionLatencyMeasurement` gates on
+  the correction **rate** rather than the max — the max over ~28 corrections is one draw from a
+  tail, and it was the statistic being asserted.
+
+  They were found by sweeping every branch unreachable from `main`/`develop` across all three
+  repos. Five other branches turned up the same way and **none was merged**: each was verified
+  as already-landed content on a stale fork, including one whose closing comment claimed
+  supersession — checked against the tree rather than believed.
+
+- **`.gitignore` covers the Addressables per-platform build folder's `.meta`.** Without it every
+  `git status` in this repo carried a permanent untracked entry, which is the noise a genuinely
+  stray file hides behind. (Branch `chore/client/ignore-addressables-platform-meta`, whose PR
+  #97 was closed without merging; the content was never in `develop`.)
+
 ### Added (2026-09-13)
 - **`com.cuvara.netcode` → v0.38.2: the client verifies the game server's ADR-25 identity.**
   `ServerIdentityVerifier` checks the per-pod Ed25519 signature over the sealed handshake
