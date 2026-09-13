@@ -8,6 +8,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added (2026-09-13)
+- **`com.cuvara.netcode` → v0.38.2: the client verifies the game server's ADR-25 identity.**
+  `ServerIdentityVerifier` checks the per-pod Ed25519 signature over the sealed handshake
+  transcript, and — the part that matters — reports what verifying it is actually worth.
+
+  **A verified signature is worth exactly as much as the hop the key arrived over.** The
+  identity key reaches the client in `enter_world_resp`, on the gateway hop. Over plaintext an
+  active attacker substitutes both the key and the signature and the check passes against the
+  attacker's own key, so `Verified` is the conjunction of "the signature checked out" **and**
+  "the key came over an authenticated hop". `NetworkSettings.RequireServerIdentity` is off by
+  default, and turning it on does **not** make a plaintext gateway hop safe — it forces the
+  attacker to sign with the key they already substituted. The pair that authenticates a server
+  is that flag plus `GatewayUseTls`.
+
+  This is not the ADR-22 binding and does not repair it: that signer is a symmetric HMAC under
+  `JOIN_TOKEN_SECRET`, so a client able to verify it could mint join tokens. `BindingVerified`
+  stays permanently false.
+
+- **`Assets/BuildScripts/Editor/StrippingProbeBuilder.cs` — build one scene as an IL2CPP player
+  at a chosen stripping level, then put the project's settings back.** IL2CPP strips managed
+  code the Editor never strips, so a library reached through its own registries can vanish from
+  a player while every Editor test stays green — no compile error, no exception, just a feature
+  that silently stops working. Answering "does this survive stripping?" means building a player,
+  and until now that was done by hand each time.
+
+  **The restore is the part that has gone wrong before.** Scripting backend and stripping level
+  are project settings, not build options, so setting them for one build leaves them set for
+  every build afterwards — and the restore only reaches disk if the settings are flushed.
+  Logging "restored" without `AssetDatabase.SaveAssets` has previously left IL2CPP/High on disk
+  while the log claimed otherwise. The restore runs in a `finally`, flushes, and logs **after**
+  the flush.
+
+  First use answered ADR-25 decision 8: **Ed25519 survives `High` stripping** in a Windows
+  player, all eight probe self-checks passing including the negative case. `Minimal` was not run
+  separately and Android is unmeasured; the scope is recorded at ADR-25 decision 8 in the
+  backend repo.
+
 - **The client can reach a Nakama that terminates its own TLS with a self-signed certificate
   — by PINNING it, not by skipping validation (ADR-24).** Pointed at `https://`, the player
   used to fail every request with `Curl error 60: Cert verify failed … UnityTls error code:
