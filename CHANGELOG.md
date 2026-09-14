@@ -8,6 +8,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed (2026-09-14)
+- **Build toolkit `unity-build-workflows` v2.2.0 → v3.2.0.** The submodule sat 197
+  commits behind while the callers referenced `@main`, so the repository was already
+  running the v3 engine through a v1-shaped caller — a combination nothing tests. The
+  submodule, `Packages/manifest.json` and `Packages/packages-lock.json` now all pin the
+  same tag, `v3.2.0`; the lock's resolved `hash` was bumped with the pin, because the
+  lock is what Unity resolves and a manifest-only bump is silently ignored.
+- **`unity-build.yml` replaced by the numbered entry workflows.** v3 splits one caller
+  into one workflow per question — `01-ci.yml` ("is this safe to merge?", builds no
+  player), `10-build-development.yml` (APK for QA) and `11-build-release.yml` (signed
+  AAB, immutable Release Set) — plus promote-only `20-release-android.yml`,
+  `22-release-webgl.yml`, `23-release-windows.yml` and `24-release-linux.yml`, which
+  publish the exact bytes of a named `Build / Release` run and rebuild nothing. The
+  files are the toolkit's `templates/consumer-*.yml` verbatim, byte-identical to the
+  ones in the `NDC-Unity-Template` base project.
+- **A push no longer builds a player.** Previously a push to `develop`, `staging` or
+  `release-*` ran the full platform matrix. It now runs `01-ci.yml`, which passes
+  `platform: None` — a merge check no longer pays for six Unity builds. A player is a
+  deliberate `workflow_dispatch` from `10-` or `11-`.
+- **`build-type` is now an axis of its own**, separate from `environment`, so a
+  development APK and a release AAB can no longer share an artifact name:
+  `development-android-apk` versus `release-android-aab`.
+
+### Removed (2026-09-14)
+- **No iOS entry workflow.** `21-release-ios.yml` exists in the toolkit and in the base
+  template, but this project ships no iOS build and `BuildConfig/*.json` carries no
+  `iOS` block — installing it would have added a workflow that can only fail.
+
+### Notes (2026-09-14)
+- `BuildConfig/{base,development,staging,production}.json` validate unchanged against
+  the v3.2.0 schema; the only keys the v3 examples carry that this project does not are
+  the iOS block.
+- `Assets/BuildScripts/Editor/{PlayerBuilder,AddressableBuilder}.cs` were left as they
+  are. The toolkit ships them as reference implementations to adapt, and this project's
+  copies have diverged deliberately.
+- Do not set `ARTIFACT_RETENTION_DAYS`: v3 tiers retention by purpose (release 90 days,
+  staging 14, development 7) and a release artifact that expires can never be promoted.
+
+### Changed (2026-09-14)
 - **`com.cuvara.netcode` → v0.39.0.** Two prediction fixes that had sat unmerged since
   2026-09-09 with no pull request ever opened: `AckIntervalSeconds` read the snapshot cadence
   **25% low** and now measures over a ring of gaps, and `PredictionLatencyMeasurement` gates on

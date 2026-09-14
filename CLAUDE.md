@@ -262,7 +262,21 @@ whole table at once — including `Predict … err 0.000`, which is the reconcil
 and the one number that says prediction and server authority agree.
 
 ### CI/CD (GitHub Actions)
-- `.github/workflows/unity-build.yml` — thin dispatcher delegating to `unity-build-workflows` submodule pipeline
+- Toolkit `unity-build-workflows` pinned at **v3.2.0**; the UPM half
+  (`com.company.build-pipeline`) is pinned to the same tag in **both**
+  `Packages/manifest.json` and `Packages/packages-lock.json`
+- Entry workflows are numbered thin callers, no build logic, all calling
+  `unity-pipeline.yml@v3`:
+  - `01-ci.yml` — push/PR gate. Validate, licence, tests. Builds **no** player
+  - `10-build-development.yml` — dispatch only. APK / unsigned artifacts for QA
+  - `11-build-release.yml` — dispatch only. Signed AAB, immutable Release Set
+  - `20-release-android.yml`, `22-release-webgl.yml`, `23-release-windows.yml`,
+    `24-release-linux.yml` — promote-only. They consume a `source-run-id` from a
+    `Build / Release` run and publish those exact bytes; they never rebuild
+- No iOS entry workflow: this project ships no iOS build and `BuildConfig/`
+  carries no `iOS` block
+- A push no longer produces a player. Before v3 that was `unity-build.yml`'s job;
+  now a push runs `01-ci.yml` only and a player is a deliberate dispatch
 - Platforms: Android (AAB/ARM64), WebGL (Brotli), Linux64, LinuxServer, Windows64
 - Environments: production, staging, development
 - Build configs live in `BuildConfig/` — `base.json` merged with environment overlays (`development.json`, `staging.json`, `production.json`)
