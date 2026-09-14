@@ -4,6 +4,7 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
+        "BuildScript.Editor",
         "NDC.Scripts.DI",
         "NDC.Scripts.UI",
         "NDC.Scripts.Benchmark",

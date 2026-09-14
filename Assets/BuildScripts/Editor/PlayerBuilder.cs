@@ -136,7 +136,7 @@ public static class PlayerBuilder
     /// error rather than a silent no-op: silently building the wrong boot scene is the failure
     /// this flag exists to prevent.
     /// </remarks>
-    private static string[] ApplyBootSceneOverride(string[] scenes, string bootScene)
+    internal static string[] ApplyBootSceneOverride(string[] scenes, string bootScene)
     {
         if (string.IsNullOrEmpty(bootScene))
         {
@@ -196,9 +196,12 @@ public static class PlayerBuilder
     /// boundary. The environment variable still works and still wins nothing — the flag
     /// takes precedence, everything else is unchanged.
     /// </remarks>
-    private static string ReadArg(string flag)
+    private static string ReadArg(string flag) => ReadArg(Environment.GetCommandLineArgs(), flag);
+
+    /// <summary>The pure half of <see cref="ReadArg(string)"/>, so the parsing can be
+    /// tested without an Editor process to own a command line.</summary>
+    internal static string ReadArg(string[] args, string flag)
     {
-        string[] args = Environment.GetCommandLineArgs();
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (string.Equals(args[i], flag, StringComparison.Ordinal) &&
@@ -212,9 +215,11 @@ public static class PlayerBuilder
     }
 
     /// <summary>True when <paramref name="flag"/> appears on the Editor's command line (valueless flag).</summary>
-    private static bool HasArg(string flag)
+    private static bool HasArg(string flag) => HasArg(Environment.GetCommandLineArgs(), flag);
+
+    /// <summary>The pure half of <see cref="HasArg(string)"/>.</summary>
+    internal static bool HasArg(string[] args, string flag)
     {
-        string[] args = Environment.GetCommandLineArgs();
         for (int i = 0; i < args.Length; i++)
         {
             if (string.Equals(args[i], flag, StringComparison.Ordinal))
@@ -318,7 +323,7 @@ public static class PlayerBuilder
 
     // Per-target output location. WebGL builds into a directory; standalone/
     // mobile targets build to a file with the platform's expected extension.
-    private static string LocationFor(BuildTarget target, string targetDir, string productName)
+    internal static string LocationFor(BuildTarget target, string targetDir, string productName)
     {
         switch (target)
         {
