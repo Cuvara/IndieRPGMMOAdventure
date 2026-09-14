@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-09-14)
+- **The app's identity was still the URP blank template's.** A Discord build report
+  read `Bundle ID: com.UnityTechnologies.com.unity.template.urpblank` and
+  `Version: 0.4.2`, and both were honest readings of `ProjectSettings.asset`:
+
+  | | was | now |
+  |---|---|---|
+  | `companyName` | `DefaultCompany` | `Cuvara` |
+  | `bundleVersion` | `0.4.2` | `0.5.0` |
+  | `applicationIdentifier` (Android / Standalone / iPhone) | template defaults | `com.cuvara.indierpgmmo` |
+
+  `bundleVersion` had not moved since the v0.4.2 prep commit on 2026-08-21, so every
+  build since `0.5.0` was released on 2026-09-05 shipped stamped `0.4.2`.
+
+- **`BuildConfig/` said the right thing in the one file nothing reads.** `base.json`
+  declared `Cuvara` and `com.cuvara.indierpgmmo`, and all three environment files
+  overrode them back to `DefaultCompany` and the template id — so the good values had
+  never taken effect anywhere. Development and staging now carry
+  `com.cuvara.indierpgmmo.dev` / `.staging`, which install alongside production rather
+  than over it.
+
+- These are complete configs, not deltas: the schema requires `companyName` and
+  `bundleVersion` in every one, so the version now lives in five places that must
+  agree — `ProjectSettings.asset` plus four `BuildConfig/*.json`. A toolkit-side gate
+  to catch them disagreeing is tracked separately.
+
+### Notes (2026-09-14)
+- On the Docker / game-ci lane **`BuildConfig/` never reaches PlayerSettings.** The
+  toolkit's own builder (`Company.BuildPipeline`) runs only when `build-method` is set,
+  which is the self-hosted/local lane; game-ci supplies its own builder and stamps
+  whatever `ProjectSettings.asset` holds. `ProjectSettings.asset` is therefore the
+  value that ships, and `scripts/common/extract_project_metadata.sh` reads it directly.
+
 ### Changed (2026-09-14)
 - **Build toolkit `unity-build-workflows` v2.2.0 → v3.2.0.** The submodule sat 197
   commits behind while the callers referenced `@main`, so the repository was already
