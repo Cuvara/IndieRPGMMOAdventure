@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-09-14)
+- **`PlayerBuilder` has tests, because until now nothing had ever run it.**
+  `PlayerBuilder.Build` is the `-executeMethod` the toolkit's self-hosted lanes
+  call by name, and the Docker lane — the only lane this project has used — never
+  reaches the file. It compiles on every CI run and executes on none, so the first
+  execution of 337 lines would have been on a real machine with a real build to
+  salvage.
+
+  `Assets/Tests/Editor/PlayerBuilderContractTests.cs` pins the parts the toolkit
+  depends on and cannot see: which extension each target's artifact gets (stage 04
+  validates `release-android-aab` by looking for an `.aab`), how the lane's
+  arguments are parsed, and that a `-bootScene` override reorders the scene list
+  without dropping or inventing a scene.
+
+  `ReadArg` and `HasArg` gained overloads taking the argument array, so the
+  parsing can be exercised without an Editor process owning a command line; the
+  originals delegate and behave identically. `ApplyBootSceneOverride` and
+  `LocationFor` are `internal` instead of `private`, with `InternalsVisibleTo`
+  limited to the test assembly. `NDC.Tests.Editor` now references
+  `BuildScript.Editor`, which it has to do explicitly because that assembly sets
+  `autoReferenced: false`.
+
 ### Changed (2026-09-14)
 - **Build toolkit v4.2.0 → v5.2.0.** Submodule, `Packages/manifest.json` and
   `Packages/packages-lock.json` all pin `v5.2.0` (`9dbe0f5`), and the seven entry
