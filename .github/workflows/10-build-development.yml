@@ -27,16 +27,6 @@
 name: Build / Development
 
 on:
-  # TEMPORARY — REVERT BEFORE MERGE.
-  # A workflow_dispatch-only file is invisible to the API until GitHub has
-  # indexed it, and GitHub indexes a workflow from the default branch or from a
-  # run that already happened. This file has neither, so `gh workflow run` 404s
-  # and the v3 build lane cannot be proven before the merge that would prove it.
-  # One push trigger on this branch breaks the deadlock. Delete this block, and
-  # the `|| '<default>'` fallbacks below, before this PR merges.
-  push:
-    branches: [chore/build-toolkit-v3]
-
   workflow_dispatch:
     inputs:
       platform:
@@ -139,13 +129,13 @@ jobs:
       project-path: '.'
       toolkit-ref: 'v3'
       build-type: development
-      platform: ${{ inputs.platform || 'Android' }}
-      environment: ${{ inputs.environment || 'development' }}
-      build-addressables: ${{ inputs.build-addressables || false }}
-      run-tests: ${{ inputs.run-tests || false }}
-      test-mode: ${{ inputs.test-mode || 'All' }}
+      platform: ${{ inputs.platform }}
+      environment: ${{ inputs.environment }}
+      build-addressables: ${{ inputs.build-addressables }}
+      run-tests: ${{ inputs.run-tests }}
+      test-mode: ${{ inputs.test-mode }}
       unity-version: ${{ inputs.unity-version }}
-      clean-build: ${{ inputs.clean-build || 'auto' }}
+      clean-build: ${{ inputs.clean-build }}
       define-symbols: ${{ inputs.define-symbols }}
       runner-type: ${{ inputs.runner-type != 'auto' && inputs.runner-type || '' }}
       build-engine: ${{ inputs.build-engine != 'auto' && inputs.build-engine || '' }}
