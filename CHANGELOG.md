@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed (2026-09-14)
+- **Build toolkit v4.2.0 → v5.2.0.** Submodule, `Packages/manifest.json` and
+  `Packages/packages-lock.json` all pin `v5.2.0` (`9dbe0f5`), and the seven entry
+  workflows are the v5.2.0 `templates/consumer-*.yml` byte-for-byte.
+- **Stage 01 now fails when `BuildConfig` and `ProjectSettings.asset` disagree**
+  about `companyName`, `bundleVersion` or the Android application id (toolkit
+  5.0.0). Run against this tree before the bump: clean on all three environments.
+  It is the gate that would have caught this project shipping under the URP
+  template's identifier for months.
+- **Each platform routes to a runner its OS can actually use** (toolkit 5.2.0).
+  Labels follow the executor rather than the target: under `BUILD_ENGINE=docker`
+  everything but iOS still builds in the Linux container, `Windows64` included,
+  so the only platform that moves here is **iOS** — off a Linux runner that has
+  no Xcode. Android, WebGL and Windows64 stay on `ubuntu-latest`.
+- **The run summary now prints a runner plan** (toolkit 5.1.0): one row per
+  platform with its `runs-on`, engine, and which tier decided the labels.
+
+### Changed (2026-09-14)
 - **Build toolkit v3.2.0 → v4.2.0.** Submodule, `Packages/manifest.json` and
   `Packages/packages-lock.json` all pin `v4.2.0` (`41afe27`), and the seven entry
   workflows are the v4.2.0 `templates/consumer-*.yml` byte-for-byte.

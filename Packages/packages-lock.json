@@ -1,13 +1,13 @@
 {
   "dependencies": {
     "com.company.build-pipeline": {
-      "version": "https://github.com/Cuvara/unity-build-workflows.git?path=/unity-package/Packages/com.company.build-pipeline#v4.2.0",
+      "version": "https://github.com/Cuvara/unity-build-workflows.git?path=/unity-package/Packages/com.company.build-pipeline#v5.2.0",
       "depth": 0,
       "source": "git",
       "dependencies": {
         "com.unity.nuget.newtonsoft-json": "3.2.1"
       },
-      "hash": "41afe278f30af08ee9523e3c150e32e1150c9ce5"
+      "hash": "9dbe0f559943dfaac5e6b452072fe1e7195e0a39"
     },
     "com.cuvara.dots": {
       "version": "https://github.com/Cuvara/UnityDots.git#v0.29.0",
