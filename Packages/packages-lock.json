@@ -1,34 +1,48 @@
 {
   "dependencies": {
     "com.company.build-pipeline": {
-      "version": "https://github.com/Cuvara/unity-build-workflows.git?path=/unity-package/Packages/com.company.build-pipeline#v1.1.3",
+      "version": "https://github.com/Cuvara/unity-build-workflows.git?path=/unity-package/Packages/com.company.build-pipeline#v5.2.0",
       "depth": 0,
       "source": "git",
       "dependencies": {
         "com.unity.nuget.newtonsoft-json": "3.2.1"
       },
-      "hash": "7ac909f81c1c3bb8f3651c7d2b59d7f6f0b2be6b"
+      "hash": "9dbe0f559943dfaac5e6b452072fe1e7195e0a39"
     },
     "com.cuvara.dots": {
-      "version": "file:com.cuvara.dots",
+      "version": "https://github.com/Cuvara/UnityDots.git#v0.29.0",
       "depth": 0,
-      "source": "embedded",
+      "source": "git",
       "dependencies": {
         "com.unity.entities": "1.4.8",
         "com.unity.burst": "1.8.30",
         "com.unity.collections": "2.6.8",
         "com.unity.mathematics": "1.3.2"
-      }
+      },
+      "hash": "def09265c7d9f916926556961ffd4c4caeffe912"
     },
     "com.cuvara.netcode": {
-      "version": "file:com.cuvara.netcode",
+      "version": "https://github.com/Cuvara/Netcode.git#8cff4c765e76aae63e17c0606bd02c2973e9d05c",
       "depth": 0,
-      "source": "embedded",
+      "source": "git",
       "dependencies": {
         "com.cysharp.unitask": "2.5.10",
+        "org.nuget.system.runtime.compilerservices.unsafe": "6.0.0",
         "com.unity.modules.unitywebrequest": "1.0.0",
         "com.unity.modules.physics": "1.0.0"
-      }
+      },
+      "hash": "8cff4c765e76aae63e17c0606bd02c2973e9d05c"
+    },
+    "com.cuvara.uitoolkit": {
+      "version": "https://github.com/Cuvara/UIToolkit.git#v0.7.2",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.cysharp.unitask": "2.5.10",
+        "com.unity.modules.uielements": "1.0.0",
+        "jp.hadashikick.vcontainer": "1.16.9"
+      },
+      "hash": "3c6fde9ac818cbfa8fc85a1bdf0c57b223607a47"
     },
     "com.cysharp.messagepipe": {
       "version": "1.8.1",
@@ -154,11 +168,11 @@
       "url": "https://package.openupm.com"
     },
     "com.rpgmmo.shared-gamelogic": {
-      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.1.9",
+      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.4.1",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "514d454192355943a24b822c1441ab25b5e770e1"
+      "hash": "ea2799731541d8d41e746ccee5ab5eb199cfbc64"
     },
     "com.unity.addressables": {
       "version": "2.8.1",
@@ -564,7 +578,7 @@
     },
     "org.nuget.system.runtime.compilerservices.unsafe": {
       "version": "6.0.0",
-      "depth": 2,
+      "depth": 1,
       "source": "registry",
       "dependencies": {},
       "url": "https://package.openupm.com"
@@ -656,14 +670,6 @@
       "source": "builtin",
       "dependencies": {}
     },
-    "com.unity.modules.cloth": {
-      "version": "1.0.0",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.physics": "1.0.0"
-      }
-    },
     "com.unity.modules.director": {
       "version": "1.0.0",
       "depth": 0,
@@ -733,26 +739,9 @@
     },
     "com.unity.modules.terrain": {
       "version": "1.0.0",
-      "depth": 0,
+      "depth": 2,
       "source": "builtin",
       "dependencies": {}
-    },
-    "com.unity.modules.terrainphysics": {
-      "version": "1.0.0",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.physics": "1.0.0",
-        "com.unity.modules.terrain": "1.0.0"
-      }
-    },
-    "com.unity.modules.tilemap": {
-      "version": "1.0.0",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.physics2d": "1.0.0"
-      }
     },
     "com.unity.modules.ui": {
       "version": "1.0.0",
@@ -843,14 +832,6 @@
         "com.unity.modules.imgui": "1.0.0"
       }
     },
-    "com.unity.modules.vehicles": {
-      "version": "1.0.0",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.physics": "1.0.0"
-      }
-    },
     "com.unity.modules.video": {
       "version": "1.0.0",
       "depth": 0,
@@ -859,32 +840,6 @@
         "com.unity.modules.audio": "1.0.0",
         "com.unity.modules.ui": "1.0.0",
         "com.unity.modules.unitywebrequest": "1.0.0"
-      }
-    },
-    "com.unity.modules.vr": {
-      "version": "1.0.0",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.jsonserialize": "1.0.0",
-        "com.unity.modules.physics": "1.0.0",
-        "com.unity.modules.xr": "1.0.0"
-      }
-    },
-    "com.unity.modules.wind": {
-      "version": "1.0.0",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {}
-    },
-    "com.unity.modules.xr": {
-      "version": "1.0.0",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.physics": "1.0.0",
-        "com.unity.modules.jsonserialize": "1.0.0",
-        "com.unity.modules.subsystems": "1.0.0"
       }
     }
   }

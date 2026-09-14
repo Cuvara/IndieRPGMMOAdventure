@@ -1,0 +1,44 @@
+{
+    "name": "NDC.Scripts.UI.Hud.Ecs",
+    "rootNamespace": "Scripts.UI.Hud.Ecs",
+    "references": [
+        "NDC.Scripts.UI",
+        "Cuvara.UIToolkit",
+        "Cuvara.UIToolkit.Ecs",
+        "Cuvara.DOTS.Netcode",
+        "UniTask",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Unity.Transforms"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "CUVARA_DOTS",
+        "CUVARA_NETCODE",
+        "CUVARA_UITOOLKIT_ENTITIES"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.dots",
+            "expression": "",
+            "define": "CUVARA_DOTS"
+        },
+        {
+            "name": "com.cuvara.netcode",
+            "expression": "0.19.0",
+            "define": "CUVARA_NETCODE"
+        },
+        {
+            "name": "com.unity.entities",
+            "expression": "",
+            "define": "CUVARA_UITOOLKIT_ENTITIES"
+        }
+    ],
+    "noEngineReferences": false
+}

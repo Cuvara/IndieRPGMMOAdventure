@@ -1,0 +1,142 @@
+# ────────────────────────────────────────────────────────────────────────────
+# 10-build-development.yml — Build / Development
+#
+# Three workflows, three questions:
+#
+#   01-ci.yml                 Is this code safe to merge?
+#   10-build-development.yml  Give me something to test with.
+#   11-build-release.yml      Give me something we could ship.
+#
+# They are separate because the answers cost different amounts and carry
+# different risk. CI must be cheap enough to run on every push; a release build
+# is signed, store-shaped and must never be mistaken for a dev build.
+#
+# All three call the same unity-pipeline.yml engine. None contains build logic.
+#
+# Artifacts for development, QA and internal testing. Android ships an APK here,
+# never an AAB — that distinction is in the artifact name, so a dev build can
+# never be mistaken for a release candidate:
+#
+#   development-android-apk    development-webgl
+#   development-ios-xcodeproj  development-windows
+#                              development-linux
+#
+# This workflow does NOT publish anywhere.
+# ────────────────────────────────────────────────────────────────────────────
+
+name: Build / Development
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "GENERAL · Platform to build. 'All' = the environment's *_BUILD_PLATFORMS; 'Desktop' = Windows64 + Linux64"
+        required: false
+        default: 'All'
+        type: choice
+        options: ['All', 'Desktop', 'Android', 'iOS', 'WebGL', 'Windows', 'Linux', 'Linux Server']
+
+      environment:
+        description: "GENERAL · Build environment"
+        required: false
+        default: 'development'
+        type: choice
+        options: ['development', 'staging']
+
+      run-tests:
+        description: "QUALITY · Run Unity tests as the quality gate before building"
+        required: false
+        default: true
+        type: boolean
+
+      test-mode:
+        description: "QUALITY · Test suite (ignored when run-tests is off)"
+        required: false
+        default: 'All'
+        type: choice
+        options: ['EditMode', 'PlayMode', 'All']
+
+      build-addressables:
+        description: "CONTENT · Run the Addressable build before the player build"
+        required: false
+        default: false
+        type: boolean
+
+      unity-version:
+        description: "UNITY · Unity version override (blank = ProjectVersion.txt)"
+        required: false
+        default: ''
+        type: string
+
+      clean-build:
+        description: "UNITY · Clean build (auto = clean for release, incremental otherwise)"
+        required: false
+        default: 'auto'
+        type: choice
+        options: ['auto', 'true', 'false']
+
+      define-symbols:
+        description: "UNITY · Extra scripting define symbols (';' or ',' separated)"
+        required: false
+        default: ''
+        type: string
+
+      runner-type:
+        description: "ADVANCED · WHERE the job runs (auto = RUNNER_TYPE variable)"
+        required: false
+        default: 'auto'
+        type: choice
+        options: ['auto', 'github-hosted', 'self-hosted']
+
+      build-engine:
+        description: "ADVANCED · HOW Unity builds (auto = BUILD_ENGINE variable)"
+        required: false
+        default: 'auto'
+        type: choice
+        options: ['auto', 'docker', 'local']
+
+      runner-labels:
+        description: "ADVANCED · Runner labels as a JSON array (blank = RUNNER_LABELS variable)"
+        required: false
+        default: ''
+        type: string
+
+# Where finished builds go so people can download them by clicking a link.
+# Set the BUILD_DELIVERY repository variable:
+#
+#   none    (default) nothing is published; the Discord link stays a GitHub
+#           artifact URL, which only opens for a signed-in collaborator
+#   r2      Cloudflare R2. Needs vars R2_BUCKET, R2_PUBLIC_BASE_URL and either
+#           R2_ACCOUNT_ID or CLOUDFLARE_ACCOUNT_ID, plus secrets
+#           R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY
+#   local   a directory on your self-hosted runner, served by your own web
+#           server. Needs vars BUILD_PUBLISH_DIR and BUILD_PUBLISH_BASE_URL,
+#           and only works on the self-hosted lane — the file has to be on the
+#           machine that serves it
+#
+# See docs/BUILD_DELIVERY.md.
+
+concurrency:
+  group: build-development-${{ github.ref }}-${{ inputs.platform }}-${{ inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Dev
+    uses: Cuvara/unity-build-workflows/.github/workflows/unity-pipeline.yml@v5
+    secrets: inherit
+    with:
+      project-path: '.'
+      toolkit-ref: 'v5'
+      build-type: development
+      platform: ${{ inputs.platform }}
+      environment: ${{ inputs.environment }}
+      build-addressables: ${{ inputs.build-addressables }}
+      run-tests: ${{ inputs.run-tests }}
+      test-mode: ${{ inputs.test-mode }}
+      unity-version: ${{ inputs.unity-version }}
+      clean-build: ${{ inputs.clean-build }}
+      define-symbols: ${{ inputs.define-symbols }}
+      runner-type: ${{ inputs.runner-type != 'auto' && inputs.runner-type || '' }}
+      build-engine: ${{ inputs.build-engine != 'auto' && inputs.build-engine || '' }}
+      runner-labels: ${{ inputs.runner-labels }}

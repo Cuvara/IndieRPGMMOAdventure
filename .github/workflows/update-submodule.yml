@@ -177,3 +177,42 @@ jobs:
           )")
 
           echo "::notice::Pull request created: ${PR_URL}"
+
+      # ────────────────────────────────────────────────────────────────────────
+      # A scheduled workflow whose only failure channel is the Actions tab will
+      # fail unnoticed, and this one did: it has run twice, failed both times,
+      # and nobody was told for a month (#40). The visible symptom of the failure
+      # -- a submodule that stops moving -- is indistinguishable from an upstream
+      # that has not changed, and `unity-build-workflows` is the toolkit the whole
+      # build pipeline delegates to, so "silently pinned to an old revision" is
+      # not cosmetic.
+      #
+      # This does not fix the cause. cuvara-bot gets 403 on push because its App
+      # installation lacks write access here, which is an admin action on the
+      # installation and cannot be done from inside the repository. It makes the
+      # failure arrive somewhere a person reads.
+      - name: Report failure
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -uo pipefail
+
+          # No webhook configured is not a reason to mask the failure: the job is
+          # already failing, and this step must not be the thing that decides
+          # whether that is reported.
+          if [[ -z "${WEBHOOK}" ]]; then
+            echo "::warning::DISCORD_WEBHOOK_URL is not set — the failure is only in the Actions tab."
+            exit 0
+          fi
+
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MSG="**submodule auto-update failed** — \`unity-build-workflows\` is not being kept current, and the CI toolkit should be assumed stale.\n${RUN_URL}\n\nSee Cuvara/IndieRPGMMOAdventure#40 — the usual cause is cuvara-bot lacking write access here."
+
+          # Never fail the notification into a green run: the job's own status is
+          # what matters, and a webhook that is down must not turn a reported
+          # failure into an unreported one.
+          curl -sS -X POST "${WEBHOOK}" \
+            -H 'Content-Type: application/json' \
+            -d "$(printf '{"content": %s}' "$(printf '%s' "${MSG}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" \
+            || echo "::warning::Could not reach the Discord webhook; the failure stands regardless."

@@ -74,6 +74,12 @@ crashlytics-build.properties
 # between, so tracking it means unrelated commits carry its churn -- which is
 # exactly how it entered the tree, riding along with 1ccb4204.
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/link.xml
+
+# Addressables writes a per-platform build folder and a .meta beside it. The folder's
+# contents are covered above; without the .meta every `git status` in this repo carries
+# a permanent untracked entry, which is the noise a genuinely stray file hides behind.
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ww]indows/
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ww]indows.meta
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/link.xml.meta
 
 # Temporary auto-generated Android Assets
@@ -97,6 +103,13 @@ UnityEntitlementLicense.xml
 /Tools/**/bin/
 /Tools/**/obj/
 
+# Same deal for the uitoolkit package's drift-check CLI: a hand-written dotnet
+# project under a ~ folder Unity never imports. Keep the project file, ignore
+# its build output.
+!/Packages/com.cuvara.uitoolkit/Tools~/**/*.csproj
+/Packages/com.cuvara.uitoolkit/Tools~/**/bin/
+/Packages/com.cuvara.uitoolkit/Tools~/**/obj/
+
 # Written by Claude Code when a project MCP server is accepted. The URL it holds
 # is machine-local — a localhost port plus a per-install id — so a committed copy
 # points every other clone at an endpoint that does not exist there.
@@ -112,3 +125,18 @@ UnityEntitlementLicense.xml
 # bare `git add -A` otherwise stages one as an embedded git repository, which
 # produces a commit that no clone can resolve.
 /.claude/worktrees/
+
+# Cuvara packages — developed in their own repos, resolved via git URL in manifest.json.
+# Kept locally (as git clones in Packages/) for direct editing, but NOT tracked by the
+# Unity project repo. Push changes from inside each package folder to its own remote.
+#
+# To develop locally: clone the repos into Packages/
+#   git clone https://github.com/Cuvara/UnityDots.git Packages/com.cuvara.dots
+#   git clone https://github.com/Cuvara/Netcode.git Packages/com.cuvara.netcode
+#   git clone https://github.com/Cuvara/UIToolkit.git Packages/com.cuvara.uitoolkit
+#
+# Unity resolves embedded (local folder) over git URL, so local clones take priority.
+# CI and fresh clones resolve from the git URLs in manifest.json.
+Packages/com.cuvara.dots/
+Packages/com.cuvara.netcode/
+Packages/com.cuvara.uitoolkit/

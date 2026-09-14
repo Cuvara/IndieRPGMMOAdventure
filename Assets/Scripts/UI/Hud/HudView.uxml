@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        Structure only, per the UI architecture contract: element hierarchy plus the names
+        the View queries for. No logic, no state — and no <Bindings> block: binding paths
+        live in C# via nameof (see the uitoolkit package's HYBRID-DATA-BINDING.md).
+        Enrolled in the UXML codegen: saving this file regenerates
+        Generated/HudView.uxml.g.cs, and a renamed element fails compilation there
+        instead of null-ing at runtime.
+    -->
+    <Style src="Hud.uss" />
+
+    <ui:VisualElement name="game-hud" class="game-hud">
+        <ui:Label name="hud-health-caption" class="game-hud__caption" text="—" />
+        <ui:VisualElement name="hud-health-track" class="game-hud__track">
+            <ui:VisualElement name="hud-health-fill" class="game-hud__fill" />
+        </ui:VisualElement>
+        <ui:Label name="hud-position" class="game-hud__row" text="—" />
+        <ui:Label name="hud-players" class="game-hud__row" text="Players 0" />
+        <ui:Label name="hud-entities" class="game-hud__row" text="Entities 0" />
+    </ui:VisualElement>
+</ui:UXML>

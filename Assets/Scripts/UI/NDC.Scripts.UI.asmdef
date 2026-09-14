@@ -1,0 +1,19 @@
+{
+  "name": "NDC.Scripts.UI",
+  "rootNamespace": "Scripts.UI",
+  "references": [
+    "Cuvara.UIToolkit",
+    "UniTask",
+    "Unity.Addressables",
+    "Unity.ResourceManager"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

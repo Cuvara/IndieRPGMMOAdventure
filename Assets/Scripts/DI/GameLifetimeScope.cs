@@ -1,19 +1,76 @@
-﻿namespace Scripts.DI
+namespace Scripts.DI
 {
     using Cuvara.Netcode.Bootstrap;
+    using Cuvara.Netcode.Client;
+    using Cuvara.Netcode.Codec;
     using Cuvara.Netcode.DI;
+    using Scripts.Nakama;
     using Scripts.Nakama.DI;
+    using Scripts.Session;
     using UnityEngine;
     using VContainer;
     using VContainer.Unity;
+#if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER
+    using Scripts.DI.Dots;
+#endif
 
     public class GameLifetimeScope : LifetimeScope
     {
         protected override void Configure(IContainerBuilder builder)
         {
             base.Configure(builder);
-            builder.RegisterNetworking();
-            builder.RegisterNakama();
+
+            // Backend addresses come from the command line / CUVARA_* environment — the flags
+            // Tools/run-clients.sh passes — with localhost defaults for a plain Editor run. Resolved
+            // once, here, because NetworkSettings and NakamaSettings are container instances and
+            // the addresses have to be known before the client and the Nakama service exist.
+            var backend = BackendCommandLine.Resolve("127.0.0.1", 8000, "map_01", "http://127.0.0.1:9101/status");
+            var deviceId = BackendCommandLine.ResolveDeviceIdOrNull(backend, "mainscene");
+            builder.RegisterInstance(new BackendSettings { Value = backend, DeviceId = deviceId });
+
+            TransportSecurityReport.Warn(backend);
+
+            // The encoding is an argument, not a property on NetworkSettings: RegisterNetworking
+            // picks the codec from it and registers one IWireCodec. Registering a second one
+            // afterwards does not override it — it makes VContainer fail the whole container
+            // build with "Conflict implementation type" — so this is the only place it can be
+            // decided. Its default in the package is Json, for source compatibility; this client
+            // asks for protobuf, because that is what the golden vectors cover and the only
+            // encoding a sealed session can use.
+            builder.RegisterNetworking(
+                new NetworkSettings
+                {
+                    GatewayHost = backend.GatewayHost,
+                    GatewayPort = backend.GatewayPort,
+                    GatewayUseTls = backend.GatewayTls,
+                    GatewayTlsPinnedCertificate = TransportSecurityReport.LoadPinOrNull(backend),
+                    RequireSealedSession = backend.Sealed,
+                },
+                encoding: backend.EncodingIsProtobuf ? WireEncoding.Protobuf : WireEncoding.Json);
+
+            // The device id is pinned on the settings, not only used once: the auth provider
+            // re-authenticates on a cold reconnect and must land on the same account.
+            builder.RegisterNakama(new NakamaSettings
+            {
+                Scheme = backend.NakamaScheme,
+                Host = backend.NakamaHost,
+                Port = backend.NakamaPort,
+                ServerKey = backend.NakamaServerKey,
+                // Null unless -cuvara-nakama-tls-cert named a PEM. Null means Unity's own
+                // validation, which is right for http and for a CA-issued certificate on
+                // https, and which refuses a self-signed one -- see ADR-24.
+                PinnedCertificate = TransportSecurityReport.LoadNakamaPinOrNull(backend),
+                DeviceId = deviceId,
+            });
+
+#if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER
+            // The DOTS view layer, its MessagePipe brokers, the simulation-model seam and the
+            // session predictor. Root-scoped for the same reason RegisterNetworking is: pools and
+            // registry outlive scene loads. The per-scene half is DotsWorldBridge, injected by
+            // MainSceneScope. viewRoot is this scope's transform so spawned views live and die
+            // with the container that owns their pools.
+            builder.RegisterDots(viewRoot: transform);
+#endif
 
             // Registering the services is not enough to inject them. VContainer only
             // injects components it has been told about, so without this NetworkBootstrap

@@ -42,6 +42,7 @@ HEIGHT=600
 TAG="mc"
 TILE=0
 DO_KILL=0
+EXTRA_ARGS=()
 
 usage() {
     cat <<'USAGE'
@@ -69,6 +70,9 @@ Usage: run-clients.sh --exe <player.exe> [options]
   --kill                Kill every running instance of the player and exit.
                         Do this before any rebuild: a running player holds
                         lib_burst_generated.dll open and the build fails on it.
+  -- ARGS...            Everything after -- is passed to every player instance
+                        verbatim, e.g. -- -bench -bench-duration 60 (see
+                        docs/DEVICE-BENCHMARK.md).
   -h, --help            This text.
 
 Example — three clients against the local dev stack:
@@ -97,6 +101,9 @@ while [ $# -gt 0 ]; do
         --tag) TAG="$2"; shift 2 ;;
         --tile) TILE=1; shift ;;
         --kill) DO_KILL=1; shift ;;
+        # Everything after -- goes to every player instance verbatim — the device
+        # benchmark's -bench flags (docs/DEVICE-BENCHMARK.md) are the consumer.
+        --) shift; EXTRA_ARGS=("$@"); break ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -181,6 +188,10 @@ for i in $(seq 1 "$COUNT"); do
 
     if [ -n "$STATUS_URL" ]; then
         ARGS+=(-cuvara-status-url "$STATUS_URL")
+    fi
+
+    if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then
+        ARGS+=("${EXTRA_ARGS[@]}")
     fi
 
     "$EXE" "${ARGS[@]}" >/dev/null 2>&1 &

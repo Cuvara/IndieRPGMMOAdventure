@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f691c0f960854090a5bb9e190221a57c, type: 3}
+  m_Name: DeviceBenchmarkConfig
+  m_EditorClassIdentifier:
+  WarmupSeconds: 10
+  SettleSeconds: 2
+  MaxExpectedFps: 1000
+  AutoQuit: 1
+  Phases:
+  - Label: ramp-250
+    EntityCount: 250
+    Seconds: 30
+  - Label: ramp-500
+    EntityCount: 500
+    Seconds: 30
+  - Label: ramp-1000
+    EntityCount: 1000
+    Seconds: 30

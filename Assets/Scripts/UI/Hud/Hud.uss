@@ -1,0 +1,37 @@
+/* Presentation only. No logic of any kind. */
+.game-hud {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    width: 220px;
+}
+
+.game-hud__caption {
+    color: rgb(235, 235, 235);
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.game-hud__track {
+    height: 10px;
+    background-color: rgba(0, 0, 0, 0.55);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.game-hud__fill {
+    height: 100%;
+    width: 0;
+    background-color: rgb(198, 62, 62);
+
+    /* A USS transition, not a per-frame push: the bridge pushes on change and the
+       animation between two states is the style system's job. */
+    transition-property: width;
+    transition-duration: 0.15s;
+}
+
+.game-hud__row {
+    color: rgb(210, 210, 210);
+    font-size: 12px;
+    margin-top: 4px;
+}

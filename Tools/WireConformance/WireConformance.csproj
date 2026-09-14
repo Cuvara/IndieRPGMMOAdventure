@@ -28,15 +28,19 @@
 
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Protocol/**/*.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Json/**/*.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Codec/**/*.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Snapshot/**/*.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Transport/WireFraming.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Transport/NetworkEndpoint.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Transport/TransportException.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Transport/TransportKind.cs" />
-    <Compile Include="../../Assets/Scripts/Net/Transport/TransportKinds.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Protocol/**/*.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Json/**/*.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Codec/**/*.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Snapshot/**/*.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Transport/WireFraming.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Transport/NetworkEndpoint.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Transport/TransportException.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Transport/TransportKind.cs" />
+    <Compile Include="../../Packages/com.cuvara.netcode/Runtime/Transport/TransportKinds.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
   </ItemGroup>
 
 </Project>
