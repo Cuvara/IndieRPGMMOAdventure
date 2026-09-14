@@ -1,6 +1,8 @@
 #if CUVARA_DOTS
 namespace Scripts.DI.Dots
 {
+    using System.Collections.Generic;
+
     /// <summary>
     /// The archetype names the client's view layer knows, in one place: the
     /// <c>TypeArchetypeResolver</c> maps server entity kinds to these, the
@@ -17,6 +19,19 @@ namespace Scripts.DI.Dots
         /// <summary>Server entity kinds, as the wire spells them (see the netcode message set).</summary>
         public const string ServerKindPlayer = "player";
         public const string ServerKindMob = "mob";
+
+        /// <summary>Every archetype the resolver can produce; a view library must define each.</summary>
+        public static readonly string[] All = { PlayerLocal, PlayerRemote, Mob };
+
+        /// <summary>
+        /// Server kind → archetype, exactly as the <c>TypeArchetypeResolver</c> is built. The local
+        /// player is not here: the resolver picks <see cref="PlayerLocal"/> from <c>isLocal</c>.
+        /// </summary>
+        public static readonly KeyValuePair<string, string>[] ServerKindMappings =
+        {
+            new KeyValuePair<string, string>(ServerKindPlayer, PlayerRemote),
+            new KeyValuePair<string, string>(ServerKindMob, Mob),
+        };
     }
 }
 #endif

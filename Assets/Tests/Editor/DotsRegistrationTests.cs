@@ -9,6 +9,7 @@ namespace Tests.Editor
     using NUnit.Framework;
     using Scripts.DI.Dots;
     using Unity.Entities;
+    using UnityEngine;
     using VContainer;
 
     /// <summary>
@@ -32,7 +33,10 @@ namespace Tests.Editor
             this.world = new World("DotsRegistrationTests");
 
             var builder = new ContainerBuilder();
-            builder.RegisterDots(viewRoot: null, world: this.world);
+            // Primitive on purpose: the production mode needs the DotsViewLibrary asset in
+            // Resources, which a unit test must not depend on. Production wiring is proven
+            // below with an explicit asset and a fake loader.
+            builder.RegisterDots(viewRoot: null, world: this.world, mode: DotsViewProviderMode.Primitive);
             this.container = builder.Build();
         }
 
@@ -59,12 +63,36 @@ namespace Tests.Editor
         }
 
         [Test]
-        public void ViewAssetProvider_IsThePrimitiveFallback()
+        public void ViewAssetProvider_IsPrimitive_InPrimitiveMode()
         {
-            // GameLifetimeScope registers no GameFoundation services (IAssetsManager,
-            // IObjectPoolManager), so RegisterDots must fall back to the primitive provider.
-            // When RegisterGameFoundation lands, this assertion is the one to flip.
             Assert.That(this.container.Resolve<IViewAssetProvider>(), Is.InstanceOf<PrimitiveViewAssetProvider>());
+            var reference = this.container.Resolve<DotsViewLibraryReference>();
+            Assert.That(reference.Mode, Is.EqualTo(DotsViewProviderMode.Primitive));
+            Assert.That(reference.Asset, Is.Null);
+        }
+
+        [Test]
+        public void ViewAssetProvider_IsTheLeasedPooledProvider_InProductionMode()
+        {
+            var asset = ScriptableObject.CreateInstance<DotsViewLibraryAsset>();
+            using var productionWorld = new World("DotsRegistrationTests.Production");
+            var builder = new ContainerBuilder();
+            builder.RegisterDots(
+                viewRoot: null,
+                world: productionWorld,
+                mode: DotsViewProviderMode.Production,
+                library: asset,
+                loader: new FakeViewPrefabLoader());
+            using var production = builder.Build();
+
+            var provider = production.Resolve<IViewAssetProvider>();
+            Assert.That(provider, Is.InstanceOf<LeasedViewAssetProvider>());
+            Assert.That(((LeasedViewAssetProvider)provider).Pool, Is.Not.Null, "the package's pooled provider underneath");
+            Assert.That(production.Resolve<DotsViewLibraryReference>().Asset, Is.SameAs(asset));
+            Assert.That(production.Resolve<DotsViewLibraryReference>().Mode, Is.EqualTo(DotsViewProviderMode.Production));
+
+            DotsViewBootstrap.Uninstall(productionWorld);
+            Object.DestroyImmediate(asset);
         }
 
         [Test]

@@ -50,7 +50,32 @@ namespace Scripts.DI.Dots
         /// <c>World.DefaultGameObjectInjectionWorld</c> at container-build time; tests pass a
         /// throwaway world.
         /// </param>
-        public static IContainerBuilder RegisterDots(this IContainerBuilder builder, Transform viewRoot = null, World world = null)
+        /// <param name="mode">
+        /// <see cref="DotsViewProviderMode.Production"/> (default) leases Addressables prefabs from
+        /// the <see cref="DotsViewLibraryAsset"/> into the package's <c>PooledViewAssetProvider</c>;
+        /// <see cref="DotsViewProviderMode.Primitive"/> keeps the capsule/sphere placeholder for
+        /// the sample and benchmark scenes.
+        /// </param>
+        /// <param name="library">
+        /// The view library. Null loads <c>Resources/DotsViews/DotsViewLibrary</c>; if that is
+        /// missing in Production mode the registration logs an error and falls back to the
+        /// primitive provider rather than failing every scene's container build.
+        /// </param>
+        /// <param name="loader">
+        /// Prefab loader override — tests pass a fake. Null means Addressables.
+        /// </param>
+        /// <param name="maxActivePerKey">
+        /// The pool's admission budget per key (0 = unlimited). The inactive-pool cap is separate
+        /// and comes from the package default; see the package's VIEW-PROVISIONING.md.
+        /// </param>
+        public static IContainerBuilder RegisterDots(
+            this IContainerBuilder builder,
+            Transform viewRoot = null,
+            World world = null,
+            DotsViewProviderMode mode = DotsViewProviderMode.Production,
+            DotsViewLibraryAsset library = null,
+            IViewPrefabLoader loader = null,
+            int maxActivePerKey = 0)
         {
 #if CUVARA_DOTS_MESSAGEPIPE
             // MessagePipe first — this is the project's first (and so far only) RegisterMessagePipe
@@ -64,9 +89,42 @@ namespace Scripts.DI.Dots
             builder.RegisterMessageBroker<ChunkCascadeReleased>(options);
 #endif
 
-            // Placeholder provider until the project decides to stand up the full GameFoundation
-            // stack — see PrimitiveViewAssetProvider's remarks for the swap instructions.
-            builder.Register<IViewAssetProvider>(_ => new PrimitiveViewAssetProvider(viewRoot), Lifetime.Singleton);
+            // The production provider is the package's pooled provider with Addressables prefabs
+            // leased in per key (LeasedViewAssetProvider). The primitive provider stays for scenes
+            // with no authored art. The choice is made here, once, and the bridge reads it back
+            // through DotsViewLibraryReference so it can validate against the right prefab source.
+            if (mode == DotsViewProviderMode.Production && library == null)
+            {
+                library = Resources.Load<DotsViewLibraryAsset>(DotsViewLibraryAsset.ResourcesPath);
+                if (library == null)
+                {
+                    Debug.LogError(
+                        $"[DotsRegistration] No DotsViewLibrary asset at '{DotsViewLibraryAsset.DefaultAssetPath}'. " +
+                        "Falling back to primitive views. Create it via Assets > Create > Cuvara > DOTS View Library " +
+                        "and list every archetype in DotsViewArchetypes.All with an Addressable prefab.");
+                    mode = DotsViewProviderMode.Primitive;
+                }
+            }
+
+            builder.RegisterInstance(new DotsViewLibraryReference { Asset = library, Mode = mode });
+
+            if (mode == DotsViewProviderMode.Production)
+            {
+                var prefabLoader = loader ?? new AddressableViewPrefabLoader(library);
+                // viewRoot is caller-owned: the pool parks inactive instances under it and never
+                // destroys it (the package's root-ownership contract). The provider is IDisposable
+                // and container-owned, so disposing the root scope destroys every instance and
+                // releases every handle — instances before assets.
+                builder.Register<IViewAssetProvider>(
+                    _ => new LeasedViewAssetProvider(
+                        new PooledViewAssetProvider(viewRoot, maxActivePerKey: maxActivePerKey),
+                        prefabLoader),
+                    Lifetime.Singleton);
+            }
+            else
+            {
+                builder.Register<IViewAssetProvider>(_ => new PrimitiveViewAssetProvider(viewRoot), Lifetime.Singleton);
+            }
 
             // Registry + cascade + provisioner, and a build callback that installs
             // DotsViewBootstrap into the world. Calls RegisterDotsMessaging itself, which is why

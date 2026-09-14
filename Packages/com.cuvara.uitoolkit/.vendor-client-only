@@ -1,8 +1,0 @@
-# Files the consuming client adds on top of the upstream package. A file listed here may
-# exist ONLY in the vendored copy; it may not DIFFER from an upstream file of the same
-# path, or real drift could hide behind the exemption.
-#
-# Empty at v0.1.0: this package was extracted wholesale from com.gdk.core, so the copy in
-# IndieRPGMMOAdventure and the contents of this repository are the same tree.
-#
-# Keep this file. An empty allowlist is a statement, and the drift check reads it.

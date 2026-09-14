@@ -6,12 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Samples/Cuvara UI Toolkit/0.1.0/Loading Flow/LoadingScene.unity
-    guid: 5c018204d2859024aa037d498cb149a8
-  - enabled: 1
-    path: Assets/Samples/Cuvara UI Toolkit/0.1.0/Loading Flow/MainScene.unity
-    guid: d5caa1adefa2a69489b352d5af009fe9
-  - enabled: 1
     path: Assets/Scenes/MainScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 1

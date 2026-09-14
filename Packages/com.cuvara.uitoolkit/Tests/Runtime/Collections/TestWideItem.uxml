@@ -1,5 +1,0 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <ui:VisualElement name="root" style="flex-grow: 1; flex-direction: column; height: 60px;">
-        <ui:Label name="headline" text="headline" />
-    </ui:VisualElement>
-</ui:UXML>

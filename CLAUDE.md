@@ -52,14 +52,19 @@ Windows paths for the same reason. The player lands in
 `Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe`. (`BuildConfig/*.json`
 lists only `MainScene`; that path is the CI toolkit's, not this one.)
 
-**`-bootScene` is what makes this a netcode-sample player, and omitting it gives you the
-wrong game.** `PlayerBuilder` builds every enabled scene in `EditorBuildSettings` and the
+**MainScene authenticates and joins on its own** (`MainSessionDriver`, an entry point of
+`MainSceneScope`): it reads the same `-cuvara-*` flags / `CUVARA_*` variables `run-clients.sh`
+passes, device-authenticates with Nakama, connects through the gateway and prints the same
+`[DOTSNet] Auth OK, user_id=` / `[DOTSNet] IN WORLD as` markers the harness asserts on. So the
+real-path player is the default build — **omit `-bootScene`** — and `-bootScene` is only for
+running the netcode DOTS *sample* instead:
+
+**`-bootScene` is what makes this a netcode-sample player.** `PlayerBuilder` builds every enabled scene in `EditorBuildSettings` and the
 player boots index 0 — which is `Assets/Scenes/MainScene.unity`, because that is what a
 release build must boot. `-bootScene` moves the named scene to index 0 for this build
 only; the enabled set, and therefore what ships inside the player, is unchanged, and
-nothing is committed. Without the flag the three windows come up in MainScene, never
-authenticate, and the harness looks broken for a reason that has nothing to do with
-networking.
+nothing is committed. Before `MainSessionDriver` existed, omitting the flag left three windows in a MainScene that
+never authenticated; that is no longer the case.
 
 The path must match the enabled scene path exactly — an unmatched value is a hard build
 error, not a silent fall-back to index 0. Note the version number in it: the sample lives
@@ -78,6 +83,69 @@ Tools/run-clients.sh --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdv
 No address is baked in. The game server is an Agones pod whose port is assigned at
 scheduling time, so every address is a parameter — see `BackendCommandLine` for the
 full flag set and the `CUVARA_*` environment fallbacks.
+
+#### What protects each hop, and what the client speaks on the wire
+
+The client talks to three things and each is configured separately, so none of these is
+implied by any other:
+
+| Hop | Flag | Default | Why that default |
+|---|---|---|---|
+| Nakama (auth, meta) | `-cuvara-nakama-scheme https`, `-cuvara-nakama-tls-cert PEM` | `http`, no pin | plaintext is the dev case; the session token crosses this hop (ADR-24) |
+| gateway | `-cuvara-gateway-tls 1`, `-cuvara-gateway-tls-cert PEM` | off | matches the gateway's own default (ADR-23) |
+| game server | `-cuvara-sealed 1` | **off** | every deployed environment pins `GAMESERVER_SEALED=off` (ADR-22) |
+
+**The Nakama hop needs the certificate as well as the scheme, and the two are separate
+flags on purpose.** `-cuvara-nakama-scheme https` alone leaves Unity's own validation
+deciding — right for a CA-issued certificate, and a correct refusal of the self-signed one
+a dev or staging Nakama holds:
+
+```
+Curl error 60: Cert verify failed. Certificate is not correctly signed by a trusted CA.
+UnityTls error code: 7
+```
+
+That is not a bug to work around. `-cuvara-nakama-tls-cert <path-to-PEM>` (or
+`CUVARA_NAKAMA_TLS_CERT`) **pins** that certificate: the client compares what Nakama
+presents against the file byte for byte and accepts nothing else. Pinning is *stricter*
+than the trust store, not looser, which is why it is the answer rather than an
+accept-anything switch — **there is none, in this client or on any other hop**, and
+`PinnedCertificateHandler` refuses to construct with an empty pin so one cannot be added by
+configuration (ADR-24 decision 4).
+
+Pinning with the scheme left at `http` is an error line at startup and the pin is ignored;
+the hop is plaintext and must not read as protected. **WebGL cannot pin at all** — the
+browser performs the handshake and Unity never calls the handler — so a WebGL player needs
+a CA-issued certificate on this hop. The server side of the same decision, including how to
+generate the certificate and which four files move together, is
+`rpg-mmo-server/backend/deploy/k8s/data/README.md` §"Turning the meta hop's TLS on".
+
+**The client speaks Protobuf on the wire, not JSON.** `-cuvara-encoding json|proto`
+selects it (`CUVARA_ENCODING`), and it defaults to `proto`. Both servers sniff the first
+body byte — `0x08` Protobuf, `0x7B` JSON — and answer in kind, so this is a client-side
+choice needing no server change; `json` is still there for a readable capture. It is not
+a free choice when sealing, though: **a JSON client can never seal.** The sealed
+handshake messages are absent from the JSON message set on purpose, and a server running
+`GAMESERVER_SEALED=require` refuses a JSON client at the join with `encoding_cannot_seal`
+— which reaches the client as nothing more informative than a closed connection during
+the handshake. That is exactly the failure the shipped client hit on 2026-09-11 when the
+dev fleet was first switched to `require`, and it is why the encoding default moved.
+
+`-cuvara-sealed` has **no negotiation and no fallback**, so the two sides must be set
+together. Client on / server off stalls the join until the sealed-handshake timeout. The
+other direction is **not** a clean refusal, measured on 2026-09-11: a protobuf client that
+does not seal against a `require` server reaches `InWorld` and is then closed
+(`PeerClosed`) and reconnects — 21 such lines in 45 seconds — so the symptom is a
+join/kick loop rather than an error naming the cause. Only the JSON client is refused
+outright. `TransportSecurityReport` logs, at startup, what the client will *request* for
+all three hops — it deliberately does not claim the gameplay hop is sealed, because that
+is decided at the join by the server.
+
+`Tools/verify-multiclient.sh` takes a `--` passthrough for exactly this:
+
+```bash
+Tools/verify-multiclient.sh --exe … --gateway-port 7000 … -- -cuvara-sealed 1
+```
 
 **`--nakama-key` is not optional any more.** It defaults to `defaultkey`, which is
 what every backend used until the keys were rotated on 2026-08-20 — each cluster now
@@ -126,9 +194,21 @@ Tools/verify-multiclient.sh \
   --kube-context k3d-rpg-dev
 ```
 
+Against the docker compose stack (`rpg-mmo-server/backend/deploy/stack.sh up`: gateway
+8000, Nakama 7350, game server status 9101, key `defaultkey`) the Redis rows come from the
+container instead of a cluster:
+
+```bash
+Tools/verify-multiclient.sh \
+  --exe Builds/MultiClient/StandaloneWindows64/IndieRPGMMOAdventure.exe \
+  --count 3 --gateway-port 8000 --nakama-port 7350 --nakama-key defaultkey \
+  --map map_01 --status-url http://127.0.0.1:9101/status \
+  --redis-container rpg-redis
+```
+
 It exits non-zero only when an asserted row fails. Rows it could not run — the Redis ones
-without `--kube-context`, and mutual visibility always — are printed as **NOT CHECKED** and
-never folded into the pass.
+without `--kube-context` or `--redis-container`, and mutual visibility always — are printed
+as **NOT CHECKED** and never folded into the pass.
 
 The table is what it asserts, kept here because the reasoning is the useful part:
 
@@ -182,7 +262,21 @@ whole table at once — including `Predict … err 0.000`, which is the reconcil
 and the one number that says prediction and server authority agree.
 
 ### CI/CD (GitHub Actions)
-- `.github/workflows/unity-build.yml` — thin dispatcher delegating to `unity-build-workflows` submodule pipeline
+- Toolkit `unity-build-workflows` pinned at **v5.2.0**; the UPM half
+  (`com.company.build-pipeline`) is pinned to the same tag in **both**
+  `Packages/manifest.json` and `Packages/packages-lock.json`
+- Entry workflows are numbered thin callers, no build logic, all calling
+  `unity-pipeline.yml@v5`:
+  - `01-ci.yml` — push/PR gate. Validate, licence, tests. Builds **no** player
+  - `10-build-development.yml` — dispatch only. APK / unsigned artifacts for QA
+  - `11-build-release.yml` — dispatch only. Signed AAB, immutable Release Set
+  - `20-release-android.yml`, `22-release-webgl.yml`, `23-release-windows.yml`,
+    `24-release-linux.yml` — promote-only. They consume a `source-run-id` from a
+    `Build / Release` run and publish those exact bytes; they never rebuild
+- No iOS entry workflow: this project ships no iOS build and `BuildConfig/`
+  carries no `iOS` block
+- A push no longer produces a player. Before v3 that was `unity-build.yml`'s job;
+  now a push runs `01-ci.yml` only and a player is a deliberate dispatch
 - Platforms: Android (AAB/ARM64), WebGL (Brotli), Linux64, LinuxServer, Windows64
 - Environments: production, staging, development
 - Build configs live in `BuildConfig/` — `base.json` merged with environment overlays (`development.json`, `staging.json`, `production.json`)
@@ -226,8 +320,48 @@ Two related traps when driving builds from the Unity MCP tools:
   sentinel file, or you get several concurrent builds and no indication of it. Read
   progress from `Editor.log` instead; the log stays available while MCP does not.
 
+### Importing a package sample to test it
+
+Every feature in `com.cuvara.netcode` / `com.cuvara.dots` ships a scene under the package's
+`Samples~`, and the way to exercise it here is to import that sample and build a player that
+boots its scene. `Assets/BuildScripts/Editor/SampleImporter.cs` does the import headlessly:
+
+```bash
+U="/mnt/c/Program Files/Unity/Hub/Editor/6000.3.9f1/Editor/Unity.exe"
+"$U" -quit -batchmode -nographics -projectPath 'E:\SecretProject\IndieRPGMMOAdventure' \
+  -executeMethod SampleImporter.Import \
+  -importPackage com.cuvara.dots -importSample "Phase B Showcase" -addToBuild 1 \
+  -logFile 'E:\SecretProject\IndieRPGMMOAdventure\Builds\import.log'
+```
+
+It lands in `Assets/Samples/<package displayName>/<version>/<sample>/` (overriding a previous
+import of the same sample) and, with `-addToBuild 1`, appends the sample's scenes to
+`EditorBuildSettings` so `PlayerBuilder -bootScene` can boot one. **Do not commit that build-settings
+change** — the release player must boot `MainScene`; the entry is a local test artefact. The imported
+sample folder itself is committed, so the version on disk records which package release was exercised.
+
+The DOTS `Phase B Showcase` scenes also run themselves: pass `-showcaseAutorun` (optionally
+`-showcaseAutorunDelay <seconds>`) to a player built from one of them and it clicks its own buttons,
+asserts the documented outcomes, prints `[PhaseB] <Scene> step=… PASS|FAIL` per step and
+`[PhaseB] <Scene>: N passed, M failed`, then exits non-zero if anything failed. The netcode
+`Reconnect Policy Demo` is driven by hand instead: build it, run two instances, and break the link
+(its buttons, or `docker pause rpg-gameserver`) to watch the reconnect policy work.
+
 ### Addressables
 Enabled with default profile. Build addressables step is optional in CI workflow.
+
+### DOTS view library (what a build needs)
+
+`MainScene` presents replicated entities through `com.cuvara.dots` with real prefabs leased from
+Addressables. The list of archetypes lives in **one asset**:
+`Assets/Resources/DotsViews/DotsViewLibrary.asset` (create via
+`Assets > Create > Cuvara > DOTS View Library`), one entry per name in
+`Scripts.DI.Dots.DotsViewArchetypes.All` (`player-local`, `player-remote`, `mob`) with an
+Addressable prefab each. `PlayerBuilder.Build` — and any build started from the Editor — runs
+`DotsViewLibraryBuildCheck` first and **fails the build** naming the entry when an archetype is
+missing, a key is malformed or a prefab reference does not resolve. No asset at all is only a
+warning: the player falls back to capsule/sphere placeholders (`DotsViewProviderMode.Primitive`),
+which is what the netcode-sample and benchmark players use.
 
 ## Architecture
 

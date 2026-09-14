@@ -18,7 +18,13 @@
         "Shared.GameLogic",
         "Unity.Entities",
         "Unity.Collections",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "Unity.Mathematics",
+        "Unity.Transforms",
+        "NDC.Scripts.Session",
+        "UniTask"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

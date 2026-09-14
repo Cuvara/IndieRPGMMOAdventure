@@ -40,8 +40,10 @@
 # Note the PIDs run-clients.sh prints are the LAUNCHER's, not the player's, and
 # have no window handle; the players are found by process name instead.
 #
-# Requires: kubectl (for the Redis assertions), curl, python3, powershell.exe.
-# Redis assertions are skipped -- visibly -- when no kubectl context is given.
+# Requires: curl, python3, powershell.exe, and for the Redis assertions either
+# kubectl (--kube-context, an Agones/k3d backend) or docker (--redis-container,
+# the compose stack from rpg-mmo-server/backend/deploy/stack.sh). Redis
+# assertions are skipped -- visibly -- when neither is given.
 
 set -uo pipefail
 
@@ -56,7 +58,9 @@ NAKAMA_PORT=""
 NAKAMA_KEY=""
 MAP_ID="map_01"
 STATUS_URL=""
+EXTRA_ARGS=()
 KUBE_CONTEXT=""
+REDIS_CONTAINER=""
 REDIS_NS="rpg-k8s-data"
 REDIS_STS="redis"
 SHOT_DIR=""
@@ -80,9 +84,12 @@ Usage: verify-multiclient.sh --exe <player.exe> --gateway-port P --nakama-port P
                              -o jsonpath='{.data.NAKAMA_SERVER_KEY}' | base64 -d
   --map ID               Default map_01
   --status-url URL       Game server /status. Required for the players_online row.
-  --kube-context CTX     Enables the Redis rows. Omitted = those rows report SKIP.
-  --redis-ns NS          Default rpg-k8s-data
-  --redis-sts NAME       Default redis
+  --kube-context CTX     Enables the Redis rows against a k3d/Agones backend.
+  --redis-container NAME Enables the Redis rows against the docker compose stack
+                         (rpg-redis for ./stack.sh up). Mutually exclusive with
+                         --kube-context. Neither given = those rows report SKIP.
+  --redis-ns NS          Default rpg-k8s-data (kubectl only)
+  --redis-sts NAME       Default redis (kubectl only)
   --shots DIR            Where to write window captures (default: a temp dir).
   --settle SECONDS       Wait before asserting (default 45). Joins are not instant.
   --keep                 Leave the players running afterwards.
@@ -104,11 +111,13 @@ while [ $# -gt 0 ]; do
         --map) MAP_ID="$2"; shift 2 ;;
         --status-url) STATUS_URL="$2"; shift 2 ;;
         --kube-context) KUBE_CONTEXT="$2"; shift 2 ;;
+        --redis-container) REDIS_CONTAINER="$2"; shift 2 ;;
         --redis-ns) REDIS_NS="$2"; shift 2 ;;
         --redis-sts) REDIS_STS="$2"; shift 2 ;;
         --shots) SHOT_DIR="$2"; shift 2 ;;
         --settle) SETTLE="$2"; shift 2 ;;
         --keep) KEEP=1; shift ;;
+        --) shift; EXTRA_ARGS=("$@"); break ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -154,13 +163,23 @@ trap cleanup EXIT
 # assuming one.
 "$HERE/run-clients.sh" --exe "$EXE" --kill >/dev/null 2>&1 || true
 
-"$HERE/run-clients.sh" \
-    --exe "$EXE" --count "$COUNT" --tag "$TAG" --log-dir "$LOG_DIR" \
-    --gateway-host "$GATEWAY_HOST" --gateway-port "$GATEWAY_PORT" \
-    --nakama-host "$NAKAMA_HOST" --nakama-port "$NAKAMA_PORT" \
-    --nakama-key "$NAKAMA_KEY" --map "$MAP_ID" \
-    ${STATUS_URL:+--status-url "$STATUS_URL"} \
-    --tile >/dev/null
+LAUNCH=(
+    "$HERE/run-clients.sh"
+    --exe "$EXE" --count "$COUNT" --tag "$TAG" --log-dir "$LOG_DIR"
+    --gateway-host "$GATEWAY_HOST" --gateway-port "$GATEWAY_PORT"
+    --nakama-host "$NAKAMA_HOST" --nakama-port "$NAKAMA_PORT"
+    --nakama-key "$NAKAMA_KEY" --map "$MAP_ID"
+)
+if [ -n "$STATUS_URL" ]; then
+    LAUNCH+=(--status-url "$STATUS_URL")
+fi
+LAUNCH+=(--tile)
+if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then
+    LAUNCH+=(-- "${EXTRA_ARGS[@]}")
+    echo "player args  ${EXTRA_ARGS[*]}"
+fi
+
+"${LAUNCH[@]}" >/dev/null
 
 echo "launched, settling for ${SETTLE}s"
 sleep "$SETTLE"
@@ -236,8 +255,17 @@ else
 fi
 
 # --- redis ----------------------------------------------------------------
+# One `redis` shim per backend shape; the assertions below do not care which.
+if [ -n "$KUBE_CONTEXT" ] && [ -n "$REDIS_CONTAINER" ]; then
+    echo "--kube-context and --redis-container are mutually exclusive" >&2
+    exit 2
+fi
 if [ -n "$KUBE_CONTEXT" ]; then
     redis() { kubectl --context "$KUBE_CONTEXT" exec -n "$REDIS_NS" "statefulset/$REDIS_STS" -- redis-cli "$@" 2>/dev/null; }
+elif [ -n "$REDIS_CONTAINER" ]; then
+    redis() { docker exec "$REDIS_CONTAINER" redis-cli "$@" 2>/dev/null; }
+fi
+if [ -n "$KUBE_CONTEXT" ] || [ -n "$REDIS_CONTAINER" ]; then
 
     sessions=$(redis --scan --pattern 'session:*' | grep -c . || true)
     if [ "$sessions" -eq "$COUNT" ]; then
@@ -258,7 +286,7 @@ if [ -n "$KUBE_CONTEXT" ]; then
         fail "one server registered for $MAP_ID (ADR-2)" "1 member" "$members"
     fi
 else
-    skip "Redis session and registry rows" "--kube-context not given"
+    skip "Redis session and registry rows" "neither --kube-context nor --redis-container given"
 fi
 
 # --- window capture -------------------------------------------------------

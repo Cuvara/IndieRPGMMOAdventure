@@ -7,6 +7,713 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-14)
+- **Build toolkit v4.2.0 → v5.2.0.** Submodule, `Packages/manifest.json` and
+  `Packages/packages-lock.json` all pin `v5.2.0` (`9dbe0f5`), and the seven entry
+  workflows are the v5.2.0 `templates/consumer-*.yml` byte-for-byte.
+- **Stage 01 now fails when `BuildConfig` and `ProjectSettings.asset` disagree**
+  about `companyName`, `bundleVersion` or the Android application id (toolkit
+  5.0.0). Run against this tree before the bump: clean on all three environments.
+  It is the gate that would have caught this project shipping under the URP
+  template's identifier for months.
+- **Each platform routes to a runner its OS can actually use** (toolkit 5.2.0).
+  Labels follow the executor rather than the target: under `BUILD_ENGINE=docker`
+  everything but iOS still builds in the Linux container, `Windows64` included,
+  so the only platform that moves here is **iOS** — off a Linux runner that has
+  no Xcode. Android, WebGL and Windows64 stay on `ubuntu-latest`.
+- **The run summary now prints a runner plan** (toolkit 5.1.0): one row per
+  platform with its `runs-on`, engine, and which tier decided the labels.
+
+### Changed (2026-09-14)
+- **Build toolkit v3.2.0 → v4.2.0.** Submodule, `Packages/manifest.json` and
+  `Packages/packages-lock.json` all pin `v4.2.0` (`41afe27`), and the seven entry
+  workflows are the v4.2.0 `templates/consumer-*.yml` byte-for-byte.
+- **Shorter node names in the Actions graph.** Toolkit 4.0.0 dropped the stage number
+  from every job name and the development caller shortened to `Dev`:
+  `Development / 04 / Android / Validate APK` now reads `Dev / Android / Validate APK`.
+  Stage order was never in the names — it is the progress ladder each job draws into
+  its summary.
+- **The `develop` required status checks were renamed with them**, from
+  `CI / 0N / …` to `CI / …`. A renamed required context is never reported again, so
+  leaving them would have blocked every pull request with the check stuck in
+  `Expected` — which is exactly what the v2 → v3 migration left behind and what this
+  repo hit this morning.
+- **The Discord build report tells the truth about artifact size.** Toolkit 4.1.0: a
+  67 MB APK had been posted as `0 MB (linked)` with no download link, because the
+  per-platform row was dropped whenever no `Editor.log` existed — which is every
+  build on the Docker lane. The embed now leads with the artifact and its download
+  link, and a size nobody measured reads `size unknown` rather than `0 MB`.
+
+### Fixed (2026-09-14)
+- **The app's identity was still the URP blank template's.** A Discord build report
+  read `Bundle ID: com.UnityTechnologies.com.unity.template.urpblank` and
+  `Version: 0.4.2`, and both were honest readings of `ProjectSettings.asset`:
+
+  | | was | now |
+  |---|---|---|
+  | `companyName` | `DefaultCompany` | `Cuvara` |
+  | `bundleVersion` | `0.4.2` | `0.5.0` |
+  | `applicationIdentifier` (Android / Standalone / iPhone) | template defaults | `com.cuvara.indierpgmmo` |
+
+  `bundleVersion` had not moved since the v0.4.2 prep commit on 2026-08-21, so every
+  build since `0.5.0` was released on 2026-09-05 shipped stamped `0.4.2`.
+
+- **`BuildConfig/` said the right thing in the one file nothing reads.** `base.json`
+  declared `Cuvara` and `com.cuvara.indierpgmmo`, and all three environment files
+  overrode them back to `DefaultCompany` and the template id — so the good values had
+  never taken effect anywhere. Development and staging now carry
+  `com.cuvara.indierpgmmo.dev` / `.staging`, which install alongside production rather
+  than over it.
+
+- These are complete configs, not deltas: the schema requires `companyName` and
+  `bundleVersion` in every one, so the version now lives in five places that must
+  agree — `ProjectSettings.asset` plus four `BuildConfig/*.json`. A toolkit-side gate
+  to catch them disagreeing is tracked separately.
+
+### Notes (2026-09-14)
+- On the Docker / game-ci lane **`BuildConfig/` never reaches PlayerSettings.** The
+  toolkit's own builder (`Company.BuildPipeline`) runs only when `build-method` is set,
+  which is the self-hosted/local lane; game-ci supplies its own builder and stamps
+  whatever `ProjectSettings.asset` holds. `ProjectSettings.asset` is therefore the
+  value that ships, and `scripts/common/extract_project_metadata.sh` reads it directly.
+
+### Changed (2026-09-14)
+- **Build toolkit `unity-build-workflows` v2.2.0 → v3.2.0.** The submodule sat 197
+  commits behind while the callers referenced `@main`, so the repository was already
+  running the v3 engine through a v1-shaped caller — a combination nothing tests. The
+  submodule, `Packages/manifest.json` and `Packages/packages-lock.json` now all pin the
+  same tag, `v3.2.0`; the lock's resolved `hash` was bumped with the pin, because the
+  lock is what Unity resolves and a manifest-only bump is silently ignored.
+- **`unity-build.yml` replaced by the numbered entry workflows.** v3 splits one caller
+  into one workflow per question — `01-ci.yml` ("is this safe to merge?", builds no
+  player), `10-build-development.yml` (APK for QA) and `11-build-release.yml` (signed
+  AAB, immutable Release Set) — plus promote-only `20-release-android.yml`,
+  `22-release-webgl.yml`, `23-release-windows.yml` and `24-release-linux.yml`, which
+  publish the exact bytes of a named `Build / Release` run and rebuild nothing. The
+  files are the toolkit's `templates/consumer-*.yml` verbatim, byte-identical to the
+  ones in the `NDC-Unity-Template` base project.
+- **A push no longer builds a player.** Previously a push to `develop`, `staging` or
+  `release-*` ran the full platform matrix. It now runs `01-ci.yml`, which passes
+  `platform: None` — a merge check no longer pays for six Unity builds. A player is a
+  deliberate `workflow_dispatch` from `10-` or `11-`.
+- **`build-type` is now an axis of its own**, separate from `environment`, so a
+  development APK and a release AAB can no longer share an artifact name:
+  `development-android-apk` versus `release-android-aab`.
+
+### Removed (2026-09-14)
+- **No iOS entry workflow.** `21-release-ios.yml` exists in the toolkit and in the base
+  template, but this project ships no iOS build and `BuildConfig/*.json` carries no
+  `iOS` block — installing it would have added a workflow that can only fail.
+
+### Notes (2026-09-14)
+- `BuildConfig/{base,development,staging,production}.json` validate unchanged against
+  the v3.2.0 schema; the only keys the v3 examples carry that this project does not are
+  the iOS block.
+- `Assets/BuildScripts/Editor/{PlayerBuilder,AddressableBuilder}.cs` were left as they
+  are. The toolkit ships them as reference implementations to adapt, and this project's
+  copies have diverged deliberately.
+- Do not set `ARTIFACT_RETENTION_DAYS`: v3 tiers retention by purpose (release 90 days,
+  staging 14, development 7) and a release artifact that expires can never be promoted.
+
+### Changed (2026-09-14)
+- **`com.cuvara.netcode` → v0.39.0.** Two prediction fixes that had sat unmerged since
+  2026-09-09 with no pull request ever opened: `AckIntervalSeconds` read the snapshot cadence
+  **25% low** and now measures over a ring of gaps, and `PredictionLatencyMeasurement` gates on
+  the correction **rate** rather than the max — the max over ~28 corrections is one draw from a
+  tail, and it was the statistic being asserted.
+
+  They were found by sweeping every branch unreachable from `main`/`develop` across all three
+  repos. Five other branches turned up the same way and **none was merged**: each was verified
+  as already-landed content on a stale fork, including one whose closing comment claimed
+  supersession — checked against the tree rather than believed.
+
+- **`.gitignore` covers the Addressables per-platform build folder's `.meta`.** Without it every
+  `git status` in this repo carried a permanent untracked entry, which is the noise a genuinely
+  stray file hides behind. (Branch `chore/client/ignore-addressables-platform-meta`, whose PR
+  #97 was closed without merging; the content was never in `develop`.)
+
+### Added (2026-09-13)
+- **`com.cuvara.netcode` → v0.38.2: the client verifies the game server's ADR-25 identity.**
+  `ServerIdentityVerifier` checks the per-pod Ed25519 signature over the sealed handshake
+  transcript, and — the part that matters — reports what verifying it is actually worth.
+
+  **A verified signature is worth exactly as much as the hop the key arrived over.** The
+  identity key reaches the client in `enter_world_resp`, on the gateway hop. Over plaintext an
+  active attacker substitutes both the key and the signature and the check passes against the
+  attacker's own key, so `Verified` is the conjunction of "the signature checked out" **and**
+  "the key came over an authenticated hop". `NetworkSettings.RequireServerIdentity` is off by
+  default, and turning it on does **not** make a plaintext gateway hop safe — it forces the
+  attacker to sign with the key they already substituted. The pair that authenticates a server
+  is that flag plus `GatewayUseTls`.
+
+  This is not the ADR-22 binding and does not repair it: that signer is a symmetric HMAC under
+  `JOIN_TOKEN_SECRET`, so a client able to verify it could mint join tokens. `BindingVerified`
+  stays permanently false.
+
+- **`Assets/BuildScripts/Editor/StrippingProbeBuilder.cs` — build one scene as an IL2CPP player
+  at a chosen stripping level, then put the project's settings back.** IL2CPP strips managed
+  code the Editor never strips, so a library reached through its own registries can vanish from
+  a player while every Editor test stays green — no compile error, no exception, just a feature
+  that silently stops working. Answering "does this survive stripping?" means building a player,
+  and until now that was done by hand each time.
+
+  **The restore is the part that has gone wrong before.** Scripting backend and stripping level
+  are project settings, not build options, so setting them for one build leaves them set for
+  every build afterwards — and the restore only reaches disk if the settings are flushed.
+  Logging "restored" without `AssetDatabase.SaveAssets` has previously left IL2CPP/High on disk
+  while the log claimed otherwise. The restore runs in a `finally`, flushes, and logs **after**
+  the flush.
+
+  First use answered ADR-25 decision 8: **Ed25519 survives `High` stripping** in a Windows
+  player, all eight probe self-checks passing including the negative case. `Minimal` was not run
+  separately and Android is unmeasured; the scope is recorded at ADR-25 decision 8 in the
+  backend repo.
+
+- **The client can reach a Nakama that terminates its own TLS with a self-signed certificate
+  — by PINNING it, not by skipping validation (ADR-24).** Pointed at `https://`, the player
+  used to fail every request with `Curl error 60: Cert verify failed … UnityTls error code:
+  7`. That refusal is correct, and it was the second of the two blockers keeping the meta
+  hop's TLS off everywhere.
+
+  `-cuvara-nakama-tls-cert <PEM>` / `CUVARA_NAKAMA_TLS_CERT` (and `backend.env` on Android)
+  now names a certificate the client compares byte for byte against what Nakama presents.
+  **This is stricter than the platform trust store, not looser**: an attacker must hold that
+  certificate's private key rather than any certificate a CA will sign. Without the flag,
+  Unity's own validation still decides and still refuses a self-signed Nakama — that is the
+  default and it did not change.
+
+  **There is no accept-anything mode and one cannot be configured.** `PinnedCertificateHandler`
+  throws on an empty pin, `Matches` returns false for an absent one, and nothing exposes a
+  "trust all" flag. A `CertificateHandler` returning `true` is `InsecureSkipVerify` with a
+  Unity spelling, which ADR-24 decision 4 rules out in every environment including dev.
+
+  **The gateway hop's answer did not transfer, which is why this is new code rather than a
+  setting.** That hop is `SslStream` inside `TcpTransport`, where
+  `TlsOptions.PinnedCertificate` pins a DER; this one goes through Nakama's SDK on Unity's
+  HTTP stack. A Unity `CertificateHandler` is **per-request**, and the SDK's stock
+  `UnityWebRequestAdapter` never assigns one and offers no hook — so the client also ships
+  `PinnedHttpAdapter`, its own Nakama `IHttpAdapter`, which installs the handler on every
+  request. It sets `disposeCertificateHandlerOnDispose = false`, without which the shared
+  handler would be disposed after the first request and the pin would work exactly once.
+
+  **Two limits, recorded because they are not obvious.** `CertificateHandler` is **not called
+  on WebGL** — the browser performs the handshake — so a WebGL player needs a CA-issued
+  certificate and pinning must not be claimed for it. And the pin is the leaf, so rotating
+  Nakama's certificate is a client change, exactly as on the gateway hop.
+
+  Pinning with the scheme left at `http` is reported as an error by
+  `TransportSecurityReport` and the pin is not loaded: a pin on a plaintext hop reads as
+  protection that is not there. The startup line for this hop now says which of the three
+  states it is in — plaintext, https with the trust store, or https pinned to a named file.
+- **Ten EditMode tests** in `Assets/Tests/Editor/NakamaCertificatePinTests.cs`, weighted
+  towards **refusal**, because a pin that accepts is visible in any working deploy and a pin
+  that accepts too much is visible in none. The certificate that must be rejected is a real
+  second self-signed certificate **with the same subject** as the pinned one; a flipped byte
+  and a truncated DER are rejected too, and the constructor is asserted to refuse an empty
+  pin. What no EditMode test can cover, and so is not claimed: that Unity itself calls
+  `ValidateCertificate` on a real handshake.
+
+
+### Fixed (2026-09-13)
+
+- **Every pull request was failing CI with `android-export='apk' was given but no Android
+  build was selected`.** `unity-build.yml` passed `android-export` with a hard default of
+  `apk` on every call, including pushes and pull requests — which select their platforms from
+  the `*_BUILD_PLATFORMS` variables, and a PR selects none. The toolkit (referenced at
+  `@main`, so it moves under us) began validating that combination and refused it.
+
+  **The refusal is correct**, so this is fixed here rather than worked around there: an
+  Android-only output format on a run with no Android build is a request nobody can satisfy.
+  The input now passes through only what a manual dispatch actually chose, and passes nothing
+  otherwise.
+
+### Added (2026-09-13)
+
+- **Parties and dungeon entry reach the player.** The backend half of ADR-26 shipped and was
+  proven with a Go probe, which proves a server and proves nothing about whether the shipped
+  client can reach it — and it could not: `party_id` existed nowhere in this client. This is
+  the half that was missing.
+
+  `Scripts/Nakama/Social/PartyService.cs` wraps the four Nakama RPCs (`party_create`,
+  `party_join`, `party_leave`, `party_get`). A **transport failure and a refusal throw
+  different types**: a caller that cannot tell "the party is full" from "Nakama is
+  unreachable" will either retry a refusal forever or report an outage as a game rule.
+
+  `MainSessionFlow` gains a party step **before** the world, because a dungeon instance is
+  keyed by the party (ADR-26 decision 2) — there is nothing to enter until the party exists.
+  A dungeon requested with **no party fails loudly** rather than falling back to the map: a
+  client configured for a dungeon and quietly dropped into the open world is a
+  misconfiguration that survives the test run that should have caught it.
+
+  Driven by `-cuvara-party create|<id>` and `-cuvara-dungeon <content id>` (or `CUVARA_PARTY`
+  / `CUVARA_DUNGEON`), so a **built** player can be put in a party from a script the way
+  `Tools/run-clients.sh` drives everything else. Without that, testing a two-player dungeon
+  needs two humans and two mice.
+
+### Changed (2026-09-13)
+
+- `com.cuvara.netcode` v0.36.2 → **v0.37.0** (manifest, and the lock's **`version` AND
+  `hash`** — see below): `EnterWorldRequest`
+  carries `party_id`, `NetworkClient.ConnectToDungeonAsync` exists, and **the party id is
+  replayed on reconnect** — a rejoin that forgot it would ask for a map named after the
+  dungeon content, so the player silently leaves their party behind. The JSON encoder omits
+  the field when empty, so a map entry is byte-identical to what a pre-party client sent.
+
+  **Two fields in the lock, not one.** `packages-lock.json` carries both a `version` (the git
+  URL with its ref) and a `hash` (the resolved commit), and **UPM resolves the `hash`**.
+  Bumping only the URL is as silently ignored as bumping only the manifest: CI built the old
+  package and failed with `NetworkClient does not contain a definition for
+  ConnectToDungeonAsync` against a commit that plainly contains it. The known rule was
+  "manifest AND lock"; it is really "manifest AND both lock fields".
+### Added (2026-09-12)
+
+- **An Android build can now be pointed at a backend at all.** Every override this client has
+  is a command-line flag or a `CUVARA_*` environment variable, and an Android app has
+  **neither** — no argv, and no settable process environment without a debuggable `wrap.sh`.
+  The defaults are a developer loopback (`127.0.0.1:8000`, Nakama's published `defaultkey`),
+  so an Android player could only ever reach a backend that happened to match them: it could
+  be built and installed, it could not be **aimed**. Measured against the dev cluster, whose
+  Nakama server key is 32 characters and not `defaultkey`, so device auth could not succeed.
+
+  `BackendCommandLine` now falls back to a `KEY=VALUE` file at
+  `Application.persistentDataPath/backend.env`, using the **same `CUVARA_*` names** rather than
+  a second vocabulary. Precedence is unchanged and the file sits at the bottom: command line >
+  environment > file > default, so a desktop run is unaffected by a file someone forgot to
+  delete. A missing file is the normal case and is silent; an unreadable one warns and is
+  ignored, because a player that refuses to start over a config file is worse than one that
+  starts on its defaults and says so.
+
+  ```
+  adb push backend.env /sdcard/Android/data/<package>/files/backend.env
+  ```
+
+- **`ANDROID_ABIS` selects the native architectures an Android build emits** (`arm64`,
+  `armv7`, `x86_64`, comma-separated; unset keeps the project's current setting, arm64 only).
+  This exists because of the emulator: every Android emulator image that runs at usable speed
+  on an x86_64 host is x86_64, and the arm64-only apk this project produced **cannot install
+  on one** — so without this the only way to run an Android build of this game was to own the
+  phone. `ANDROID_ABIS=arm64,x86_64` installs on both, at the cost of a second IL2CPP pass and
+  roughly double the native payload, which is why it is opt-in rather than the shipping
+  default. An unrecognised value throws instead of silently building the wrong set: a typo
+  otherwise surfaces at `adb install` time with nothing pointing back at this variable.
+
+### Fixed (2026-09-12)
+
+- **`PlayerBuilder` reported the wrong object's size on success.** The line read
+  `Build succeeded: {summary.totalSize} bytes -> {path}`, and `summary.totalSize` is the
+  build's **uncompressed content**, not the artefact: it announced `2175682249 bytes` for an
+  apk that is 70 MB on disk. A consistent number about the wrong object is the hardest kind
+  of wrong to notice. Both figures are now printed, each labelled, with the artefact's size
+  read from disk — and a build the report calls a success while producing no file now throws,
+  which is the Windows IL2CPP failure this project has already hit once (exit 0, plausible
+  `.exe`, no `GameAssembly.dll`).
+
+### Changed (2026-09-11)
+
+- `com.cuvara.netcode` v0.36.1 → **v0.36.2** (manifest and lock): a client refused for not
+  sealing now retries WITH sealing, so a default player build plays on the sealed dev fleet
+  **without any flag**. It escalates and never downgrades — the runtime has exactly one
+  assignment to `RequireSealedSession` and it is `= true`, with a test that scans for the
+  opposite.
+
+  Measured on k3d-rpg-dev with `GAMESERVER_SEALED=require`, three players, no flags:
+  **7 passed, 0 failed**. The client log shows the whole path:
+
+  ```
+  will NOT request sealing up front …
+  the game server requires a sealed session and refused this one (no_sealed_session);
+    reconnecting WITH sealing
+  sealed session established; the server's binding was NOT verified …
+  ```
+
+- **`TransportSecurityReport` no longer claims the gameplay hop is in the clear.** Its
+  startup line said "this matches every deployed environment today (GAMESERVER_SEALED=off)",
+  which stopped being true the same day dev and staging were flipped to `require` — a
+  sentence that was accurate when written and wrong one deploy later. It now describes what
+  the client will *request*, names what a `require` server does about it, and points the
+  reader at the `sealed session established` line that settles it.
+
+### Added (2026-09-11)
+
+- **The shipped client can run against a game server that requires a sealed session, and
+  speaks Protobuf on the wire by default.** Two flags, in the existing `-cuvara-*` /
+  `CUVARA_*` style:
+
+  | Flag | Environment | Values | Default |
+  |---|---|---|---|
+  | `-cuvara-sealed` | `CUVARA_SEALED` | the usual boolean spellings | **off** |
+  | `-cuvara-encoding` | `CUVARA_ENCODING` | `json` \| `proto` | **`proto`** |
+
+  `-cuvara-sealed` sets `NetworkSettings.RequireSealedSession` (ADR-22: ChaCha20-Poly1305
+  over authenticated X25519, HKDF-SHA256, sequence doubling as the replay counter).
+  `-cuvara-encoding` selects the codec `RegisterNetworking` registers; it has to be an
+  argument to that call, because registering a second `IWireCodec` afterwards does not
+  override the first — it makes VContainer fail the whole container build with "Conflict
+  implementation type".
+
+  **Why this was needed.** `GAMESERVER_SEALED` defaults to `require` on the C# game
+  server and every deployed environment pins it to `off`. Turning it on for the live
+  `k3d-rpg-dev` fleet on 2026-09-11 passed the Go smoketest with `-sealed -encoding proto`
+  and correctly refused the JSON smoketest — and killed the real Unity client outright:
+  `[DOTSNet] FATAL: Cuvara.Netcode.Client.NetworkException: gateway closed the connection
+  during the handshake`, then twelve refused reconnects, 4 of 8 acceptance rows failing.
+  `GameLifetimeScope` called `RegisterNetworking` with no `encoding` argument, so it took
+  the package default of `WireEncoding.Json`, and `RequireSealedSession` was never set at
+  all. **A JSON client can never seal** — the sealed handshake messages are absent from
+  the JSON message set on purpose, so key material cannot be rendered into a
+  human-readable payload — so a `require` server refuses it at the join with
+  `encoding_cannot_seal`, which arrives at the client as a bare closed connection.
+
+  **Why these defaults.** Sealing is **off** unless asked for: there is no negotiation and
+  no fallback, so a client that seals against a server with sealing off waits for a hello
+  that never comes and the join times out. Defaulting it on would break every dev run to
+  make one environment work. Encoding defaults to **`proto`**, which does change what a
+  plain run does, because (a) leaving it at JSON would make `-cuvara-sealed` a flag that
+  cannot work unless a second flag is remembered alongside it, (b) Protobuf is what the
+  backend defaults to and what the package's golden vectors cover, ~81% smaller on the
+  wire once id interning is counted, and (c) it costs no server change — both servers
+  sniff the first body byte (`0x08` Protobuf, `0x7B` JSON) and answer in kind. That last
+  claim is what the unsealed acceptance run below exists to check rather than assert.
+  `-cuvara-encoding json` puts the old behaviour back for a readable capture.
+
+  The one combination that cannot work — sealing over JSON — is reported as an **error**
+  at startup naming both flags, rather than silently corrected: forcing Protobuf there
+  would be guessing which of the two the operator meant.
+
+- **`TransportSecurityReport` now reports the gameplay hop too — as a request, not an
+  outcome.** It previously said nothing about it, deliberately, because whether the
+  session is sealed is decided at the join. That is still true and the new lines still say
+  so; what changed is that the client now *asks* for something, and the request is a real
+  knowable fact at startup. It logs `will REQUEST a sealed session (ADR-22) over
+  protobuf` / `will NOT request sealing — gameplay frames cross this hop in the clear`,
+  names the address as *assigned at join* rather than pretending to know it, and leaves
+  the line that says the session **is** sealed to the netcode client, which carries the
+  caveat this one cannot: the server's binding is not verified, so the session is
+  confidential against a passive eavesdropper and offers nothing against an active one
+  until ADR-22's pinned identity key lands.
+
+- **`Tools/verify-multiclient.sh` takes a `--` passthrough**, the same one
+  `run-clients.sh` already had, so the harness can exercise the sealed hop:
+  `… -- -cuvara-sealed 1`. Without it there was no way to reach the new flags through the
+  verification script at all.
+
+  **Acceptance, run here against the live `k3d-rpg-dev` fleet — not unit tests.** A fresh
+  Windows player (Mono2x, `-executeMethod PlayerBuilder.Build`, no `-bootScene`, so the
+  real MainScene path) reported `[PlayerBuilder] Build succeeded: 131072079 bytes`, which
+  is the line `PlayerBuilder` only prints when `BuildReport.summary.result` is
+  `Succeeded`. `Tools/verify-multiclient.sh --count 3` was then run three ways:
+
+  | Run | Fleet | Client | Result |
+  |---|---|---|---|
+  | (a) regression | `GAMESERVER_SEALED=off` | protobuf, unsealed | **7 passed, 0 failed, 1 not checked** |
+  | (b) sealed | `GAMESERVER_SEALED=require` | protobuf, `-cuvara-sealed 1` | **7 passed, 0 failed, 1 not checked** |
+  | control | `GAMESERVER_SEALED=require` | protobuf, **no** `-cuvara-sealed` | join/kick loop |
+
+  The seven asserted rows in (a) and (b) are identical: all 3 clients reached IN WORLD, 3
+  distinct Nakama user ids, all assigned the same game server, no FATAL in any log,
+  `players_online=3`, 3 Redis session keys, `servers:map:map_01` holding exactly one
+  member. The eighth row — mutual visibility — is the one only a human can settle and is
+  reported NOT CHECKED, never folded into the pass.
+
+  Run (a) is what makes the encoding default defensible: it is the same harness that
+  passed before this change, now passing with the client speaking protobuf against an
+  unchanged `off` server.
+
+  Run (b)'s client log carries the two lines that say what actually happened, rather than
+  leaving it to the exit code:
+
+  ```
+  [transport-security] game server (address assigned at join): will REQUEST a sealed session (ADR-22) over protobuf. …
+  [Net] sealed session established; the server's binding was NOT verified, so this session is
+        confidential against a passive eavesdropper and offers no man-in-the-middle protection
+  ```
+
+  The control exists because (b) passing does not by itself prove the flag did anything.
+  It shows the flag is load-bearing, and it also **corrects the failure shape recorded
+  above**: a protobuf client that does not seal is not refused *at* the join by a
+  `require` server — it reaches `InWorld` and is then closed (`PeerClosed`) and
+  reconnects, 21 such lines in 45 seconds, where the sealed run logged **zero**. Only the
+  *JSON* client is refused outright. So the original `gateway closed the connection during
+  the handshake` was the encoding, and `-cuvara-sealed` is what buys a session that
+  survives.
+
+  Fleet handling: `GAMESERVER_SEALED` is env index 5 and was patched by replacing the
+  **whole** env entry object, never `/value` — index 6 is `GAMESERVER_ADVERTISE_HOST`, a
+  `configMapKeyRef`, and a `/value` patch on an entry with `valueFrom` corrupts it. The
+  fleet was returned to `off` and recycled afterwards; index 6 was verified intact both
+  times.
+
+### Added (2026-09-11)
+
+- **Gateway TLS is wired to the command line, and every hop says what protects it at
+  startup.** `-cuvara-gateway-tls` / `CUVARA_GATEWAY_TLS` turns on ADR-23's TLS for the
+  gateway connection, and `-cuvara-gateway-tls-cert` / `CUVARA_GATEWAY_TLS_CERT` pins a PEM
+  certificate for a gateway holding a self-signed one. Off by default, matching the
+  gateway's own default. `-cuvara-nakama-scheme https` already existed and is unchanged.
+
+  `TransportSecurityReport` logs one line per hop when the container is built. The client
+  talks to three things — Nakama, the gateway, the game server — and each is protected by a
+  different mechanism configured independently, so "the connection is encrypted" is a
+  sentence that is true of one hop and believed about all three. A plaintext hop to
+  loopback logs at Info and says nothing more; a plaintext hop to a **remote** host logs an
+  **error** naming what crosses in the clear and the flag that fixes it, because that is a
+  build shipping credentials readable by anyone on the path. A host it does not recognise
+  counts as remote, so the failure direction is one warning too many rather than a silent
+  plaintext link to a real server.
+
+  It lives in `NDC.Scripts.DI` rather than beside `BackendCommandLine`: `NDC.Scripts.Session`
+  references no assemblies at all, so a `using Cuvara.Netcode.Transport` there compiles in a
+  hand-written csproj and fails in Unity.
+
+### Changed (2026-09-11)
+
+- `com.cuvara.netcode` v0.35.0 → **v0.36.1** (manifest and lock): TLS on the gateway hop
+  with certificate validation that cannot be turned off, plus the fix for a pending socket
+  read that ignored cancellation — which is why `NetworkSettings.ConnectTimeout` now
+  actually bounds the gateway handshake instead of hanging indefinitely when the gateway
+  never answers.
+
+  Acceptance, run here rather than taken from package CI: the full EditMode suite is
+  **1223/1223** against v0.36.1, and the sample's five cases were run in **play mode**
+  against a real `SslStream` listener — pinned connects over Tls12 and carries a frame, an
+  unpinned connection to a self-signed certificate is refused by the platform, a TLS client
+  does not downgrade to a plaintext gateway, a plaintext client against a TLS gateway
+  stalls rather than being refused, and the factory throws when asked for TLS with no
+  options. The first is a positive control, so "everything is refused now" cannot pass for
+  success.
+
+  The `Gateway TLS Probe` sample is imported at `Assets/Samples/Cuvara Netcode/0.36.1/`.
+
+### Changed (2026-09-08)
+
+- `com.cuvara.netcode` v0.34.0 → **v0.35.0** (manifest and lock): the client's input send
+  cadence is no longer anchored to `GameConstants.DefaultTickRate`. That constant is the
+  server's SNAPSHOT rate, not its simulation rate, so the client was sending at exactly the
+  snapshot cadence — the one rate at which the acknowledgement floor cannot be measured,
+  because the wait term never sweeps. The cadence is now derived from the snapshot rate
+  (13 Hz against 15) and the send schedule is pinned, without which the choice is unreachable
+  on a frame grid. Cost: ~13% fewer uplink packets, and a direction change waits up to 76.9 ms
+  instead of 66.7 ms to reach the server.
+- The release also lands the floor-statistic correction, the sweep guard's sample floor, two
+  reconcile counter fixes, the ack-floor rate conversion, and assembly definitions for five
+  package samples. Full detail in the package CHANGELOG under 0.35.0.
+
+- `com.cuvara.netcode` v0.33.0 → **v0.34.0** (manifest and lock): nine guards against an
+  untrustworthy timebase. The staleness estimator fits a rate through two best-case anchors, a
+  construction valid only if the minimum achievable delay is the same at both ends; nothing
+  checked that before the result reached `SetClockRateScale`, so a displaced fit ran the client's
+  base-tick clock 8.3% slow. A fitted rate must now reproduce over a doubled baseline before it
+  steers the clock, the age is refused when its slope is, and a provisional age that saturates its
+  clamp contributes zero instead of delivering the warm-up fallback.
+- `Assets/Samples/Cuvara Netcode/0.28.1/Clock Sync Probe` removed and re-imported at 0.34.0. The
+  committed 0.28.1 copy had no assembly definition, so importing the sample a second time was a
+  hard compile error (CS0101) that only appears **after** a version bump - it lands on the first
+  person to update, never on the person who imported. The 0.34.0 copy ships `ClockSyncProbe.asmdef`.
+- `SampleImporter` takes `-samplePackage` instead of `-importPackage`. The latter is a built-in
+  Unity batch-mode flag expecting a `.unitypackage` path: Unity acted on it too, failed to
+  decompress the package *name* as an archive, and exited 1 **after** the sample had imported
+  successfully - an exit code reporting failure for a run that worked.
+
+- `com.cuvara.netcode` v0.32.0 → **v0.33.0** (manifest and lock): client prediction now steers on the
+  measured snapshot age instead of a whole snapshot interval during the estimator's ~8 s warm-up, and
+  runs its base-tick clock on the server's timebase using the already-fitted skew. Live against the dev
+  stack this took the target lead from 4 base ticks to 0 and the standing clock error from 3 ticks to −1,
+  halving the correction the local avatar took on every input. Sample folder re-imported at the new
+  version.
+- `.gitignore`: the Addressables platform folder and its `.meta` (an untracked entry in every status).
+
+### Changed (2026-09-07)
+
+- `com.cuvara.dots` v0.28.0 → **v0.29.0** and `com.cuvara.netcode` v0.31.1 → **v0.32.0** (manifest and
+  lock together). Netcode v0.32.0 makes `RegisterNetworking()` take its dependencies, fixing a v0.31.1
+  regression that made the container unbuildable for any consumer wanting its own `ITransportFactory`.
+  DOTS v0.29.0 adds the Phase B Showcase sample.
+- Both packages' sample scenes are imported into `Assets/Samples/` and committed, so the folder version
+  records which release was exercised: `Cuvara DOTS/0.29.0/Phase B Showcase` (four offline scenes, each
+  self-testing under `-showcaseAutorun`) and `Cuvara Netcode/0.32.0/Reconnect Policy Demo`.
+
+### Added (2026-09-07)
+
+- `Assets/BuildScripts/Editor/SampleImporter.cs` — headless UPM sample import
+  (`-executeMethod SampleImporter.Import -importPackage <id> -importSample <name> [-addToBuild 1]`),
+  so a package feature's sample scene can be built and run from batch mode. Documented in CLAUDE.md.
+
+### Changed (2026-09-07)
+
+- `com.cuvara.netcode` v0.31.0 → v0.31.1 (manifest + lock): `RegisterNetworking()` now resolves
+  `NetworkClient` from a scope (VContainer ignored `DefaultTransportFactory`'s default `string`
+  parameter). Required for `MainSessionDriver` / `DotsWorldBridge` injection in MainScene.
+### Added (2026-09-07) — MainScene session driver
+
+- **`MainSessionDriver`** (`Assets/Scripts/DI/`, VContainer entry point registered by
+  `MainSceneScope`): on scene start authenticates the device with Nakama
+  (`NakamaSessionService.AuthenticateDeviceAsync`), connects through the gateway
+  (`NetworkClient.ConnectAsync(map)` via the registered `NakamaAuthProvider`), and logs the
+  markers `Tools/verify-multiclient.sh` asserts on — `[DOTSNet] Auth OK, user_id=<id>` and
+  `[DOTSNet] IN WORLD as <id>` — byte-identical to the netcode DOTS sample. Disposing the scope
+  cancels the sequence and disconnects. MainScene therefore authenticates and joins on its own;
+  `-bootScene` is no longer required for a real-path multi-client run.
+- **`Scripts.Session`** assembly (`Assets/Scripts/Session/`): `BackendCommandLine` (the sample's
+  flag/`CUVARA_*` resolution, now with an injectable overload) and `MainSessionFlow` (the pure
+  sequence with an endpoint seam). `GameLifetimeScope` resolves the backend once and registers
+  `NetworkSettings`/`NakamaSettings` from it plus a `BackendSettings` instance.
+- **Per-process identity**: `NakamaSettings.DeviceId` (from `-cuvara-device`, else a per-process
+  id when `-cuvara-instance` is given, else null = machine id). `NakamaSessionService` uses it as
+  the default device id and `NakamaAuthProvider` skips the PlayerPrefs session restore when it is
+  set — three clients on one machine share PlayerPrefs and `SystemInfo.deviceUniqueIdentifier`,
+  which made their logins evict each other.
+- `NakamaSessionService` constructs its `Client` with `UnityWebRequestAdapter.Instance` (the Unity
+  package's documented adapter) instead of the .NET SDK's default `HttpClient` adapter, which in a
+  Mono player surfaces fast connection failures as `TaskCanceledException`.
+- `MainSessionFlow` reports "Cancelled" only when the session's own token is cancelled; any other
+  `OperationCanceledException` (a superseded login generation, a foreign timeout token) is
+  `FATAL` with its message. `MainSessionDriver` logs a probe line at start (instance, disposed,
+  token cancelled, client state) and at dispose (phase + stack trace), kept for player-log
+  diagnosis.
+- Tests: `MainSessionFlowTests` (10, fake endpoint: phases, marker lines, auth/connect failure,
+  cancel vs. foreign cancellation), `BackendCommandLineTests` (6: precedence, the exact harness
+  flag set, bad port, device-id resolution).
+- `com.cuvara.netcode` v0.31.1 (RegisterNetworking resolves `NetworkClient`) is required for the
+  container to build; the tag did not exist at commit time, so the manifest stays at v0.31.0.
+
+### Changed (2026-09-07)
+
+- `com.cuvara.dots` v0.27.1 → v0.28.0 (manifest + lock): the DOTS improvement plan phases A–E
+  (pool ownership, chunk epochs, module install/uninstall, config validation, lifecycle events,
+  physics collector, minimap/overlay, camera policies, ingestion generations). Required by the
+  production view provider and `DotsWorldBridge` on this branch.
+### Added (2026-09-07) — DOTS host provider adoption (plan D12)
+
+Requires `com.cuvara.dots` at the release cut from `integration/dots-phase-b` (>= 63bfa52:
+`PooledViewAssetProvider` ownership contract + `IsRegistered`, `DotsModules`,
+`ViewConfigCatalog.TryBuild`/`ViewConfigValidator`, `DotsEntityView.BeginGeneration`,
+`CameraFollowBootstrap.ResetSmoothing`, `MinimapBootstrap`) and `com.cuvara.netcode` >= 0.31.0
+(`NetworkClient.Reconnected`). The manifest/lock bump to that tag is a separate change; until it
+lands this code does not compile against the pinned v0.27.1 and the `CUVARA_DOTS` assemblies
+will report the missing members.
+
+- **Production view provider**: `LeasedViewAssetProvider` (`Assets/Scripts/DI/Dots/`) — the
+  package's `PooledViewAssetProvider` for pooling, an `IViewPrefabLoader` for prefabs, and a
+  lease per key between them: loaded once on first prewarm (concurrent callers share the load),
+  the Addressables handle held while any instance exists, `Release(key)` dropping pooled
+  instances now and the handle only after the last acquired instance returns, `Dispose` destroying
+  instances before releasing handles. `Acquire` never loads synchronously (returns `null`,
+  `UnloadedAcquires`). `AddressableViewPrefabLoader` resolves view keys through the library
+  asset's `AssetReferenceGameObject`s — one handle per key, released once.
+- **`DotsViewLibraryAsset`** (`Assets > Create > Cuvara > DOTS View Library`, expected at
+  `Assets/Resources/DotsViews/DotsViewLibrary.asset`): one entry per archetype with view key,
+  Addressable prefab, pool size, scale and offsets; `BuildLibrary` generates the package's
+  `ViewArchetypeLibrary`/`ViewConfig`s at session start. `DotsViewLibraryValidation` runs the
+  package validator plus this game's rules (every `DotsViewArchetypes.All` archetype present,
+  every server kind mapped, every entry referencing a prefab).
+- **Build gate**: `Assets/BuildScripts/Editor/DotsViewLibraryBuildCheck` — `IPreprocessBuildWithReport`
+  and an explicit call at the top of `PlayerBuilder.Build` — fails the build with the offending
+  entries named when the library has a missing/mismatched key or a reference that does not
+  resolve to a prefab. No asset at all is a warning (primitive fallback), so sample/benchmark
+  players still build.
+- `RegisterDots(viewRoot, world, mode, library, loader, maxActivePerKey)`:
+  `DotsViewProviderMode.Production` (default) leases Addressables prefabs from the library into
+  the pooled provider; `Primitive` keeps the capsule/sphere placeholder for the sample and
+  benchmark scenes. A missing library asset in Production logs an error and falls back to
+  primitive rather than failing every scene's container. `DotsViewLibraryReference` is
+  registered so the bridge can read the chosen mode/asset.
+- **Authoring tool** `Assets/BuildScripts/Editor/DotsViewLibraryAuthoring.cs`: menu
+  `Cuvara > DOTS > Create Placeholder View Library`, or headless
+  `-executeMethod DotsViewLibraryAuthoring.CreatePlaceholderLibrary`. Creates
+  `Assets/DotsViews/Prefabs/{PlayerLocal,PlayerRemote,Mob}.prefab` (blue/green capsules, red
+  sphere, own materials, no colliders), marks them Addressable in the default group as
+  `dots/view/<archetype>`, writes `Assets/Resources/DotsViews/DotsViewLibrary.asset` with pool
+  sizes 4/32/64 and half-height lifts, validates and logs. Idempotent; throws on validation
+  errors so a batchmode run fails loudly.
+- Tests (`Assets/Tests/Editor`): `LeasedViewAssetProviderTests` (10, fake loader — lease
+  refcount contract), `DotsViewLibraryValidationTests` (8), `DotsRegistrationTests` gains the
+  production-mode wiring test.
+
+### Changed (2026-09-07)
+
+- **`DotsWorldBridge`** now builds its catalog from the `DotsViewLibraryAsset` through
+  `ViewConfigCatalog.TryBuild` with the provider's own `prefabExists` (`LeasedViewAssetProvider.CanProvide`
+  or the primitive provider's shape table) plus `ValidateMappings` against
+  `DotsViewArchetypes.ServerKindMappings`; an invalid library logs every issue and disables the
+  component. Prewarm is asynchronous and the binder starts ticking only when every key is warm.
+  Session modules install with `DotsModuleScope.Session`: CameraFollow (targets the local
+  player's mirror via `NetworkEntitySpawned`) and, opt-in, Minimap (with a category resolver on
+  the `DotsEntityView`). Teardown: prediction → `DotsNetcodeBootstrap.Uninstall(destroyMirrors: true)`
+  → `DotsModules.UninstallScope(Session)` → catalog → `Release(key)` for every catalog key
+  (handles drop once the view layer recycled the last instance). On `NetworkClient.Reconnected`:
+  `view.BeginGeneration()`, `predictor.Reset()`, `CameraFollowBootstrap.ResetSmoothing`.
+- `DotsViewArchetypes` gains `All` and `ServerKindMappings`, the single table the resolver, the
+  validator and the build gate all read.
+- asmdefs: `NDC.Scripts.DI` and `NDC.Tests.Editor` reference `Unity.Addressables` +
+  `Unity.ResourceManager`; `BuildScript.Editor` references `NDC.Scripts.DI` + `Cuvara.DOTS.Runtime`
+  under a `CUVARA_DOTS` version define.
+
+### Changed (2026-09-07)
+
+- `com.cuvara.netcode` v0.30.0 → v0.31.0 (manifest + lock, hash `40b3e4f`): reconnect policy by
+  disconnect cause (60 s budget anchored to the server's clock, verified live with a 45 s game-server
+  freeze), operation-generation guard, monotonic heartbeat clock; ability-protocol types held back
+  until wired. EditMode 722/722 on this project with that package.
+### Fixed
+
+- **Login cancellation and stale completions** (`NakamaSessionService`, `NakamaAuthProvider`,
+  workspace audit F09). Every Nakama SDK call now receives the caller's `CancellationToken`
+  (`canceller:`), and every login re-checks it *after* the HTTP call returns, before
+  `ApplySession`: a round trip that completes in the same frame as the cancel no longer
+  installs a session the player backed out of. Logins run under a new
+  `Scripts.Nakama.Auth.OperationGeneration`: the newest login wins, an older one that
+  completes later is discarded with `OperationCanceledException`, and `SignOut()`
+  invalidates anything in flight. `RestoreSessionAsync` only clears persisted tokens when it
+  still owns the outcome. `NakamaAuthProvider` mints the gateway token for the session it
+  captured and discards the token if the session or login generation changed underneath the
+  RPC; a cancelled RPC surfaces as a cancel, not as "Nakama RPC failed".
+  `Assets/Tests/Editor/OperationGenerationTests.cs` pins the guard (7 EditMode tests, pure
+  C#, no delays). The netcode half of F09 — one operation guard and try/finally ownership of
+  both connections in `NetworkClient` — lives in the `com.cuvara.netcode` package
+  (0.31.0) and reaches this repo with the next manifest + lock bump.
+### Documentation
+
+- Add a Cuvara DOTS improvement plan covering verified pooling ownership risks,
+  incomplete modules, integration boundaries, profiling, acceptance tests and
+  conditional gameplay-driven extensions. Planning only; no runtime changes.
+### Fixed (2026-09-07)
+
+- `Packages/packages-lock.json` recorded the three Cuvara packages as `embedded`
+  (`file:com.cuvara.*`) while `Packages/com.cuvara.*/` is gitignored, so every fresh clone
+  resolved them from the manifest's git URLs at first open and rewrote the lock. The lock now
+  pins the resolved commits (`dots` v0.27.1 `dfcfddc`, `netcode` v0.30.0 `051f787`,
+  `uitoolkit` v0.7.2 `3c6fde9`) — the lock is what resolves, a manifest-only pin is not
+  enough.
+- Addressables `Default Local Group` dropped eight entries (`InventoryPopup`, `SettingsPopup`,
+  `ConfirmPopup`, `MainScreen`, `InfoPopup`, `InventoryItem`, `LoadingScreen`, `SecondScreen`)
+  whose GUIDs no longer exist anywhere in the project; the Addressables build had been
+  cleaning them on every player build. HUD `Hud.uss.meta` / `HudView.uxml.meta` importer
+  fileIDs filled in by the Unity 6 importer.
+### Added (2026-09-07)
+
+- `tools/verify-multiclient.sh --redis-container NAME`: the two Redis rows (N session keys,
+  exactly one `servers:map:<id>` member — ADR-2) now run against the docker compose stack via
+  `docker exec`, not only against a k3d cluster via `--kube-context`. Against `stack.sh up` they
+  were printed NOT CHECKED on every run and walked by hand. The two flags are mutually exclusive;
+  the SKIP message names both. CLAUDE.md gains the compose-stack invocation.
+
+### Added (2026-09-05 to 2026-09-06)
+
+- Cuvara packages switched to git URL dependencies with gitignored local clones
+- com.cuvara.dots v0.27.1: pooling, archetype presets, camera follow, lifecycle events, minimap, physics, overlay anchors, editor window, 42 new tests
+- com.cuvara.netcode v0.30.0: connection state events, diagnostics, reconnection progress, server time, content ready, ability protocol, status effects, 15 new tests
+- com.cuvara.uitoolkit v0.7.2: loading progress, confirm dialog, toast service, screen transitions, settings model, 26 new tests
+- rpg-mmo-server: golden vectors, pgstore cleanup, drawio labels, TEAM.md, tagged v0.9.0
+- Go 1.27, .NET SDK 10.0, GitHub CLI installed
+- Workspace hygiene: BuildConfig, modules, stale samples, CI fixes
+
+### Fixed
+
+- All CI pipelines green across 5 repos
+- ADR-3 sid check and ADR-7 entity leak confirmed resolved
+
+## [0.5.0] - 2026-09-05
+
 ### Added
 
 - **DOTS stress benchmark** (`Assets/Scripts/Benchmark/Dots/`, CLI flags
@@ -573,7 +1280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinning the rate during a measurement, and for battery and thermals.
 
 
-## [Unreleased]
+## [0.4.0] - 2026-09-03
 
 ### Fixed
 
