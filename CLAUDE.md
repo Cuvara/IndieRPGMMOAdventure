@@ -262,11 +262,11 @@ whole table at once — including `Predict … err 0.000`, which is the reconcil
 and the one number that says prediction and server authority agree.
 
 ### CI/CD (GitHub Actions)
-- Toolkit `unity-build-workflows` pinned at **v4.2.0**; the UPM half
+- Toolkit `unity-build-workflows` pinned at **v5.2.0**; the UPM half
   (`com.company.build-pipeline`) is pinned to the same tag in **both**
   `Packages/manifest.json` and `Packages/packages-lock.json`
 - Entry workflows are numbered thin callers, no build logic, all calling
-  `unity-pipeline.yml@v4`:
+  `unity-pipeline.yml@v5`:
   - `01-ci.yml` — push/PR gate. Validate, licence, tests. Builds **no** player
   - `10-build-development.yml` — dispatch only. APK / unsigned artifacts for QA
   - `11-build-release.yml` — dispatch only. Signed AAB, immutable Release Set
