@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-09-14)
+- **The Addressables stage was shipping an artifact with no bundles in it.**
+  Toolkit submodule bumped `9dbe0f5` → `d7d1de3` (**v5.7.0**). Discord had been
+  reporting `✅ Addressables: success — size unknown · run` on every content
+  build, and the message was accurate: the stage really was uploading nothing.
+
+  This project's only group is `Default Local Group`, so Unity writes content to
+  `Library/com.unity.addressables/aa`. The toolkit searched and uploaded
+  `ServerData` — the **remote** build path, which nothing here ever writes — and
+  matched `catalog*.json` when Addressables 2.x emits a binary `catalog.bin`.
+  The job passed green every run while the artifact held only
+  `Assets/AddressableAssetsData/**`.
+
+  Verified on run `34835048379` after the bump: artifact `16,714` → `950,949`
+  bytes, now containing `defaultlocalgroup_assets_all_9bc5….bundle`,
+  `catalog.bin` and `catalog.hash`; measured size `0` → `1,029,258` bytes.
+
+  CI already resolves `uses: ...@v5` at run time and picked this up when the tag
+  moved. This bump only re-syncs the pinned submodule so a fresh clone gets the
+  same toolkit CI runs against.
+
 ### Added (2026-09-14)
 - **`PlayerBuilder` has tests, because until now nothing had ever run it.**
   `PlayerBuilder.Build` is the `-executeMethod` the toolkit's self-hosted lanes
