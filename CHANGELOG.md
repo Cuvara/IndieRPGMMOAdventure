@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-09-14)
+- **Build toolkit v3.2.0 → v4.2.0.** Submodule, `Packages/manifest.json` and
+  `Packages/packages-lock.json` all pin `v4.2.0` (`41afe27`), and the seven entry
+  workflows are the v4.2.0 `templates/consumer-*.yml` byte-for-byte.
+- **Shorter node names in the Actions graph.** Toolkit 4.0.0 dropped the stage number
+  from every job name and the development caller shortened to `Dev`:
+  `Development / 04 / Android / Validate APK` now reads `Dev / Android / Validate APK`.
+  Stage order was never in the names — it is the progress ladder each job draws into
+  its summary.
+- **The `develop` required status checks were renamed with them**, from
+  `CI / 0N / …` to `CI / …`. A renamed required context is never reported again, so
+  leaving them would have blocked every pull request with the check stuck in
+  `Expected` — which is exactly what the v2 → v3 migration left behind and what this
+  repo hit this morning.
+- **The Discord build report tells the truth about artifact size.** Toolkit 4.1.0: a
+  67 MB APK had been posted as `0 MB (linked)` with no download link, because the
+  per-platform row was dropped whenever no `Editor.log` existed — which is every
+  build on the Docker lane. The embed now leads with the artifact and its download
+  link, and a size nobody measured reads `size unknown` rather than `0 MB`.
+
 ### Fixed (2026-09-14)
 - **The app's identity was still the URP blank template's.** A Discord build report
   read `Bundle ID: com.UnityTechnologies.com.unity.template.urpblank` and

@@ -33,7 +33,7 @@ a ready-made command. iOS promotion exists in the toolkit
 (`pipeline-ios-release.yml`) but is not installed here: this project ships no
 iOS build and `BuildConfig/` carries no `iOS` block.
 
-All entry workflows call the same `unity-pipeline.yml` engine at `@v3` and
+All entry workflows call the same `unity-pipeline.yml` engine at `@v4` and
 contain no build logic of their own.
 
 See [unity-build-workflows/docs/CONSUMER\_SETUP.md](unity-build-workflows/docs/CONSUMER_SETUP.md)
