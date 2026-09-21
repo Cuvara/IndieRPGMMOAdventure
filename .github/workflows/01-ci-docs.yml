@@ -28,6 +28,20 @@ name: CI / Validate & Test (docs)
 # harmless -- rather than code merging unchecked.
 #
 # Keep the two lists in sync. If you add a path to 01-ci.yml's paths-ignore, add it here.
+#
+# KNOWN CAVEAT -- a MIXED pull request (docs AND code) runs BOTH workflows, because
+# GitHub's `paths` filter means "any changed file matches", not "all of them". Both then
+# report the same six context names, and for a required check GitHub keeps the LAST status
+# reported. In practice the real workflow wins: it checks out, resolves config, licences
+# Unity and runs the test suite, taking minutes, while these jobs are a single `echo` and
+# finish in seconds. But it is ordering, not a guarantee.
+#
+# This is stated rather than hidden because the failure it would produce is the bad kind --
+# a genuinely failing code change showing green. If that is ever observed, the fix is to
+# delete this workflow and remove `paths-ignore` from 01-ci.yml instead, paying ~10 minutes
+# of Unity CI on every documentation change in exchange for having no race at all. That
+# trade was not taken up front only because docs-only PRs are the common case here and
+# mixed ones are rare.
 
 on:
   pull_request:
