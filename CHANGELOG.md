@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`verify-a-result` skill** — the checklist to run before reporting any measurement,
+  benchmark, CI verdict, counter reading or "it works now" claim.
+
+  Every expensive defect across both repos had one shape: it produced **a plausible number
+  instead of an error**. The skill is the working form; the incident history with costs is
+  `rpg-mmo-server/backend/docs/MEASUREMENT.md`, and `backend/TEAM.md` carries the short form
+  as a mandatory standard.
+
+  It lives here rather than in the backend repo because `.claude` is gitignored there, and a
+  checklist that is not versioned is a checklist nobody else gets.
+
+  Client-specific entries it carries: Unity batch-mode exit codes (0 with failing tests, and
+  `result=Failed` still leaves a plausible `.exe` on disk), a running player locking
+  `lib_burst_generated.dll` and failing the next build, `tail -f` never firing on `/mnt/e`,
+  and the WSL interop failures that make `tasklist`, `taskkill` and `Start-Sleep` no-op
+  silently.
+
 ### Fixed
 
 - **A documentation-only pull request could never be merged.** `01-ci.yml` carries
