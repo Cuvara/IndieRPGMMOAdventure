@@ -39,6 +39,32 @@ public static class PlayerBuilder
                 "Add at least one scene under File > Build Settings.");
         }
 
+        // An enabled scene that is not on disk is NOT caught by BuildPipeline: it builds a
+        // player containing the scenes it could find and reports success, so the failure
+        // arrives later as a player that boots into nothing.
+        //
+        // This is not hypothetical. The enabled set named
+        // "Assets/Samples/Cuvara Netcode/0.28.1/DOTS Sample/Scenes/DOTSSample.unity" for as
+        // long as it took someone to notice; the sample had been re-imported at 0.35.0 and
+        // the 0.28.1 folder no longer held a DOTS Sample at all (#124). Anything building
+        // from the enabled set was building a path to nothing, silently.
+        //
+        // An imported sample is also usually UNTRACKED, so "it exists here" does not mean it
+        // exists on the machine that runs CI -- which is why a builder that wants a sample
+        // scene should name it, as PlayClientBuilder does, rather than rely on this set.
+        string[] missing = scenes.Where(path => !File.Exists(path)).ToArray();
+        if (missing.Length > 0)
+        {
+            throw new Exception(
+                "[PlayerBuilder] Enabled scenes that are not on disk:\n  " +
+                string.Join("\n  ", missing) +
+                "\n\nBuildPipeline would skip these and report success, producing a player " +
+                "that boots into nothing. Fix the path under File > Build Settings, or " +
+                "remove the entry. If the scene belongs to an imported sample, note that " +
+                "the import is usually untracked and therefore absent on CI -- name it in a " +
+                "builder instead (see PlayClientBuilder).");
+        }
+
         scenes = ApplyBootSceneOverride(scenes, ReadArg("-bootScene"));
 
 #if CUVARA_DOTS
