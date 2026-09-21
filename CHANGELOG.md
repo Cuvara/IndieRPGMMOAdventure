@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A documentation-only pull request could never be merged.** `01-ci.yml` carries
+  `paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']`, and six of its checks are
+  **required** by the branch protection on `develop`. A required check that never *runs* is
+  not treated as satisfied — it stays pending forever. So a docs PR triggered nothing, the
+  six contexts never reported, and the PR sat at "blocked" showing a completely green check
+  list and no explanation.
+
+  The only way through was an administrator override, which means every documentation change
+  has quietly required a privilege escalation — and the checklist gave no hint why.
+
+  `01-ci-docs.yml` now triggers on exactly the paths `01-ci.yml` ignores and reports the same
+  six contexts as successful no-ops. It is **not** a way to skip CI on code: its `paths` list
+  is the exact complement of the other's `paths-ignore`, so a PR touching a single source
+  file runs the real workflow instead. If the two lists ever drift apart, the failure mode is
+  a docs PR that blocks again — visible and harmless — rather than code merging unchecked.
+
 ### Changed
 
 - **`com.cuvara.netcode` pinned to `v0.42.0`**, replacing a **raw commit sha**
