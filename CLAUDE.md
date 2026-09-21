@@ -261,6 +261,108 @@ Nakama/Gateway/GameServer/PostgreSQL/Redis states. Reading three screenshots set
 whole table at once — including `Predict … err 0.000`, which is the reconciliation error
 and the one number that says prediction and server authority agree.
 
+### Package pins, and the one local-development exception
+
+Every git-URL package is pinned in **two** files, and **only `Packages/packages-lock.json`
+resolves**. `Packages/manifest.json` is what a human edits and what a reviewer reads. A bump
+to the manifest alone is therefore silently ignored: the diff shows the upgrade, the build
+stays green, and the project keeps compiling the old package. **Move both, always.**
+
+`.github/workflows/02-package-pins.yml` enforces this for every git-URL dependency, and
+`sgl-pin-check.yml` additionally checks `com.rpgmmo.shared-gamelogic` against the server repo
+and is fired by a cross-repo dispatch when a new `sgl-v*` tag is published.
+
+**Pin to a tag, not a commit.** A raw sha resolves correctly and carries no version, so a
+bump to one is unreadable in review — one opaque hex string replacing another, with nothing
+saying whether the package moved forward, backward, or onto an abandoned branch. The gate
+emits a notice for this shape rather than failing it, because it is legal, not because it is
+fine. `com.cuvara.netcode` sat on a sha 12 commits behind `develop` this way.
+
+#### `file:` pinning IS sanctioned — for local development only, and never committed
+
+Pointing a package at a local clone is how `com.cuvara.netcode` and `com.cuvara.dots` are
+developed against this client:
+
+```jsonc
+"com.cuvara.netcode": "file:../../../CuvaraPackages/netcode"
+```
+
+The clones live at `/mnt/e/CuvaraPackages/` (outside the workspace, deliberately — the
+workspace holds only `CLAUDE.md` and `.claude/`). **Both** `manifest.json` and
+`packages-lock.json` have to point there; the manifest alone does nothing, for the reason
+above.
+
+The rules, which exist because each has already been broken:
+
+1. **A `file:` pin must never reach a commit.** It is machine-local: it resolves on exactly
+   one computer and breaks the build everywhere else, including CI. Restore the tag pin
+   before committing — originals are backed up at
+   `/mnt/e/CuvaraPackages/_client-manifest-backup/`.
+2. **The clone is a SECOND working copy of the package**, not the package. A fix applied
+   there produces a correct local build while the branch that ships still carries the defect,
+   and it fails with the *same error twice* — which reads like the fix not working rather
+   than the fix not arriving. After editing either copy, compare them with `md5sum` and
+   confirm what was actually pushed with `git show origin/<branch>:<path>`.
+3. **Finish by releasing, not by pinning.** A `file:` pin is a development loop, not a
+   delivery: tag the package repo, then move the manifest and the lock to that tag and
+   verify by *building* — the editor log names the resolved version, and that is the only
+   evidence the pin took effect rather than a stale `Library/PackageCache` entry.
+
+An uncommitted `file:` pin is also how a version can drift without any file changing: the
+committed manifest once sat at `sgl-v0.4.1` while the machine everyone was testing on ran
+`sgl-v0.5.0`, and nothing reported the difference (Cuvara/rpg-mmo-server#380).
+
+### Package pins, and the one local-development exception
+
+Every git-URL package is pinned in **two** files, and **only `Packages/packages-lock.json`
+resolves**. `Packages/manifest.json` is what a human edits and what a reviewer reads. A bump
+to the manifest alone is therefore silently ignored: the diff shows the upgrade, the build
+stays green, and the project keeps compiling the old package. **Move both, always.**
+
+`.github/workflows/02-package-pins.yml` enforces this for every git-URL dependency, and
+`sgl-pin-check.yml` additionally checks `com.rpgmmo.shared-gamelogic` against the server repo
+and is fired by a cross-repo dispatch when a new `sgl-v*` tag is published.
+
+**Pin to a tag, not a commit.** A raw sha resolves correctly and carries no version, so a
+bump to one is unreadable in review — one opaque hex string replacing another, with nothing
+saying whether the package moved forward, backward, or onto an abandoned branch. The gate
+emits a notice for this shape rather than failing it, because it is legal, not because it is
+fine. `com.cuvara.netcode` sat on a sha 12 commits behind `develop` this way.
+
+#### `file:` pinning IS sanctioned — for local development only, and never committed
+
+Pointing a package at a local clone is how `com.cuvara.netcode` and `com.cuvara.dots` are
+developed against this client:
+
+```jsonc
+"com.cuvara.netcode": "file:../../../CuvaraPackages/netcode"
+```
+
+The clones live at `/mnt/e/CuvaraPackages/` (outside the workspace, deliberately — the
+workspace holds only `CLAUDE.md` and `.claude/`). **Both** `manifest.json` and
+`packages-lock.json` have to point there; the manifest alone does nothing, for the reason
+above.
+
+The rules, which exist because each has already been broken:
+
+1. **A `file:` pin must never reach a commit.** It is machine-local: it resolves on exactly
+   one computer and breaks the build everywhere else, including CI. Restore the tag pin
+   before committing — originals are backed up at
+   `/mnt/e/CuvaraPackages/_client-manifest-backup/`.
+2. **The clone is a SECOND working copy of the package**, not the package. A fix applied
+   there produces a correct local build while the branch that ships still carries the defect,
+   and it fails with the *same error twice* — which reads like the fix not working rather
+   than the fix not arriving. After editing either copy, compare them with `md5sum` and
+   confirm what was actually pushed with `git show origin/<branch>:<path>`.
+3. **Finish by releasing, not by pinning.** A `file:` pin is a development loop, not a
+   delivery: tag the package repo, then move the manifest and the lock to that tag and
+   verify by *building* — the editor log names the resolved version, and that is the only
+   evidence the pin took effect rather than a stale `Library/PackageCache` entry.
+
+An uncommitted `file:` pin is also how a version can drift without any file changing: the
+committed manifest once sat at `sgl-v0.4.1` while the machine everyone was testing on ran
+`sgl-v0.5.0`, and nothing reported the difference (Cuvara/rpg-mmo-server#380).
+
 ### CI/CD (GitHub Actions)
 - Toolkit `unity-build-workflows` pinned at **v5.2.0**; the UPM half
   (`com.company.build-pipeline`) is pinned to the same tag in **both**

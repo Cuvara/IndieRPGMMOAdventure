@@ -27,6 +27,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Documented the package-pin policy in `CLAUDE.md`**, including the `file:` local-development
+  exception (Cuvara/rpg-mmo-server#380, item 1).
+
+  `file:` pinning is **sanctioned** — it is how `com.cuvara.netcode` and `com.cuvara.dots` are
+  developed against this client — with three rules, each written because it has already been
+  broken: never commit one (it resolves on one machine and breaks CI); treat the clone as a
+  *second working copy* whose fixes do not reach the branch that ships; and finish by tagging
+  and verifying with a build, because the editor log naming the resolved version is the only
+  evidence the pin took effect rather than a stale `Library/PackageCache` entry.
+
+  Also records that only the lock resolves, and that a tag is preferable to a raw commit sha
+  because a sha bump is unreadable in review.
+
+### Changed
+
 - **`com.cuvara.netcode` pinned to `v0.42.0`**, replacing a **raw commit sha**
   (`8cff4c76…`), in `manifest.json` and `packages-lock.json`.
 
