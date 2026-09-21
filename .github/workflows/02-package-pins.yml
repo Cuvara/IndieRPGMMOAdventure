@@ -9,6 +9,17 @@ name: Package pins
 # sgl-v0.4.1 while a bump to sgl-v0.5.0 lived only in a working tree, and nothing
 # reported that the repo and the dev machine were building different libraries.
 #
+# OVERLAP WITH sgl-pin-check.yml IS DELIBERATE, and worth stating so nobody removes the
+# wrong one. That workflow checks com.rpgmmo.shared-gamelogic specifically and carries a
+# cross-repo dispatch: rpg-mmo-server fires it when a new sgl-v* tag is published, so the
+# client hears about a release rather than a bug report. That is SGL-specific value this
+# job does not replace.
+#
+# What it does not cover is every OTHER git-URL dependency -- and that is where the
+# unchecked pin actually was: com.cuvara.netcode is pinned to a raw commit sha, which
+# carries no version at all. A gate that covers one dependency by name is how the second
+# one goes unwatched, so this job covers all of them and accepts that SGL is checked twice.
+#
 # The check is deliberately not a tree comparison. Pinning by tag already makes the
 # trees equal by construction; what is NOT guaranteed is that the two pins agree with
 # each other and that the tag they name exists at all.
