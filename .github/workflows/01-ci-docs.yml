@@ -1,0 +1,80 @@
+name: CI / Validate & Test (docs)
+
+# THE PROBLEM THIS SOLVES
+#
+# 01-ci.yml carries `paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']`, and
+# six of its checks are REQUIRED by the branch protection on `develop`:
+#
+#   CI / Resolve Build Config, CI / Validate Unity Project, CI / Validate Unity License,
+#   CI / Quality Gate, CI / Final Report, CI / Unity Tests / All
+#
+# A required check that never RUNS is not treated as satisfied — it stays pending forever.
+# So a documentation-only pull request can never be merged: it triggers nothing, the six
+# contexts never report, and the PR sits at "blocked" with a completely green check list
+# and no explanation. The only way through is an administrator override, which is how it
+# has been getting done, and which means every docs change has quietly required a
+# privilege escalation.
+#
+# THE FIX
+#
+# This workflow triggers on exactly the paths 01-ci.yml ignores, and reports the same six
+# contexts as successful no-ops. GitHub matches a required check by its context string, so
+# a job whose `name` is the full context satisfies the requirement.
+#
+# It is deliberately NOT a way to skip CI on code. The `paths` filter here is the exact
+# complement of 01-ci.yml's `paths-ignore`: a pull request touching one source file runs
+# the real workflow, because any non-ignored path excludes it from this one. If the two
+# lists ever drift apart, the failure is a docs PR that blocks again -- visible and
+# harmless -- rather than code merging unchecked.
+#
+# Keep the two lists in sync. If you add a path to 01-ci.yml's paths-ignore, add it here.
+
+on:
+  pull_request:
+    branches: [develop, staging, 'release-*']
+    paths: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
+
+concurrency:
+  group: ci-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: CI / Resolve Build Config
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Documentation-only change; the real gate is 01-ci.yml, which ignores these paths."
+
+  validate-project:
+    name: CI / Validate Unity Project
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Documentation-only change; no Unity project files were touched."
+
+  validate-licence:
+    name: CI / Validate Unity License
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Documentation-only change; no Unity invocation to licence."
+
+  quality:
+    name: CI / Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Documentation-only change."
+
+  tests:
+    name: CI / Unity Tests / All
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Documentation-only change; no code under test was modified."
+
+  report:
+    name: CI / Final Report
+    runs-on: ubuntu-latest
+    needs: [resolve, validate-project, validate-licence, quality, tests]
+    steps:
+      - run: echo "Documentation-only change - six required contexts reported as no-ops."
