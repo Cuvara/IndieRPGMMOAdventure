@@ -1,0 +1,177 @@
+name: Package pins
+
+# Git-URL package dependencies are pinned in TWO files and only one of them
+# resolves. `packages-lock.json` is what Unity uses; `manifest.json` is what a human
+# reads and edits. A bump to the manifest alone is therefore silently ignored, and the
+# project keeps building the old version while every reviewer sees the new number.
+#
+# This has happened. Cuvara/rpg-mmo-server#380: the committed manifest sat at
+# sgl-v0.4.1 while a bump to sgl-v0.5.0 lived only in a working tree, and nothing
+# reported that the repo and the dev machine were building different libraries.
+#
+# OVERLAP WITH sgl-pin-check.yml IS DELIBERATE, and worth stating so nobody removes the
+# wrong one. That workflow checks com.rpgmmo.shared-gamelogic specifically and carries a
+# cross-repo dispatch: rpg-mmo-server fires it when a new sgl-v* tag is published, so the
+# client hears about a release rather than a bug report. That is SGL-specific value this
+# job does not replace.
+#
+# What it does not cover is every OTHER git-URL dependency -- and that is where the
+# unchecked pin actually was: com.cuvara.netcode is pinned to a raw commit sha, which
+# carries no version at all. A gate that covers one dependency by name is how the second
+# one goes unwatched, so this job covers all of them and accepts that SGL is checked twice.
+#
+# The check is deliberately not a tree comparison. Pinning by tag already makes the
+# trees equal by construction; what is NOT guaranteed is that the two pins agree with
+# each other and that the tag they name exists at all.
+
+on:
+  pull_request:
+    paths:
+      - 'Packages/manifest.json'
+      - 'Packages/packages-lock.json'
+      - '.github/workflows/02-package-pins.yml'
+  push:
+    branches: [develop, main]
+    paths:
+      - 'Packages/manifest.json'
+      - 'Packages/packages-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  pins-agree:
+    name: Manifest and lock pin the same versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare every git-URL dependency
+        run: |
+          python3 - <<'PY'
+          import json, sys
+
+          manifest = json.load(open("Packages/manifest.json"))["dependencies"]
+          lock = json.load(open("Packages/packages-lock.json"))["dependencies"]
+
+          problems = []
+          checked = 0
+
+          for name, spec in manifest.items():
+              # Only git-URL dependencies are pinned twice. A registry dependency is a
+              # version string the lock derives, and comparing those would fail on
+              # perfectly ordinary resolution.
+              if not isinstance(spec, str) or not spec.startswith(("https://", "git@", "ssh://")):
+                  continue
+
+              checked += 1
+              entry = lock.get(name)
+              if entry is None:
+                  problems.append(
+                      f"{name}: in manifest.json but ABSENT from packages-lock.json. "
+                      f"Unity resolves the lock, so this dependency is whatever the lock "
+                      f"last happened to contain."
+                  )
+                  continue
+
+              locked = entry.get("version")
+              if locked != spec:
+                  problems.append(
+                      f"{name}:\n"
+                      f"    manifest.json      {spec}\n"
+                      f"    packages-lock.json {locked}\n"
+                      f"    The LOCK is what resolves. This build uses the lock's version, "
+                      f"not the manifest's."
+                  )
+
+          # A gate that checks nothing passes loudly. If the selector stops matching --
+          # a schema change, a move to another dependency form -- this must fail rather
+          # than report success over an empty set.
+          if checked == 0:
+              print("::error::No git-URL dependencies found in Packages/manifest.json. "
+                    "This gate exists to compare them, so matching none means the check "
+                    "is not running, not that everything is fine.")
+              sys.exit(1)
+
+          if problems:
+              for p in problems:
+                  print(f"::error::{p}")
+              sys.exit(1)
+
+          print(f"OK: {checked} git-URL dependenc{'y' if checked == 1 else 'ies'} "
+                f"pinned identically in manifest.json and packages-lock.json")
+          PY
+
+      - name: Every pinned ref exists on its remote
+        run: |
+          python3 - <<'PY'
+          import json, re, shutil, subprocess, sys, tempfile
+
+          manifest = json.load(open("Packages/manifest.json"))["dependencies"]
+
+          problems = []
+          checked = 0
+
+          for name, spec in manifest.items():
+              if not isinstance(spec, str) or not spec.startswith("https://"):
+                  continue
+              if "#" not in spec:
+                  # No ref means "default branch", which is a moving target rather than a
+                  # pin. Worth naming, because it looks pinned in a diff.
+                  problems.append(f"{name}: no #ref -- this follows the default branch and is not pinned")
+                  continue
+
+              url, ref = spec.split("#", 1)
+              url = re.sub(r"\?.*$", "", url)
+              checked += 1
+
+              # A 40-hex ref is a COMMIT, not a tag or branch, and `ls-remote` lists refs
+              # rather than commits -- so checking it the same way reports a perfectly
+              # valid pin as missing. It is verified by fetching it instead, which GitHub
+              # permits for a full sha and which is exact: either the object arrives or
+              # the pin is unresolvable.
+              if re.fullmatch(r"[0-9a-f]{40}", ref):
+                  work = tempfile.mkdtemp()
+                  subprocess.run(["git", "init", "-q", work], check=True)
+                  got = subprocess.run(
+                      ["git", "-C", work, "fetch", "--depth=1", "-q", url, ref],
+                      capture_output=True, text=True,
+                  )
+                  shutil.rmtree(work, ignore_errors=True)
+                  if got.returncode != 0:
+                      problems.append(
+                          f"{name}: commit {ref[:12]} is not fetchable from {url}\n"
+                          f"    {got.stderr.strip()}"
+                      )
+                  else:
+                      # Valid, but worth saying out loud: a sha pin carries no version, so
+                      # nothing in a diff shows whether it moved forward or back.
+                      print(f"::notice::{name} is pinned to a raw commit ({ref[:12]}) "
+                            f"rather than a release tag -- valid, but a bump is unreadable "
+                            f"in review and the package has no version attached to it.")
+                  continue
+
+              result = subprocess.run(
+                  ["git", "ls-remote", "--tags", "--heads", url, ref],
+                  capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  problems.append(f"{name}: could not reach {url}\n    {result.stderr.strip()}")
+              elif not result.stdout.strip():
+                  problems.append(
+                      f"{name}: ref '{ref}' does not exist on {url}. "
+                      f"A tag that was never pushed resolves from a local cache on the "
+                      f"machine that created it and nowhere else."
+                  )
+
+          if checked == 0 and not problems:
+              print("::error::No pinned git dependencies were checked; the selector matched nothing.")
+              sys.exit(1)
+
+          if problems:
+              for p in problems:
+                  print(f"::error::{p}")
+              sys.exit(1)
+
+          print(f"OK: {checked} pinned ref(s) exist on their remotes")
+          PY

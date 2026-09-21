@@ -49,6 +49,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Verified by building, not by reasoning about it: the player built `Succeeded` and the
   editor log shows the package resolving at `sgl-v0.6.0`.
+### Added
+
+- **CI gate: `manifest.json` and `packages-lock.json` must pin the same versions, and every
+  pinned ref must exist on its remote** (`.github/workflows/02-package-pins.yml`,
+  Cuvara/rpg-mmo-server#380).
+
+  A git-URL dependency is pinned in two files and **only the lock resolves**. A bump to the
+  manifest alone is silently ignored: the project keeps building the old version while every
+  reviewer sees the new number. That happened — the committed manifest sat at `sgl-v0.4.1`
+  while a bump to `sgl-v0.5.0` lived only in a working tree, and nothing reported that the
+  repo and the dev machine were building different libraries.
+
+  Two details, both learned from the check itself:
+
+  - **A 40-hex ref is a commit, not a tag**, and `git ls-remote` lists refs rather than
+    commits — so checking a sha pin the same way reports a valid pin as missing. It is
+    verified by fetching it, which is exact. The first version of this gate produced that
+    false positive against `com.cuvara.netcode`.
+  - **Matching nothing fails.** If the selector stops finding git-URL dependencies, the gate
+    errors instead of reporting success over an empty set — a check that silently checks
+    nothing is worse than no check, because it is credited.
+
+  A sha pin also emits a notice: it is valid, but it carries no version, so a bump to one is
+  unreadable in review.
+
+  Verified both ways before merging: green against the real manifest (6 dependencies), and
+  failing against a deliberately mismatched lock.
 
 ### Fixed (2026-09-14)
 - **The Addressables stage was shipping an artifact with no bundles in it.**
