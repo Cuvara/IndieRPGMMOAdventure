@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`com.cuvara.netcode` pinned to `v0.42.0`**, replacing a **raw commit sha**
+  (`8cff4c76…`), in `manifest.json` and `packages-lock.json`.
+
+  A sha pin resolves correctly and carries no version, so a bump to one is unreadable in
+  review: the diff shows one opaque hex string replacing another, and nothing says whether
+  the package moved forward, backward, or onto an abandoned branch. The new package-pin gate
+  now emits a notice for exactly this.
+
+  0.42.0 brings the smoothness work: `InterpolationConfig.DeferUntilBracketed`
+  (Cuvara/Netcode#163), which holds a newly seen remote entity out of the view until its
+  buffer can bracket the render instant instead of drawing it frozen — measured **53-57% of
+  an entity's first-quarter-second frames frozen down to 0.0%** — with the DOTS sample
+  defaulting it on (Cuvara/Netcode#164). Also the entity counters (Cuvara/Netcode#161) and
+  plugin reference validation (Cuvara/Netcode#124).
+
+  Verified by building against the tag rather than against the local development clone: the
+  player built `Succeeded` and the editor log shows
+  `com.cuvara.netcode@https://github.com/Cuvara/Netcode.git#v0.42.0`.
+
 ### Fixed
 
 - **The enabled build set named a scene that is not on disk, and `PlayerBuilder` would have
