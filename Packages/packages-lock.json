@@ -168,11 +168,11 @@
       "url": "https://package.openupm.com"
     },
     "com.rpgmmo.shared-gamelogic": {
-      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.4.1",
+      "version": "https://github.com/Cuvara/rpg-mmo-server.git?path=/backend/gameserver-dotnet/Shared.GameLogic#sgl-v0.6.0",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "ea2799731541d8d41e746ccee5ab5eb199cfbc64"
+      "hash": "c33bfd10c12606673e372ca6cbde923694e499b4"
     },
     "com.unity.addressables": {
       "version": "2.8.1",

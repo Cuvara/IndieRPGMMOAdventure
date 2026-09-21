@@ -31,6 +31,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Not touched here: the ~72 pending deletions of the 0.28.1 sample that a re-import left in
   the working tree. They want deciding on their own terms, not as a side effect of a
   one-line settings fix.
+### Changed
+
+- **`Shared.GameLogic` pinned to `sgl-v0.6.0`** (was `sgl-v0.4.1`), in `manifest.json` **and**
+  `packages-lock.json` — the lock is what resolves, so a manifest-only bump is silently
+  ignored.
+
+  The committed pin was **two releases behind**. A bump to `sgl-v0.5.0` existed only in a
+  working tree on the dev machine and was never committed, so the version this repo actually
+  builds and the version someone had been testing against were different — which is the drift
+  Cuvara/rpg-mmo-server#380 describes, in a form that survives the `file:` pin it was filed
+  about.
+
+  0.6.0 is a **breaking** release: it removes the ten-argument `EntitySnapshotData`
+  constructor that captured `ActionSeq` into `changedFields`. Nothing in `Assets/` constructs
+  that type — the only call site is in `com.cuvara.netcode`, and it names its arguments.
+
+  Verified by building, not by reasoning about it: the player built `Succeeded` and the
+  editor log shows the package resolving at `sgl-v0.6.0`.
 
 ### Fixed (2026-09-14)
 - **The Addressables stage was shipping an artifact with no bundles in it.**
