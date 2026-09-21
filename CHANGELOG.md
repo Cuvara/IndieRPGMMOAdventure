@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The enabled build set named a scene that is not on disk, and `PlayerBuilder` would have
+  built it anyway** (#124).
+
+  `EditorBuildSettings` enabled
+  `Assets/Samples/Cuvara Netcode/0.28.1/DOTS Sample/Scenes/DOTSSample.unity`. The netcode
+  sample has since been re-imported at 0.35.0 and the 0.28.1 folder holds only
+  `Content Pipeline` — the scene was simply gone. Anything building from the enabled set was
+  building a path to nothing.
+
+  **`BuildPipeline` does not object to this.** It builds the scenes it can find and reports
+  success, so the failure arrives later as a player that boots into nothing — no error, no
+  warning, a green build. `PlayerBuilder` now refuses up front and names every enabled scene
+  that is missing.
+
+  The entry is **removed** rather than repointed at 0.35.0, because repointing it would not
+  fix the real problem: an imported sample is **untracked**, so it is absent on any other
+  machine including CI, whatever version the path names. A builder that wants a sample scene
+  should name it — which is what `PlayClientBuilder` does.
+
+  Not touched here: the ~72 pending deletions of the 0.28.1 sample that a re-import left in
+  the working tree. They want deciding on their own terms, not as a side effect of a
+  one-line settings fix.
+
 ### Fixed (2026-09-14)
 - **The Addressables stage was shipping an artifact with no bundles in it.**
   Toolkit submodule bumped `9dbe0f5` → `d7d1de3` (**v5.7.0**). Discord had been
