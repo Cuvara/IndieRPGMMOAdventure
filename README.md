@@ -33,7 +33,7 @@ a ready-made command. iOS promotion exists in the toolkit
 (`pipeline-ios-release.yml`) but is not installed here: this project ships no
 iOS build and `BuildConfig/` carries no `iOS` block.
 
-All entry workflows call the same `unity-pipeline.yml` engine at `@v5` and
+All entry workflows call the same `unity-pipeline.yml` engine at `@v6` and
 contain no build logic of their own.
 
 See [unity-build-workflows/docs/CONSUMER\_SETUP.md](unity-build-workflows/docs/CONSUMER_SETUP.md)
@@ -62,11 +62,16 @@ gh workflow run 11-build-release.yml \
   --ref main \
   -f platform=Android
 
-# Promote a finished release build to the store lane
+# Promote a finished release build to the store lane.
+# artifact-name is REQUIRED since toolkit v6: artifacts are named
+# {product}_{version}_{build}_{environment}_{platform}_{type}, so the name differs per
+# build and there is no default to fall back on. Copy it from the Build / Release run's
+# artifact list (or its final report).
 gh workflow run 20-release-android.yml \
   --repo Cuvara/IndieRPGMMOAdventure \
   --ref main \
-  -f source-run-id=<RUN_ID>
+  -f source-run-id=<RUN_ID> \
+  -f artifact-name=<Product>_<version>_<build>_release_android_aab
 ```
 
 Platform choices: **All**, **Desktop**, **Android**, **WebGL**, **Windows**,
@@ -98,8 +103,11 @@ Shared by `10-build-development.yml` and `11-build-release.yml`:
 | `build-engine` | `auto` | `auto`, `docker`, `local` |
 
 `build-type` is its own axis and is fixed per workflow (`development` vs
-`release`), so artifact names cannot be confused: `development-android-apk`
-versus `release-android-aab`.
+`release`), so artifact names cannot be confused. Since toolkit v6 they are
+`{product}_{version}_{build}_{environment}_{platform}_{type}` — e.g.
+`IndieRPGMMOAdventure_1.4.2_42_release_android_aab` — rather than v5's fixed
+`release-android-aab`. That is why the promote workflows now require
+`artifact-name`: a default could only name an artifact that no longer exists.
 
 Full input reference: [EXPLICIT\_PLATFORM\_FLOW.md § 2](unity-build-workflows/docs/EXPLICIT_PLATFORM_FLOW.md#2-workflow-dispatch-inputs).
 
