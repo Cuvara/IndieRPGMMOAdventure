@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The DOTS Sample the play client builds existed only on one machine (#135).**
+  `PlayClientBuilder` built `Assets/Samples/Cuvara Netcode/0.35.0/DOTS Sample`, a folder that
+  was **never tracked** -- a fresh clone had no such scene -- and whose name lied besides: it
+  held package **v0.43.0** content (md5-identical), then v0.44.0 after a hand re-import. What
+  git actually tracked was a different copy, `0.28.1/DOTS Sample`, frozen at v0.28.1, so a
+  fresh clone compiled five-month-old sample code and could not build the play client at all.
+
+  The sample now lives at a **version-free, tracked** path, `Assets/Samples/Netcode/DOTS Sample`,
+  copied byte for byte from `com.cuvara.netcode` v0.44.0's `Samples~/DOTSSample` (blob-set
+  identical to the tag, `.meta` files included, so GUIDs match what the package ships). The
+  stale `0.28.1/DOTS Sample` is removed -- it could not coexist, both define an assembly named
+  `DOTSSample`. Its source is recorded in `.sample-source`, and a new `02-package-pins.yml` job
+  fails when that disagrees with the `com.cuvara.netcode` pin in `packages-lock.json` --
+  because bumping the package never updates an imported sample, and a name cannot be checked.
+
+  **On any machine that has the old untracked `0.35.0/DOTS Sample` folder, delete it after
+  pulling**: two `DOTSSample` assemblies is a compile error. The other version-named folders
+  (`0.33.0` Reconnect Policy Demo, `0.34.0` Clock Sync Probe, `0.36.1` Gateway TLS Probe,
+  `0.28.1` Content Pipeline) are different samples frozen at the version they were accepted
+  with, so their names are accurate and they are left alone.
+
 ### Changed
 
 - **Build toolkit workflows moved to v6 (#138).** Every entry workflow now calls

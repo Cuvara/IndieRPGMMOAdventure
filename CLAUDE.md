@@ -363,6 +363,16 @@ An uncommitted `file:` pin is also how a version can drift without any file chan
 committed manifest once sat at `sgl-v0.4.1` while the machine everyone was testing on ran
 `sgl-v0.5.0`, and nothing reported the difference (Cuvara/rpg-mmo-server#380).
 
+### The DOTS Sample (what the play client builds)
+- Lives at **`Assets/Samples/Netcode/DOTS Sample`** -- tracked, version-free. It is a byte-for-byte
+  copy of `com.cuvara.netcode`'s `Samples~/DOTSSample` at the version in its `.sample-source`
+- **Bumping netcode does not update it.** Copy `Samples~/DOTSSample` from the new tag over the
+  folder (with `.meta` files) and update `.sample-source`; CI (`02-package-pins.yml`) fails until
+  the two agree. Never re-import it through Package Manager: that creates a version-named folder
+  and a second `DOTSSample` assembly
+- Other folders under `Assets/Samples/Cuvara Netcode/<version>/` are different samples, frozen at
+  the version they were accepted with (#135)
+
 ### CI/CD (GitHub Actions)
 - Toolkit `unity-build-workflows`: the **workflows** call **`@v6`** (the major tag, as
   upstream's consumer templates do). The **UPM half** (`com.company.build-pipeline`)

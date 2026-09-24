@@ -1,0 +1,12 @@
+# Where the files in this folder came from. Checked by CI (02-package-pins.yml): the
+# version must equal the com.cuvara.netcode pin in Packages/packages-lock.json.
+#
+# The folder name used to carry the version (Assets/Samples/Cuvara Netcode/0.35.0/...)
+# and it lied: that copy held v0.43.0 content, and a different, v0.28.1 copy was the one
+# git actually tracked (#135). A name cannot be checked; this file is.
+#
+# To update: copy Samples~/DOTSSample from the pinned tag over this folder, byte for byte
+# (including .meta files), and change both lines below.
+package=com.cuvara.netcode
+version=v0.44.0
+commit=2ed3df16132fc8bfe02885fb28773d0af5e2e506

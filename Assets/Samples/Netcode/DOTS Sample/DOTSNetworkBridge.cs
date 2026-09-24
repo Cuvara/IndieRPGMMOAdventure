@@ -6,6 +6,7 @@ using Cuvara.Netcode.Auth;
 using Cuvara.Netcode.Client;
 using Cuvara.Netcode.Codec;
 using Cuvara.Netcode.Diagnostics;
+using Cuvara.Netcode.Interpolation;
 using Cuvara.Netcode.Prediction;
 using Cuvara.Netcode.Transport;
 using Cuvara.Netcode.View;
@@ -33,6 +34,15 @@ namespace DOTSSample
         [SerializeField] private string gatewayHost = "127.0.0.1";
         [SerializeField] private int gatewayPort = 8000;
         [SerializeField] private string mapId = "map_01";
+        [Header("Transport security")]
+        [Tooltip("Run the sealed-session handshake on the GAMEPLAY hop (not the gateway hop) " +
+                 "and encrypt every frame after it. MUST match the game server's " +
+                 "GAMESERVER_SEALED: there is no negotiation and no fallback, by design " +
+                 "(ADR-22), so a mismatch is a misconfiguration rather than a degradation. " +
+                 "On here with the server off times out naming the cause; off here with the " +
+                 "server on has the join accepted and the connection then closed.")]
+        [SerializeField] private bool requireSealedSession;
+
 
         [Header("Input")]
         [Tooltip("Inputs sent per second. Must equal the server's simulation tick rate: " +
@@ -49,7 +59,12 @@ namespace DOTSSample
         // carries no DOTSNetworkBridge and no stored value to override it. Author the
         // component into a scene and the serialized number wins instead — at which point
         // this default stops applying and the scene has to be updated too.
-        [SerializeField] private int inputRateHz = GameConstants.DefaultTickRate;
+        // OFFSET FROM THE SNAPSHOT RATE ON PURPOSE. This used to be
+        // GameConstants.DefaultTickRate, which is 15 -- the World group rate, and therefore
+        // exactly the rate snapshots arrive at. Sending at the snapshot rate locks the two
+        // in phase and makes the acknowledgement floor unmeasurable. See InputCadence.
+        [SerializeField] private int inputRateHz =
+            InputCadence.RecommendedSendHz(GameConstants.DefaultTickRate);
 
         [Tooltip("Take movement from WASD / arrow keys. Off falls back to the scripted " +
                  "sine-wave walk, which is what this sample did before and is still what " +
@@ -76,9 +91,13 @@ namespace DOTSSample
         [SerializeField] private float cameraFollowSharpness = 8f;
 
         [Header("Run")]
-        [Tooltip("Seconds before the client disconnects itself. The end is quiet -- the avatar " +
-                 "simply stops and the HUD reads 'Run complete' -- so a value shorter than the " +
-                 "session you are actually running looks like a movement or netcode fault.")]
+        [Tooltip("Seconds before the client disconnects itself, or 0 for no cap. Override at " +
+                 "launch with -cuvara-run-seconds (or CUVARA_RUN_SECONDS) rather than " +
+                 "rebuilding. The cap announces itself at run start, counts down on the " +
+                 "[DOTSNet/health] line as runEndsIn=, and says so loudly when it fires -- " +
+                 "because a value shorter than the session you are actually running is " +
+                 "otherwise indistinguishable from a movement or netcode fault, and 3600 " +
+                 "collides with the gateway's SessionTTL, which is a different 3600.")]
         [SerializeField] private float runSeconds = 3600f;
 
         private NetworkClient _client;
@@ -99,7 +118,15 @@ namespace DOTSSample
 
         /// <summary>The timestep replay is using, recovered for the cross-check log.</summary>
         private float PredictedDt() =>
-            _client != null && _client.TickRate > 0 ? 1f / _client.TickRate : 1f / Mathf.Max(1, inputRateHz);
+            _client != null && _client.TickRate > 0
+                ? 1f / _client.TickRate
+                : 1f / Mathf.Max(1, GameConstants.DefaultTickRate);
+
+        /// <summary>When the run cap will fire, or null when the run is uncapped.</summary>
+        private DateTime? _runEndsAtUtc;
+
+        /// <summary>Set once the run cap has fired, so the silence afterwards can name itself.</summary>
+        private bool _runComplete;
 
         // --- Status for OnGUI ---
         private string _status = "Initializing...";
@@ -305,6 +332,14 @@ namespace DOTSSample
                 gameServerStatusUrl = _backend.StatusUrl;
             }
 
+            // A play session is not a test run, and the cap is baked into the scene asset,
+            // so without a flag the only way to sit in world for longer than the scene says
+            // is to rebuild. 0 means no cap.
+            if (_backend.RunSeconds >= 0f)
+            {
+                runSeconds = _backend.RunSeconds;
+            }
+
             if (_backend.MapExplicit)
             {
                 // Collapse the offered set to the requested map. Two or more entries make
@@ -508,11 +543,38 @@ namespace DOTSSample
 
             uint advertised = _client?.TickRate ?? 0u;
 
+            // THE FALLBACK IS NOT inputRateHz, and the remarks above already said so while
+            // the code did the opposite. A send cadence is a client choice; the integration
+            // rate is the server's. They were numerically equal at 15 so the confusion cost
+            // nothing visible, and offsetting the cadence to 13 would have quietly made the
+            // fallback wrong by a further 2 Hz. Passing the constant directly keeps this
+            // value exactly as it was and removes the coupling rather than worsening it.
+            // (It is still not 60, the rate the server actually advertises — a separate
+            // pre-existing gap, live only on a server old enough to advertise nothing.)
             var settings = PredictionSettings.FromServer(
-                advertised, fallbackTickRate: inputRateHz, playerSpeed, MapBounds.Default);
+                advertised, fallbackTickRate: GameConstants.DefaultTickRate, playerSpeed, MapBounds.Default);
 
             _predictor = new LocalMovePredictor(settings);
-            _binder = new WorldViewBinder(_view, _predictor);
+
+            // Deferred spawn is a RUNTIME switch rather than a build-time one on purpose.
+            // Its effect is a percentage of frozen frames in an entity's first quarter
+            // second, and a percentage is only readable against the same scene, the same
+            // spawner and the same observer position. Two builds cannot give that: the
+            // measured difference would carry every other difference between them too,
+            // which is exactly how a -73% figure for field delta turned out to be a
+            // cross-build artefact. One binary, one flag, two runs.
+            var interpolation = InterpolationConfig.Default;
+            // ON by default in the SAMPLE, while the library default stays off. The two
+            // defaults answer different questions. The library serves views that may render
+            // existence rather than motion -- a health bar or a selection ring wants the
+            // entity the moment the server says it exists -- so it must not change what
+            // Spawn means underneath them. This sample renders position and nothing else,
+            // and here the deferral measured 53-57% of an entity's first-quarter-second
+            // frames frozen down to 0.0%. Opt out with -cuvara-no-defer-spawn to see the
+            // artefact, which is also how the control arm of that measurement was taken.
+            interpolation.DeferUntilBracketed = !HasArg("-cuvara-no-defer-spawn");
+            _binder = new WorldViewBinder(_view, _predictor, null, interpolation);
+            Debug.Log($"[DOTSNet] deferUntilBracketed={interpolation.DeferUntilBracketed}");
 
             // The protocol permits a fallback only if it is OBSERVABLE. A silent one is
             // behaviourally the code that predated the field.
@@ -956,6 +1018,20 @@ namespace DOTSSample
                 _lastReconciles = _predictor.Reconciles;
                 _lastSnapshotsApplied = _snapshotsApplied;
                 _lastFramesRx = _client?.Session?.FramesReceived ?? 0L;
+
+                // The health line is what a reader watches, so its ABSENCE is the signal --
+                // and an absence reads as nothing wrong. Two clients stopped reporting at
+                // 3598.8s and 3597.9s and it took a day to find out why, because the run cap
+                // (3600s) and the gateway's SessionTTL (3600s) are the same number by
+                // coincidence and the log said neither. Print on the same cadence instead,
+                // naming which of the two it was.
+                Debug.Log(_runComplete
+                    ? "[DOTSNet/health] suspended -- the RUN CAP fired and this client " +
+                      $"disconnected ITSELF after {runSeconds:F0}s. Nothing expired and nothing " +
+                      "dropped; the world on screen is frozen from here. " +
+                      "Pass -cuvara-run-seconds 0 for an uncapped session."
+                    : $"[DOTSNet/health] suspended -- no session (state={_client?.State.ToString() ?? "no client"}). " +
+                      "Counters are re-baselined, so the next in-world line is measured from here.");
                 return;
             }
 
@@ -994,6 +1070,20 @@ namespace DOTSSample
                 $"skipExpired={_predictor.SkipExpired} coalesced={_predictor.CoalescedInputs} " +
                 $"clientTick={_predictor.BaseTick} serverTick={_binder.LastServerTick} " +
                 $"lead={_predictor.BaseTick - _binder.LastServerTick}t " +
+                // ENTITIES, not frames. Every other counter on this line measures frames,
+                // so a snapshot carrying one entity and one carrying eight read identically
+                // and a client rendering 1 of 8 looks perfectly healthy (#161).
+                //   entities  = what is currently visible (WorldState.Count)
+                //   snapEnts  = what the last snapshot carried; on a DELTA this is the
+                //               number that CHANGED and is normally far below `entities`,
+                //               which is why kf= is printed beside it -- on a keyframe the
+                //               two should agree, and that is the comparison worth making.
+                //   entsTotal = running total, for the same reason rxTotal is here: a rate
+                //               is a difference of counters and a total is not.
+                $"entities={_client.World.Count} snapEnts={_client.World.LastAppliedEntityCount} " +
+                $"kf={(_client.World.LastAppliedWasKeyframe ? 1 : 0)} " +
+                $"snapRemoved={_client.World.LastAppliedRemovedCount} " +
+                $"entsTotal={_client.World.EntitiesApplied} " +
                 $"fps={fps:F0} snapshotsApplied={appliedPerSec:F1}/s " +
                 $"clamped={_predictor.ClampedFrames} discarded={_predictor.DiscardedCatchUpSeconds:F2}s " +
                 $"framesRx={framesPerSec:F1}/s rtt={_client.Session?.RoundTripMs ?? 0}ms " +
@@ -1015,6 +1105,9 @@ namespace DOTSSample
                 // suspect, not the network.
                 $"rxTotal={_client.Session?.FramesReceived ?? 0L} " +
                 $"sinceFirst={_healthStopwatch.Elapsed.TotalSeconds - _firstHealthAt:F1}s " +
+                // On the line the reader is already reading, because the run cap ending a
+                // session is indistinguishable downstream from a network fault.
+                $"runEndsIn={(_runEndsAtUtc.HasValue ? $"{(_runEndsAtUtc.Value - DateTime.UtcNow).TotalSeconds:F0}s" : "never")} " +
                 $"clockRatio={(swWindow > 0 ? window / swWindow : 0):F4} " +
                 $"fits={_binder.Staleness.Fits} " +
                 $"stSamples={_binder.Staleness.Samples} " +
@@ -1070,7 +1163,7 @@ namespace DOTSSample
                 // JWT while the token is still valid — a reconnect after a server
                 // restart costs zero Nakama traffic in the common case.
                 _client = new NetworkClient(
-                    new NetworkSettings { GatewayHost = gatewayHost, GatewayPort = gatewayPort },
+                    new NetworkSettings { GatewayHost = gatewayHost, GatewayPort = gatewayPort, RequireSealedSession = requireSealedSession },
                     new DefaultTransportFactory(), new ProtobufWireCodec(), new UnityNetLog(),
                     new DelegateAuthProvider(token => auth.GetGatewayTokenAsync(device, token)));
 
@@ -1104,7 +1197,7 @@ namespace DOTSSample
                 _client.Reconnected += () =>
                 {
                     _status = "In World (reconnected)";
-                    Debug.Log("[DOTSNet] Reconnected after server shutdown");
+                    Debug.Log("[DOTSNet] Reconnected after connection loss");
 
                     // The new session's counters restart at zero while these baselines
                     // keep the old session's totals, so the first health window printed
@@ -1130,8 +1223,32 @@ namespace DOTSSample
                 _status = "In World";
                 Debug.Log($"[DOTSNet] IN WORLD as {_client.UserId}");
 
-                var dt = 1f / Mathf.Max(1f, inputRateHz);
                 var started = DateTime.UtcNow;
+                _runEndsAtUtc = runSeconds > 0f ? started.AddSeconds(runSeconds) : (DateTime?)null;
+                Debug.Log(_runEndsAtUtc.HasValue
+                    ? $"[DOTSNet] run capped at {runSeconds:F0}s -- this client will disconnect " +
+                      $"ITSELF at {_runEndsAtUtc.Value:HH:mm:ss} UTC and the world will freeze. " +
+                      "Pass -cuvara-run-seconds 0 for an uncapped session."
+                    : "[DOTSNet] run is uncapped (-cuvara-run-seconds 0); the client will stay " +
+                      "in world until it is closed.");
+
+                // PINNED SCHEDULE, NOT "delay one period after each send". UniTask.Delay
+                // starts its stopwatch after the send and resumes on the first Update frame
+                // at or past the period, throwing the remainder away every iteration; at
+                // 60 fps that collapsed every nominal rate in (12, 15] onto 12 Hz. The
+                // configured cadence was therefore not the cadence sent, and setting a
+                // different number here would have changed nothing. See InputSendSchedule.
+                var schedule = new InputSendSchedule();
+                schedule.Start(inputRateHz, Time.realtimeSinceStartupAsDouble);
+
+                if (!InputCadence.Sweeps(inputRateHz, GameConstants.DefaultTickRate))
+                {
+                    Debug.LogWarning(
+                        $"[DOTSNet] send cadence {inputRateHz} Hz does not sweep against the " +
+                        $"{GameConstants.DefaultTickRate} Hz snapshot rate — the acknowledgement floor " +
+                        $"will be refused. Recommended: " +
+                        $"{InputCadence.RecommendedSendHz(GameConstants.DefaultTickRate)} Hz.");
+                }
 
                 while (!ct.IsCancellationRequested)
                 {
@@ -1155,13 +1272,29 @@ namespace DOTSSample
                     // attackTarget is not passed and combat stays server-authoritative.
                     _predictor?.RecordInput(_inputTick, moveX, moveY);
 
-                    await UniTask.Delay(TimeSpan.FromSeconds(dt), DelayType.Realtime,
-                        PlayerLoopTiming.Update, ct);
+                    schedule.NoteSent(Time.realtimeSinceStartupAsDouble);
+                    double wait = schedule.SecondsUntilDue(Time.realtimeSinceStartupAsDouble);
+
+                    if (wait > 0.0)
+                    {
+                        await UniTask.Delay(TimeSpan.FromSeconds(wait), DelayType.Realtime,
+                            PlayerLoopTiming.Update, ct);
+                    }
+                    else
+                    {
+                        await UniTask.Yield(PlayerLoopTiming.Update, ct);
+                    }
                 }
 
+                _runComplete = true;
                 _client.Disconnect();
-                _status = "Run complete";
-                Debug.Log("[DOTSNet] Run finished");
+                _status = $"Run complete ({runSeconds:F0}s cap) -- world is frozen";
+                Debug.LogWarning(
+                    $"[DOTSNet] RUN CAP REACHED after {runSeconds:F0}s. This client is " +
+                    "disconnecting ITSELF -- this is not a network fault, not a session " +
+                    "expiry and not an eviction. The process keeps rendering, so the world " +
+                    "you are looking at is frozen at its last known state from here on. " +
+                    "Pass -cuvara-run-seconds 0 (or a larger value) for a longer session.");
             }
             catch (OperationCanceledException)
             {
@@ -1870,5 +2003,18 @@ namespace DOTSSample
 
             GUI.color = Color.white;
         }
+
+        /// <summary>True when <paramref name="flag"/> was passed on the command line.</summary>
+        private static bool HasArg(string flag)
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            for (var i = 0; i < args.Length; i++)
+            {
+                if (args[i] == flag) return true;
+            }
+
+            return false;
+        }
+
     }
 }

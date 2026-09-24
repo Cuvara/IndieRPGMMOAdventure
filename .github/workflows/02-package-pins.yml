@@ -29,12 +29,14 @@ on:
     paths:
       - 'Packages/manifest.json'
       - 'Packages/packages-lock.json'
+      - 'Assets/Samples/Netcode/**'
       - '.github/workflows/02-package-pins.yml'
   push:
     branches: [develop, main]
     paths:
       - 'Packages/manifest.json'
       - 'Packages/packages-lock.json'
+      - 'Assets/Samples/Netcode/**'
 
 permissions:
   contents: read
@@ -175,3 +177,41 @@ jobs:
 
           print(f"OK: {checked} pinned ref(s) exist on their remotes")
           PY
+
+  # The imported DOTS Sample is a COPY of the package's Samples~ -- Unity copies a sample only
+  # on an explicit Import -- so bumping com.cuvara.netcode in manifest and lock leaves the
+  # sample the play client actually builds exactly as it was. The folder used to carry a
+  # version in its name, and the name lied: a folder named 0.35.0 held v0.43.0 content, was
+  # untracked, and a separate v0.28.1 copy was the one git shipped (#135). The source is now
+  # recorded in .sample-source, and this fails when it disagrees with the pin.
+  sample-matches-pin:
+    name: Imported DOTS Sample matches the netcode pin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare .sample-source with packages-lock.json
+        run: |
+          python3 - <<'PY'
+          import json, re, sys
+          stamp_path = "Assets/Samples/Netcode/DOTS Sample/.sample-source"
+          try:
+              stamp = dict(l.split("=", 1) for l in open(stamp_path).read().splitlines()
+                           if l and not l.startswith("#") and "=" in l)
+          except FileNotFoundError:
+              print(f"::error::{stamp_path} is missing -- the sample's source is unrecorded")
+              sys.exit(1)
+          lock = json.load(open("Packages/packages-lock.json"))["dependencies"]
+          pkg = stamp.get("package", "")
+          if pkg not in lock:
+              print(f"::error::{stamp_path} names {pkg!r}, which packages-lock.json does not pin")
+              sys.exit(1)
+          pinned = lock[pkg].get("version", "").rsplit("#", 1)[-1]
+          if stamp.get("version") != pinned:
+              print(f"::error::the DOTS Sample was copied from {pkg} {stamp.get('version')} but the "
+                    f"lock pins {pinned}. Copy Samples~/DOTSSample from {pinned} over "
+                    f"Assets/Samples/Netcode/DOTS Sample (including .meta files) and update {stamp_path}.")
+              sys.exit(1)
+          print(f"OK: DOTS Sample is {pkg} {pinned} ({stamp.get('commit', '?')[:8]}), matching the lock")
+          PY
+
