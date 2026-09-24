@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Build toolkit workflows moved to v6 (#138).** Every entry workflow now calls
+  `unity-build-workflows` at `@v6` with `toolkit-ref: 'v6'`. v6 is **breaking for
+  releases**: artifacts are named `{product}_{version}_{build}_{environment}_{platform}_{type}`
+  instead of v5's fixed `release-android-aab`, so the four promote workflows
+  (`20-release-android`, `22-release-webgl`, `23-release-windows`, `24-release-linux`) now
+  **require** `artifact-name` and carry no default -- a default could only name an artifact
+  that no longer exists, and nothing in CI runs a promotion, so it would have failed first at
+  release time. The README's promote example now passes it.
+
+  The change is exactly upstream's: the four release workflows were byte-identical to the
+  v5 consumer templates and are now byte-identical to the v6 ones (the template delta is 9
+  lines; so is ours). Upstream adds no required input or secret to any reusable workflow the
+  client calls. The UPM half (`com.company.build-pipeline`) stays at v5.2.0 in manifest and
+  lock: v5.2.0 -> v6 changed 14 workflow files and none of the package's 84.
+
 ### Fixed
 
 - **The weekly branch-cleanup job failed every Monday since at least 2026-08-24 and never

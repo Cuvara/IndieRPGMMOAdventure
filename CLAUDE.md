@@ -364,11 +364,19 @@ committed manifest once sat at `sgl-v0.4.1` while the machine everyone was testi
 `sgl-v0.5.0`, and nothing reported the difference (Cuvara/rpg-mmo-server#380).
 
 ### CI/CD (GitHub Actions)
-- Toolkit `unity-build-workflows` pinned at **v5.2.0**; the UPM half
-  (`com.company.build-pipeline`) is pinned to the same tag in **both**
-  `Packages/manifest.json` and `Packages/packages-lock.json`
+- Toolkit `unity-build-workflows`: the **workflows** call **`@v6`** (the major tag, as
+  upstream's consumer templates do). The **UPM half** (`com.company.build-pipeline`)
+  stays at **v5.2.0** in **both** `Packages/manifest.json` and
+  `Packages/packages-lock.json` — deliberately: v5.2.0 -> v6 changed 14 workflow files
+  and none of the package's 84 files, so moving it would be churn with no content.
+  Move it (manifest AND lock) when the UPM half itself changes
+- **v6 is breaking for releases:** artifacts are named
+  `{product}_{version}_{build}_{environment}_{platform}_{type}`, so the four promote
+  workflows REQUIRE `artifact-name` (no default). A v5 default such as
+  `release-android-aab` would name an artifact that no longer exists, and nothing in CI
+  runs a promotion, so the failure would first appear at release time
 - Entry workflows are numbered thin callers, no build logic, all calling
-  `unity-pipeline.yml@v5`:
+  `unity-pipeline.yml@v6`:
   - `01-ci.yml` — push/PR gate. Validate, licence, tests. Builds **no** player
   - `10-build-development.yml` — dispatch only. APK / unsigned artifacts for QA
   - `11-build-release.yml` — dispatch only. Signed AAB, immutable Release Set
