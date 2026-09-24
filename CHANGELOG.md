@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`com.cuvara.netcode` v0.44.0 → v0.45.0**, with the imported DOTS Sample recopied from the
+  tag (blob-identical, `.sample-source` updated). This is the first bump under the #135
+  procedure. v0.45.0 changes the sample only: `[DOTSNet/health]` now prints `skewApplied=` and
+  `ageFitted=` beside the raw fitted `skew=`, and `uncorroborated=` / `extraordinary=` beside
+  `refusedSkew=`, so a fit the estimator refused no longer reads like a clock running off-rate
+  (Cuvara/Netcode#174). Manifest and lock both move; the lock is what resolves.
+
 ### Fixed
 
 - **The DOTS Sample the play client builds existed only on one machine (#135).**
