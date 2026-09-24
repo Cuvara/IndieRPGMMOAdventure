@@ -11,8 +11,11 @@ using UnityEngine;
 /// <remarks>
 /// <para>
 /// <b>Why not <c>PlayerBuilder</c>.</b> The enabled set in EditorBuildSettings still names
-/// <c>Assets/Samples/Cuvara Netcode/0.28.1/DOTS Sample/Scenes/DOTSSample.unity</c>, and the
-/// sample has since been re-imported at 0.35.0 — the 0.28.1 folder holds only Content Pipeline.
+/// <c>Assets/Samples/Cuvara Netcode/0.28.1/DOTS Sample/Scenes/DOTSSample.unity</c>. The
+/// sample now lives at a version-free, tracked path (<c>Assets/Samples/Netcode/DOTS Sample</c>)
+/// with its source recorded in <c>.sample-source</c> and checked by CI (#135): the old
+/// version-named folder was untracked, held newer content than its name, and existed only on
+/// the machine that imported it.
 /// Building from the enabled set therefore builds a scene that is not on disk. This builder
 /// names the scene it wants and hands it straight to <c>BuildPipeline</c>, which is the same
 /// choice <see cref="SampleBuilder"/> made and for the same reason: nothing project-wide
@@ -33,7 +36,7 @@ using UnityEngine;
 public static class PlayClientBuilder
 {
     private const string Scene =
-        "Assets/Samples/Cuvara Netcode/0.35.0/DOTS Sample/Scenes/DOTSSample.unity";
+        "Assets/Samples/Netcode/DOTS Sample/Scenes/DOTSSample.unity";
 
     public static void Build()
     {
