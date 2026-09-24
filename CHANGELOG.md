@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`com.cuvara.netcode` v0.42.0 → v0.44.0**, in `manifest.json` **and**
+  `packages-lock.json` (hash `2ed3df16`). A manifest-only bump is silently ignored, because
+  the lock is what resolves. Straight from 0.42.0 — 0.43.0 was never pinned on `develop`, and
+  0.44.0 contains it.
+
+  0.44.0 carries the DOTS sample run-cap fix for Cuvara/rpg-mmo-server#412: the cap is
+  overridable with `-cuvara-run-seconds` (`0` for none), announces itself at run start, counts
+  down as `runEndsIn=` on the `[DOTSNet/health]` line, and names itself when it fires instead
+  of leaving the health line to stop silently.
+
+  **This pin does not by itself change what the built player runs.** The sample the PlayClient
+  compiles is an imported copy under `Assets/Samples/Cuvara Netcode/`, not the package's
+  `Samples~`, and Unity only copies on an explicit Import. There are seven such copies on disk
+  (`0.28.1` through `0.40.0`), exactly one of which holds a `DOTSNetworkBridge` — the folder
+  named **`0.35.0`**, whose `DOTSNetworkBridge.cs` is **byte-identical to package v0.43.0**
+  (md5 `74d51a3a…`). The folder name is eight releases stale while its content is current, so
+  the version in the path cannot be used to tell which sample is running. Re-importing the
+  sample at 0.44.0 is a separate step from this bump.
+
 ### Added
 
 - **`verify-a-result` skill** — the checklist to run before reporting any measurement,
