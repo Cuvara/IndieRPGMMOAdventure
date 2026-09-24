@@ -5,12 +5,19 @@ on:
     # Every Monday at 06:00 UTC
     - cron: '0 6 * * 1'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what would be deleted without deleting anything
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
 
     steps:
       - name: Checkout
@@ -18,76 +25,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Selection is by PULL REQUEST STATE, not by `git branch --merged`.
+      #
+      # This repository squash-merges into develop. A squash merge creates a new
+      # commit, so no PR branch is ever an ancestor of develop or main, and
+      # `git branch -r --merged origin/main` -- what this step used to run -- is
+      # empty on every run. Worse, it failed rather than reporting that: the
+      # pipeline ended in `grep -v`, which exits 1 on empty input, inside `$( )`
+      # under `bash -e`, so the step died before reaching the `exit 0` written for
+      # the empty case. It failed every Monday from at least 2026-08-24 and never
+      # deleted a branch.
+      #
+      # A branch is deleted only when ALL of these hold:
+      #   - a PR from it was MERGED more than 7 days ago;
+      #   - its current head is EXACTLY that PR's head -- a branch that received
+      #     commits after its PR merged holds work develop does not have, and is
+      #     kept (this has happened here: commits pushed onto a branch whose PR had
+      #     already merged, recoverable only because the branch still existed);
+      #   - it is not a long-lived branch.
       - name: Delete stale merged branches
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          CUTOFF_DATE=$(date -d '7 days ago' --iso-8601=seconds)
-          DELETED=()
-          SKIPPED=()
-
-          echo "Scanning for merged branches older than 7 days..."
-          echo "Cutoff: ${CUTOFF_DATE}"
-          echo ""
-
-          # List remote branches merged into main
-          MERGED_BRANCHES=$(git branch -r --merged origin/main \
-            | sed 's|origin/||' \
-            | grep -v '^\s*HEAD' \
-            | xargs -n1 echo \
-            | grep -vE '^(main|develop|staging)$' \
-            | grep -vE '^release-')
-
-          if [[ -z "${MERGED_BRANCHES}" ]]; then
-            echo "No merged branches found to clean up."
-            echo "::notice::No stale branches to delete."
-            exit 0
-          fi
-
-          REPO="${{ github.repository }}"
-
-          while IFS= read -r BRANCH; do
-            [[ -z "${BRANCH}" ]] && continue
-
-            # Get the last commit date on this branch
-            LAST_COMMIT_DATE=$(gh api \
-              "repos/${REPO}/commits?sha=${BRANCH}&per_page=1" \
-              --jq '.[0].commit.committer.date' 2>/dev/null || echo "")
-
-            if [[ -z "${LAST_COMMIT_DATE}" ]]; then
-              SKIPPED+=("${BRANCH} (could not fetch commit date)")
-              continue
-            fi
-
-            # Compare dates
-            if [[ "${LAST_COMMIT_DATE}" < "${CUTOFF_DATE}" ]]; then
-              echo "Deleting: ${BRANCH} (last commit: ${LAST_COMMIT_DATE})"
-              if gh api -X DELETE "repos/${REPO}/git/refs/heads/${BRANCH}" 2>/dev/null; then
-                DELETED+=("${BRANCH}")
-              else
-                SKIPPED+=("${BRANCH} (API delete failed)")
-              fi
-            else
-              SKIPPED+=("${BRANCH} (too recent: ${LAST_COMMIT_DATE})")
-            fi
-          done <<< "${MERGED_BRANCHES}"
-
-          echo ""
-          echo "========================================="
-          echo "Cleanup Summary"
-          echo "========================================="
-          echo "Deleted: ${#DELETED[@]} branch(es)"
-          for b in "${DELETED[@]}"; do
-            echo "  - ${b}"
-          done
-          echo "Skipped: ${#SKIPPED[@]} branch(es)"
-          for b in "${SKIPPED[@]}"; do
-            echo "  - ${b}"
-          done
-
-          if [[ ${#DELETED[@]} -gt 0 ]]; then
-            BRANCH_LIST=$(printf '%s, ' "${DELETED[@]}")
-            echo "::notice::Deleted ${#DELETED[@]} stale branch(es): ${BRANCH_LIST%, }"
-          else
-            echo "::notice::No branches were old enough to delete."
-          fi
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: .github/scripts/cleanup-merged-branches.sh

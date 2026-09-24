@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The weekly branch-cleanup job failed every Monday since at least 2026-08-24 and never
+  deleted a branch.** It selected branches with `git branch -r --merged origin/main`. This
+  repository squash-merges into `develop`, so no PR branch is ever an ancestor of `main` and
+  the list was always empty -- and the step did not report that, it failed: the pipeline
+  ended in `grep -v`, which exits 1 on empty input, inside `$( )` under `bash -e`, killing the
+  step before the `exit 0` written for the empty case. The log showed its cutoff date and
+  then `exit 1`.
+
+  Replaced by `.github/scripts/cleanup-merged-branches.sh`, which selects by **PR state**: a
+  branch is deleted only when a PR from it merged more than 7 days ago **and** its current
+  head is exactly that PR's head. A branch that received commits after its PR merged holds
+  work `develop` does not have, and is kept and named -- that has happened in this project.
+  `main`, `develop`, `staging` and `release-*` are never touched, an empty `ls-remote` fails
+  loudly rather than reporting a clean run, and `workflow_dispatch` gains a `dry_run` input.
+
+  Tested against the real pre-cleanup state of this repository (8 PR branches plus the
+  three long-lived ones) through a `git` shim, dry-run: with the 7-day cutoff all 8 are kept
+  as too recent; with the cutoff at zero all 8 would be deleted, matching an independent
+  hand audit exactly; with one branch given a commit after its merge, that one is kept and
+  the other 7 would go; with an empty remote it exits 1.
+
 ### Changed
 
 - **`com.cuvara.netcode` v0.42.0 → v0.44.0**, in `manifest.json` **and**
