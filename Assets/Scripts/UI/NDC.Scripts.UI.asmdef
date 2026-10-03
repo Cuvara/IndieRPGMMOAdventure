@@ -5,7 +5,9 @@
     "Cuvara.UIToolkit",
     "UniTask",
     "Unity.Addressables",
-    "Unity.ResourceManager"
+    "Unity.ResourceManager",
+    "NDC.Scripts.Gameplay",
+    "Shared.GameLogic"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

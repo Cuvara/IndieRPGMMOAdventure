@@ -4,6 +4,7 @@ using Cysharp.Threading.Tasks;
 using Cuvara.Netcode.Auth;
 using Cuvara.Netcode.Json;
 using Nakama;
+using Scripts.Nakama.Characters;
 
 namespace Scripts.Nakama.Auth
 {
@@ -34,11 +35,33 @@ namespace Scripts.Nakama.Auth
         const string GatewayTokenRpc = "gateway_token";
 
         readonly NakamaSessionService _nakama;
+        readonly CharacterSelectionState _character;
 
         public NakamaAuthProvider(NakamaSessionService nakama)
+            : this(nakama, null)
+        {
+        }
+
+        /// <param name="character">
+        /// The selected roster character (ADR-31); every token is minted for it. Null or an
+        /// empty id asks for the account's default character, exactly as before character slots.
+        /// </param>
+        [VContainer.Inject]
+        public NakamaAuthProvider(NakamaSessionService nakama, CharacterSelectionState character)
         {
             _nakama = nakama;
+            _character = character;
         }
+
+        /// <summary>
+        /// The <c>gateway_token</c> request payload: <c>{}</c>, or
+        /// <c>{"character_id":"..."}</c> when a roster character is selected. Nakama checks the
+        /// character belongs to the caller and puts it in the token as the <c>cid</c> claim.
+        /// </summary>
+        public static string GatewayTokenPayload(string characterId) =>
+            string.IsNullOrEmpty(characterId)
+                ? "{}"
+                : new JsonBuilder().BeginObject().String("character_id", characterId).EndObject().ToString();
 
         public async UniTask<string> GetJwtAsync(CancellationToken ct)
         {
@@ -95,7 +118,8 @@ namespace Scripts.Nakama.Auth
             string payload;
             try
             {
-                var rpc = await _nakama.Client.RpcAsync(session, GatewayTokenRpc, "{}", canceller: ct);
+                var rpc = await _nakama.Client.RpcAsync(
+                    session, GatewayTokenRpc, GatewayTokenPayload(_character?.CharacterId), canceller: ct);
                 payload = rpc?.Payload;
             }
             catch (OperationCanceledException)

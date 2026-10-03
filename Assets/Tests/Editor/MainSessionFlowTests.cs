@@ -53,6 +53,24 @@ namespace Tests.Editor
 
             public string ConnectedUserId;
 
+            // ---- character (ADR-31) ----
+            // Recorded apart from Calls so the existing sequence assertions keep describing
+            // auth/party/connect; CharacterOrder says where in that sequence it ran.
+            public int CharacterCalls;
+            public int CharacterOrder = -1;
+            public string CharacterUserIdSeen;
+            public CharacterChoice CharacterToReturn = CharacterChoice.Default;
+            public Exception CharacterError;
+
+            public Task<CharacterChoice> SelectCharacterAsync(string userId, CancellationToken cancellationToken)
+            {
+                this.CharacterCalls++;
+                this.CharacterOrder = this.Calls.Count;
+                this.CharacterUserIdSeen = userId;
+                if (this.CharacterError != null) return Task.FromException<CharacterChoice>(this.CharacterError);
+                return Task.FromResult(this.CharacterToReturn);
+            }
+
             // ---- party / dungeon ----
             public string PartyIdToReturn = "party-1";
             public bool CreateSeen;
@@ -205,6 +223,50 @@ namespace Tests.Editor
             CollectionAssert.Contains(this.log, "[DOTSNet] Auth OK, user_id=user-1");
             CollectionAssert.Contains(this.log, "[DOTSNet] IN WORLD as user-1");
             CollectionAssert.IsEmpty(this.errors);
+        }
+
+        // ---- character selection (ADR-31) ---------------------------------------------
+
+        [Test]
+        public void Character_IsChosenAfterAuthAndBeforeThePartyAndTheWorld()
+        {
+            this.endpoint.CharacterToReturn = new CharacterChoice("c-1", "Scout", created: false);
+            var flow = new MainSessionFlow();
+
+            this.Run(flow, createParty: true).GetAwaiter().GetResult();
+
+            Assert.That(this.endpoint.CharacterCalls, Is.EqualTo(1));
+            Assert.That(this.endpoint.CharacterOrder, Is.EqualTo(1), "after 'auth', before 'party-create'");
+            Assert.That(this.endpoint.CharacterUserIdSeen, Is.EqualTo("user-1"));
+            Assert.That(flow.Character.Id, Is.EqualTo("c-1"));
+            CollectionAssert.Contains(this.log, "[DOTSNet] character: Scout (id=c-1)");
+            Assert.That(flow.CurrentPhase, Is.EqualTo(MainSessionFlow.Phase.InWorld));
+        }
+
+        [Test]
+        public void Character_Created_IsSaidSo_AndTheDefaultIsNamed()
+        {
+            this.endpoint.CharacterToReturn = new CharacterChoice("c-9", "Hero_user1", created: true);
+            this.Run(new MainSessionFlow()).GetAwaiter().GetResult();
+            CollectionAssert.Contains(this.log, "[DOTSNet] character: Hero_user1 (id=c-9, created)");
+
+            this.log.Clear();
+            this.endpoint = new FakeEndpoint();
+            this.Run(new MainSessionFlow()).GetAwaiter().GetResult();
+            CollectionAssert.Contains(this.log, "[DOTSNet] character: <account default>");
+        }
+
+        [Test]
+        public void Character_Failure_IsFatal_AndNeverConnects()
+        {
+            this.endpoint.CharacterError = new ArgumentException("requested character 'x' is neither ...");
+            var flow = new MainSessionFlow();
+
+            this.Run(flow).GetAwaiter().GetResult();
+
+            Assert.That(flow.CurrentPhase, Is.EqualTo(MainSessionFlow.Phase.Failed));
+            CollectionAssert.AreEqual(new[] { "auth" }, this.endpoint.Calls);
+            Assert.That(this.errors.Count, Is.EqualTo(1));
         }
 
         [Test]

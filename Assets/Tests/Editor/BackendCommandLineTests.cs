@@ -36,6 +36,26 @@ namespace Tests.Editor
             Assert.That(s.StatusUrl, Is.EqualTo("http://status.default"));
             Assert.That(s.DeviceId, Is.Null);
             Assert.That(s.InstanceLabel, Is.Null);
+            Assert.That(s.Character, Is.Null);
+            Assert.That(s.ContentUrl, Is.Null);
+        }
+
+        [Test]
+        public void Character_And_ContentUrl_FlagWinsOverEnvironment()
+        {
+            var env = new Dictionary<string, string>
+            {
+                ["CUVARA_CHARACTER"] = "EnvHero",
+                ["CUVARA_CONTENT_URL"] = "http://env:9100",
+            };
+
+            var fromEnv = Resolve(null, env);
+            Assert.That(fromEnv.Character, Is.EqualTo("EnvHero"));
+            Assert.That(fromEnv.ContentUrl, Is.EqualTo("http://env:9100"));
+
+            var fromFlag = Resolve(new[] { "p.exe", "-cuvara-character", "CliHero", "-cuvara-content-url", "http://cli:9100" }, env);
+            Assert.That(fromFlag.Character, Is.EqualTo("CliHero"));
+            Assert.That(fromFlag.ContentUrl, Is.EqualTo("http://cli:9100"));
         }
 
         [Test]

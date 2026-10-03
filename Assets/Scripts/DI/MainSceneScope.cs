@@ -17,6 +17,10 @@ namespace Scripts.DI
             // scene carries no object for it and the scope's disposal ends the session.
             builder.RegisterEntryPoint<MainSessionDriver>();
 
+            // Core v3 gameplay surface: content download, inventory commands on the command
+            // channel, and the runtime-hosted panel (stat block, statuses, inventory).
+            builder.RegisterEntryPoint<GameplayPanelDriver>();
+
 #if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER && CUVARA_NETCODE && CUVARA_SHARED_GAMELOGIC
             // Same pattern, same reason as GameLifetimeScope's NetworkBootstrap callback: a build
             // callback injects the component when it is present and is a no-op when it is not,

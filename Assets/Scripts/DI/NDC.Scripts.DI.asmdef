@@ -24,7 +24,10 @@
         "Unity.Mathematics",
         "Unity.Transforms",
         "NDC.Scripts.Session",
-        "UniTask"
+        "UniTask",
+        "NDC.Scripts.Gameplay",
+        "NDC.Scripts.UI",
+        "Cuvara.UIToolkit"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -16,12 +16,24 @@ namespace Scripts.DI.Dots
         public const string PlayerRemote = "player-remote";
         public const string Mob = "mob";
 
+        /// <summary>A skillshot in flight (ADR-29). Replicated to protocol 3 peers only.</summary>
+        public const string Projectile = "projectile";
+
+        /// <summary>A dropped item lying in the world (ADR-30 loot). Replicated to protocol 3 peers only.</summary>
+        public const string Item = "item";
+
         /// <summary>Server entity kinds, as the wire spells them (see the netcode message set).</summary>
         public const string ServerKindPlayer = "player";
         public const string ServerKindMob = "mob";
 
+        /// <summary>The server's <c>CombatResolver.ProjectileType</c>.</summary>
+        public const string ServerKindProjectile = "projectile";
+
+        /// <summary>The server's <c>CombatResolver.ItemType</c>.</summary>
+        public const string ServerKindItem = "item";
+
         /// <summary>Every archetype the resolver can produce; a view library must define each.</summary>
-        public static readonly string[] All = { PlayerLocal, PlayerRemote, Mob };
+        public static readonly string[] All = { PlayerLocal, PlayerRemote, Mob, Projectile, Item };
 
         /// <summary>
         /// Server kind → archetype, exactly as the <c>TypeArchetypeResolver</c> is built. The local
@@ -31,6 +43,8 @@ namespace Scripts.DI.Dots
         {
             new KeyValuePair<string, string>(ServerKindPlayer, PlayerRemote),
             new KeyValuePair<string, string>(ServerKindMob, Mob),
+            new KeyValuePair<string, string>(ServerKindProjectile, Projectile),
+            new KeyValuePair<string, string>(ServerKindItem, Item),
         };
     }
 }

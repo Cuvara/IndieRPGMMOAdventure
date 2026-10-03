@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Core v3 client leg (wire protocol 3, ADR-28..31)** against `com.cuvara.netcode` 0.46.0 and
+  `com.rpgmmo.shared-gamelogic` 0.7.0 (the manifest/lock pin bump is a separate, human-gated
+  step). Full description: `docs/CORE-V3-CLIENT.md`.
+  - **Characters (ADR-31), headless selection.** `CharacterService` over the Nakama
+    `character_list` / `character_create` / `character_delete` RPCs; `CharacterSelection`
+    (pure) picks `-cuvara-character` / `CUVARA_CHARACTER` (id or name; a valid unknown name is
+    created), else the last character this account played here, else the first slot, and
+    creates `Hero_<user>` for an empty roster. The id goes into the `gateway_token` payload
+    (`character_id`, via `CharacterSelectionState` / `NakamaAuthProvider`) and
+    `NetworkClient.CharacterId`. New session log line `[DOTSNet] character: …`; the harness
+    markers are unchanged. A Nakama without the roster RPCs plays the default character with a
+    warning unless a character was requested.
+  - **Protocol 3 prediction.** After every join/reconnect the predictor gets
+    `UseServerProtocol(client.ServerProtocolVersion)` and the map's geometry from the client copy
+    `Assets/Resources/Maps/<map>.json` (`MapGeometryJson`, validated with the shared
+    `MapGeometryValidation`; flat when absent). `dev_arena.json` is copied from the server.
+  - **Input.** Space jumps; Q / right mouse casts the content's projectile ability, aimed by the
+    pointer ray onto the player's height (`AimX/Y/Z`), predicted with `ProjectilePredictor`
+    from feet + 1.0 and sent with its `SpawnSeq`; every input carries `SetRenderTime`.
+  - **Views.** Wire `(x, y, z)` -> Unity `(x, z, y)` (`WireAxes`); `EntityElevationSystem` puts
+    height on every DOTS mirror (interpolated at the render tick) and draws projectiles
+    velocity-extrapolated; own projectiles are drawn predicted until handover. New view
+    archetypes `projectile` and `item` (placeholder prefabs, Addressable, in
+    `DotsViewLibrary.asset`).
+  - **Gameplay panel + inventory.** `GameplayPanelDriver` downloads `/content`
+    (`GameContentService`, origin `-cuvara-content-url` / `CUVARA_CONTENT_URL` or the status
+    URL's), shows level and mana resolved by stat KEY plus active statuses, and an inventory
+    list (opcode 1 on join, equip/unequip/use opcodes 3-5, E picks up the nearest item with
+    opcode 2, push 100 refreshes) in a runtime-hosted UI Toolkit panel (I toggles it).
+  - **Editor map exporter** `Cuvara/Maps/Export Open Scene To Map JSON...`: axis-aligned
+    BoxColliders (rotated ones skipped with a warning), the terrain as a heightfield,
+    `spawn_*` / `portal_*@map/spawn` / `map_bounds` markers; validated, then written to the
+    server's `content/maps/` and the client copy.
+  - New assembly `NDC.Scripts.Gameplay`; new EditMode tests (`MapGeometryJsonTests`,
+    `MapGeometryExporterTests`, `WireAxesTests`, `CharacterSelectionTests`, `InventoryTests`,
+    `GameContentAndStatsTests`, plus character/flag cases in `MainSessionFlowTests` and
+    `BackendCommandLineTests`).
+
 ### Changed
 
 - **`com.cuvara.netcode` v0.44.0 → v0.45.0**, with the imported DOTS Sample recopied from the

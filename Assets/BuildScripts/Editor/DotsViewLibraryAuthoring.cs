@@ -9,7 +9,7 @@ using UnityEngine.AddressableAssets;
 
 /// <summary>
 /// Authors the placeholder view library the real MainScene path needs, without anyone clicking:
-/// three primitive prefabs, marked Addressable, and the <see cref="DotsViewLibraryAsset"/> in
+/// one primitive prefab per archetype in <see cref="DotsViewArchetypes.All"/>, marked Addressable, and the <see cref="DotsViewLibraryAsset"/> in
 /// <c>Resources/</c> that points at them. Idempotent — re-running updates rather than duplicates.
 /// </summary>
 /// <remarks>
@@ -41,6 +41,10 @@ public static class DotsViewLibraryAuthoring
         new Placeholder { Archetype = DotsViewArchetypes.PlayerLocal, FileName = "PlayerLocal", Shape = PrimitiveType.Capsule, Colour = new Color(0.2f, 0.5f, 1f), Scale = 1f, Lift = 1f, PoolSize = 4 },
         new Placeholder { Archetype = DotsViewArchetypes.PlayerRemote, FileName = "PlayerRemote", Shape = PrimitiveType.Capsule, Colour = new Color(0.2f, 0.85f, 0.3f), Scale = 1f, Lift = 1f, PoolSize = 32 },
         new Placeholder { Archetype = DotsViewArchetypes.Mob, FileName = "Mob", Shape = PrimitiveType.Sphere, Colour = new Color(0.9f, 0.15f, 0.1f), Scale = 0.8f, Lift = 0.4f, PoolSize = 64 },
+        // A projectile's replicated position is its sphere's CENTRE (launched 1.0 above the
+        // caster's feet), so it carries no lift; an item lies on the ground, lifted by half its size.
+        new Placeholder { Archetype = DotsViewArchetypes.Projectile, FileName = "Projectile", Shape = PrimitiveType.Sphere, Colour = new Color(1f, 0.45f, 0.05f), Scale = 0.4f, Lift = 0f, PoolSize = 32 },
+        new Placeholder { Archetype = DotsViewArchetypes.Item, FileName = "Item", Shape = PrimitiveType.Cube, Colour = new Color(1f, 0.85f, 0.2f), Scale = 0.5f, Lift = 0.25f, PoolSize = 32 },
     };
 
     [MenuItem("Cuvara/DOTS/Create Placeholder View Library")]
