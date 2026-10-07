@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Packages: `com.cuvara.netcode` v0.45.0 -> v0.46.0 and `com.rpgmmo.shared-gamelogic`
+  sgl-v0.6.0 -> sgl-v0.7.0** (wire protocol 3, Core v3). Manifest and lock pin the release tags
+  (lock hashes 93441fe / 86a654f); the imported DOTS Sample is recopied from netcode v0.46.0
+  (`DOTSNetworkBridge.cs`, `.sample-source`).
+
 - **`com.cuvara.netcode` v0.44.0 → v0.45.0**, with the imported DOTS Sample recopied from the
   tag (blob-identical, `.sample-source` updated). This is the first bump under the #135
   procedure. v0.45.0 changes the sample only: `[DOTSNet/health]` now prints `skewApplied=` and
