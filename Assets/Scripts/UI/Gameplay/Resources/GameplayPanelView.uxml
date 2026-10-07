@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        Structure only (docs/UI-ARCHITECTURE.md): the protocol 3 gameplay panel - stat block,
+        status effects and the inventory list. No logic and no <Bindings> block; binding paths
+        live in GameplayPanelView.cs via nameof. Enrolled in the UXML codegen: saving or
+        re-importing this file regenerates Generated/GameplayPanelView.uxml.g.cs.
+        Lives under Resources/ because the panel is hosted at runtime by GameplayPanelDriver,
+        which has no scene object to hold a serialized reference.
+    -->
+    <Style src="GameplayPanel.uss" />
+
+    <ui:VisualElement name="gameplay-panel" class="gameplay-panel">
+        <ui:Label name="gameplay-level" class="gameplay-panel__stat" text="Level —" />
+        <ui:Label name="gameplay-mana" class="gameplay-panel__stat" text="Mana —" />
+        <ui:Label name="gameplay-statuses" class="gameplay-panel__row" text="No status effects" />
+        <ui:VisualElement name="gameplay-inventory" class="gameplay-panel__inventory">
+            <ui:Label name="gameplay-inventory-caption" class="gameplay-panel__caption" text="Inventory" />
+            <ui:ListView name="gameplay-inventory-list" class="gameplay-panel__list" fixed-item-height="28" />
+            <ui:VisualElement name="gameplay-inventory-actions" class="gameplay-panel__actions">
+                <ui:Button name="gameplay-pickup" class="gameplay-panel__button" text="Pick up (E)" />
+                <ui:Button name="gameplay-refresh" class="gameplay-panel__button" text="Refresh" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:Label name="gameplay-hint" class="gameplay-panel__hint" text="WASD move · Space jump · Q/RMB cast · E pick up · I inventory" />
+    </ui:VisualElement>
+</ui:UXML>

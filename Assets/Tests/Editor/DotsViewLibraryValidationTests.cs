@@ -49,7 +49,9 @@ namespace Tests.Editor
             this.asset.Configure(
                 Entry(DotsViewArchetypes.PlayerLocal),
                 Entry(DotsViewArchetypes.PlayerRemote, viewKey: "player"),
-                Entry(DotsViewArchetypes.Mob));
+                Entry(DotsViewArchetypes.Mob),
+                Entry(DotsViewArchetypes.Projectile),
+                Entry(DotsViewArchetypes.Item));
         }
 
         [Test]
@@ -70,7 +72,7 @@ namespace Tests.Editor
             var library = this.asset.BuildLibrary(out var configs);
             try
             {
-                Assert.That(library.Entries.Count, Is.EqualTo(3));
+                Assert.That(library.Entries.Count, Is.EqualTo(DotsViewArchetypes.All.Length));
                 Assert.That(configs[0].ViewKey, Is.EqualTo(DotsViewArchetypes.PlayerLocal), "empty view key defaults to the archetype");
                 Assert.That(configs[1].ViewKey, Is.EqualTo("player"), "an explicit view key is kept");
                 Assert.That(configs[0].PoolSize, Is.EqualTo(4));

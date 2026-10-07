@@ -13,7 +13,13 @@ namespace Scripts.DI.Dots
     using Cuvara.DOTS.Views;
     using Cuvara.Netcode.Client;
     using Cuvara.Netcode.Prediction;
+    using Cuvara.Netcode.Protocol;
+    using Cuvara.Netcode.Protocol.Messages;
     using Cuvara.Netcode.View;
+    using Scripts.Gameplay.Content;
+    using Scripts.Gameplay.Maps;
+    using Scripts.Gameplay.Presentation;
+    using Shared.GameLogic.Components;
     using Unity.Entities;
     using Unity.Mathematics;
     using UnityEngine;
@@ -61,6 +67,16 @@ namespace Scripts.DI.Dots
     /// <c>SendSyntheticInput</c> must then be OFF in the scene's config.
     /// </para>
     /// <para>
+    /// <b>Protocol 3 (Core v3, ADR-28/29).</b> After every join and reconnect the predictor is
+    /// switched to the server's movement model (<c>UseServerProtocol</c>) and given the map's
+    /// geometry (<see cref="MapGeometrySource"/>, flat when the map has no file); a
+    /// <see cref="ProjectilePredictor"/> is created for a protocol 3 server. Input carries jump,
+    /// the render time, and -- on the cast key -- the content's projectile ability with a ground
+    /// aim and a <c>spawn_seq</c>. Height reaches the mirrors through
+    /// <see cref="EntityElevationSystem"/>, which also draws projectiles extrapolated; the
+    /// owner's predicted projectiles are <see cref="PredictedProjectileViews"/> until handover.
+    /// </para>
+    /// <para>
     /// <b>The binder uses the no-predictor overload on purpose.</b>
     /// <c>WorldViewBinder(view, predictor)</c> hands <c>SetState</c> the predicted position, and
     /// <c>DotsEntityView</c> stores what it receives as the authoritative
@@ -95,6 +111,7 @@ namespace Scripts.DI.Dots
 
         private NetworkClient client;
         private LocalMovePredictor predictor;
+        private GameContentService content;
         private IViewAssetProvider viewAssetProvider;
         private DotsViewLibraryReference libraryReference;
 
@@ -111,11 +128,23 @@ namespace Scripts.DI.Dots
         private bool prewarmFailureLogged;
         private long inputTick;
 
+        // ---- protocol 3 ----
+        private readonly EntityElevationTable elevationTable = new EntityElevationTable();
+        private EntityElevationFeeder elevationFeeder;
+        private bool elevationInstalled;
+        private ProjectilePredictor projectilePredictor;
+        private PredictedProjectileViews predictedViews;
+        private GameSessionClient protocolAppliedTo;
+        private bool castWarningLogged;
+
         /// <summary>True once the catalog is installed and every key is warm; the binder ticks only then.</summary>
         public bool IsReady => this.ready;
 
         /// <summary>Reconnects this bridge has turned into view generations. Diagnostics.</summary>
         public int ReconnectsHandled { get; private set; }
+
+        /// <summary>The local projectile predictor of the current session; null before a protocol 3 join.</summary>
+        public ProjectilePredictor ProjectilePredictor => this.projectilePredictor;
 
         /// <summary>Called by the scene scope's build callback; absent a container this component stays inert.</summary>
         [Inject]
@@ -123,12 +152,14 @@ namespace Scripts.DI.Dots
             NetworkClient networkClient,
             LocalMovePredictor movePredictor,
             IViewAssetProvider assetProvider,
-            DotsViewLibraryReference viewLibraryReference)
+            DotsViewLibraryReference viewLibraryReference,
+            GameContentService gameContent)
         {
             this.client = networkClient;
             this.predictor = movePredictor;
             this.viewAssetProvider = assetProvider;
             this.libraryReference = viewLibraryReference;
+            this.content = gameContent;
         }
 
         private void Update()
@@ -148,22 +179,50 @@ namespace Scripts.DI.Dots
                 return;
             }
 
+            if (this.client.State == NetworkClientState.InWorld)
+            {
+                this.EnsureServerProtocolApplied();
+            }
+
             if (this.driveInput && this.client.State == NetworkClientState.InWorld)
             {
                 // Input is sampled and SENT here, not inside the prediction driver: the tick
                 // recorded must be the tick that went to the server.
                 ReadKeyboard(out var moveX, out var moveY);
-                if (moveX != 0f || moveY != 0f)
+                var jump = GameplayInputReader.JumpPressed();
+                var cast = GameplayInputReader.CastPressed();
+                if (moveX != 0f || moveY != 0f || jump || cast)
                 {
                     this.inputTick++;
-                    this.client.Session?.SendInput(this.inputTick, moveX, moveY);
-                    this.predictor?.RecordInput(this.inputTick, moveX, moveY);
+                    var input = new InputMessage { Tick = this.inputTick, MoveX = moveX, MoveY = moveY, Jump = jump };
+                    if (cast)
+                    {
+                        this.TryAddProjectileCast(input);
+                    }
+
+                    // Every input says which instant the player was looking at, so the server can
+                    // rewind hit targets to it (ADR-29 decision 4). Zero before the first snapshot.
+                    input.SetRenderTime(this.binder.RenderTick);
+                    this.client.Session?.SendInput(input);
+                    this.predictor?.RecordInput(this.inputTick, moveX, moveY, jump);
                 }
             }
 
             // Polls the merged world every frame — despawn falls out of absence. This is the ONE
             // feed into the adapter; see the class remarks on SetStateAtTick.
             this.binder.Tick(this.client.World, this.client.UserId);
+
+            // Height and projectile positions for this frame's mirrors, read by
+            // EntityElevationSystem later in the same frame (Presentation).
+            this.projectilePredictor?.Advance(Time.deltaTime);
+            this.elevationFeeder?.Feed(
+                this.client.World,
+                this.client.UserId,
+                this.binder.RenderTick,
+                Time.realtimeSinceStartupAsDouble,
+                this.predictor,
+                this.projectilePredictor);
+            this.predictedViews?.Sync(this.projectilePredictor);
         }
 
         private bool TryInstall()
@@ -222,6 +281,20 @@ namespace Scripts.DI.Dots
             }
 
             this.InstallSessionModules();
+
+            // Height for every mirror (protocol 3). Absent a view group nothing is presented, so
+            // there is nothing to lift; say so rather than half-install.
+            if (EntityElevationBootstrap.Install(this.world, this.elevationTable) != null)
+            {
+                this.elevationInstalled = true;
+                this.elevationFeeder = new EntityElevationFeeder(this.elevationTable);
+            }
+            else
+            {
+                Debug.LogWarning("[DotsWorldBridge] no ViewSystemGroup in the world; entity height (wire z) is not presented.");
+            }
+
+            this.predictedViews = new PredictedProjectileViews(this.transform);
 
             this.client.Reconnected += this.OnReconnected;
 
@@ -372,6 +445,13 @@ namespace Scripts.DI.Dots
             // otherwise sweep from the last known position to the re-placed avatar.
             var generation = this.view.BeginGeneration();
             this.predictor?.Reset();
+            this.projectilePredictor?.Reset();
+            this.elevationFeeder?.Reset();
+
+            // The reconnected session may be a different server (a transfer, a restarted pod):
+            // re-select the movement model and geometry for it before its first reconcile.
+            this.protocolAppliedTo = null;
+            this.EnsureServerProtocolApplied();
             CameraFollowBootstrap.ResetSmoothing(this.world);
             this.ReconnectsHandled++;
 
@@ -388,6 +468,9 @@ namespace Scripts.DI.Dots
             this.spawnSubscription?.Dispose();
             this.spawnSubscription = null;
 
+            this.predictedViews?.Dispose();
+            this.predictedViews = null;
+
             if (this.installed && this.world is { IsCreated: true })
             {
                 // Reverse of install. Prediction first (hands claimed transforms back), then the
@@ -395,6 +478,12 @@ namespace Scripts.DI.Dots
                 // then every session-scoped module in reverse install order, then the catalog
                 // singleton — the blob is freed below, after nothing reads it.
                 DotsPredictionBootstrap.Uninstall(this.world);
+                if (this.elevationInstalled)
+                {
+                    EntityElevationBootstrap.Uninstall(this.world);
+                    this.elevationInstalled = false;
+                }
+
                 DotsNetcodeBootstrap.Uninstall(this.world, destroyMirrors: true);
                 DotsModules.UninstallScope(this.world, DotsModuleScope.Session);
                 this.catalog?.Uninstall(this.world);
@@ -440,6 +529,136 @@ namespace Scripts.DI.Dots
 
                 this.configs = null;
             }
+        }
+
+        /// <summary>
+        /// Once per session (and again after a reconnect): selects the server's movement model,
+        /// supplies the map's geometry, and creates the projectile predictor for a protocol 3
+        /// server. Keyed on the session object, so a transfer or reconnect re-applies.
+        /// </summary>
+        private void EnsureServerProtocolApplied()
+        {
+            var session = this.client.Session;
+            if (session == null || ReferenceEquals(session, this.protocolAppliedTo))
+            {
+                return;
+            }
+
+            this.protocolAppliedTo = session;
+            var version = this.client.ServerProtocolVersion;
+            var mapId = this.client.CurrentMapId;
+            var geometry = MapGeometrySource.LoadOrNull(mapId, out var origin);
+
+            if (this.predictor != null)
+            {
+                // Order matters: a model change resets the predictor, then the geometry it steps
+                // against. Null geometry restores the flat world of the predictor's own bounds,
+                // which is what the server runs for a map with no file.
+                this.predictor.UseServerProtocol(version);
+                this.predictor.SetMapGeometry(geometry);
+            }
+
+            if (WireProtocolVersion.Supports(version, WireProtocolVersion.Motor3D))
+            {
+                var tickRate = this.client.TickRate > 0
+                    ? (int)this.client.TickRate
+                    : this.predictor?.TickRateHz ?? GameConstants.DefaultTickRate;
+                this.projectilePredictor = new ProjectilePredictor(tickRate, geometry ?? this.predictor?.Geometry);
+            }
+            else
+            {
+                this.projectilePredictor = null;
+            }
+
+            Debug.Log(
+                $"[DotsWorldBridge] server protocol {version}: " +
+                $"{(this.predictor != null && this.predictor.UsesCharacterMotor ? "3D CharacterMotor" : "planar")} prediction, " +
+                $"map '{mapId}' geometry {origin}, projectile prediction {(this.projectilePredictor != null ? "on" : "off")}");
+        }
+
+        /// <summary>
+        /// Adds the content's projectile ability to <paramref name="input"/>, aimed where the
+        /// pointer meets the ground at the player's height, and starts predicting it. Sends no
+        /// cast at all when there is nothing valid to send (no content, a protocol 2 server, a
+        /// refused spawn): a cast the client cannot predict is not one it should request.
+        /// </summary>
+        private void TryAddProjectileCast(InputMessage input)
+        {
+            var ability = this.content != null ? this.content.Catalog.FirstProjectileAbility() : null;
+            if (ability == null || this.projectilePredictor == null)
+            {
+                if (!this.castWarningLogged)
+                {
+                    this.castWarningLogged = true;
+                    Debug.LogWarning(
+                        "[DotsWorldBridge] cast key ignored: " +
+                        (this.projectilePredictor == null
+                            ? $"the server speaks protocol {this.client.ServerProtocolVersion} (projectiles need 3)."
+                            : "the content has no projectile ability (content not loaded yet?)."));
+                }
+
+                return;
+            }
+
+            if (!this.TryGetLocalFeet(out var feet))
+            {
+                return;
+            }
+
+            var aim = this.AimFrom(feet);
+            var spawnSeq = this.projectilePredictor.Fire(
+                AimPoint.LaunchOrigin(feet),
+                AimPoint.LaunchTarget(aim),
+                ability.ProjectileSpeed,
+                ability.ProjectileRadius,
+                ability.ProjectileRange);
+            if (spawnSeq == 0u)
+            {
+                // ProjectileLogic refused (aim on the origin): send nothing, predict nothing.
+                return;
+            }
+
+            input.AbilityId = ability.Id;
+            input.AimX = aim.X;
+            input.AimY = aim.Y;
+            input.AimZ = aim.Z;
+            input.SpawnSeq = spawnSeq;
+        }
+
+        /// <summary>The local player's feet in wire space: the predicted body, else the snapshot.</summary>
+        private bool TryGetLocalFeet(out Vec3 feet)
+        {
+            if (this.predictor != null && this.predictor.IsEnabled && this.predictor.Reconciles > 0)
+            {
+                feet = this.predictor.Position3;
+                return true;
+            }
+
+            if (this.client.World.TryGet(this.client.UserId, out var self))
+            {
+                feet = new Vec3(self.X, self.Y, self.Z);
+                return true;
+            }
+
+            feet = default;
+            return false;
+        }
+
+        /// <summary>
+        /// The ground point under the pointer at the player's own height, in wire space; with no
+        /// pointer (a headless or automated run) a point 10 units along wire +y.
+        /// </summary>
+        private Vec3 AimFrom(in Vec3 feet)
+        {
+            var camera = this.followCamera != null ? this.followCamera : Camera.main;
+            if (camera != null &&
+                GameplayInputReader.TryPointerPosition(out var screen) &&
+                AimPoint.TryGroundAim(camera.ScreenPointToRay(screen), feet.Z, out var aim))
+            {
+                return aim;
+            }
+
+            return new Vec3(feet.X, feet.Y + 10f, feet.Z);
         }
 
         /// <summary>
@@ -498,6 +717,8 @@ namespace Scripts.DI.Dots
                 Config(DotsViewArchetypes.PlayerLocal, 1.2f, 1f),
                 Config(DotsViewArchetypes.PlayerRemote, 1f, 1f),
                 Config(DotsViewArchetypes.Mob, 0.8f, 0.5f),
+                Config(DotsViewArchetypes.Projectile, 0.4f, 0f),
+                Config(DotsViewArchetypes.Item, 0.5f, 0.25f),
             };
 
             this.library = ScriptableObject.CreateInstance<ViewArchetypeLibrary>();
@@ -505,7 +726,9 @@ namespace Scripts.DI.Dots
             this.library.Configure(
                 new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.PlayerLocal, Config = this.configs[0] },
                 new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.PlayerRemote, Config = this.configs[1] },
-                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.Mob, Config = this.configs[2] });
+                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.Mob, Config = this.configs[2] },
+                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.Projectile, Config = this.configs[3] },
+                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.Item, Config = this.configs[4] });
         }
 
         /// <summary>Minimap categories by archetype: 0 local player, 1 remote player, 2 mob.</summary>

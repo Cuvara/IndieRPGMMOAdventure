@@ -49,3 +49,27 @@ MonoBehaviour:
     Scale: 0.8
     PositionOffset: {x: 0, y: 0.4, z: 0}
     RotationOffsetEuler: {x: 0, y: 0, z: 0}
+  - Archetype: projectile
+    ViewKey: 
+    Prefab:
+      m_AssetGUID: eade312cd6c3f244fac8b642543672d4
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    PoolSize: 32
+    Scale: 0.4
+    PositionOffset: {x: 0, y: 0, z: 0}
+    RotationOffsetEuler: {x: 0, y: 0, z: 0}
+  - Archetype: item
+    ViewKey: 
+    Prefab:
+      m_AssetGUID: 2c35bbd8510371f44893d0d43d7d77fd
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    PoolSize: 32
+    Scale: 0.5
+    PositionOffset: {x: 0, y: 0.25, z: 0}
+    RotationOffsetEuler: {x: 0, y: 0, z: 0}

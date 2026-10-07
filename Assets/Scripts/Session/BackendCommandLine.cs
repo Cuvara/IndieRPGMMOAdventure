@@ -174,6 +174,22 @@ namespace Scripts.Session
             /// <summary><c>-cuvara-instance</c> / <c>CUVARA_INSTANCE</c>; null when not given.</summary>
             public string InstanceLabel;
 
+            /// <summary>
+            /// <c>-cuvara-character</c> / <c>CUVARA_CHARACTER</c>: the roster character to play
+            /// (ADR-31), by id or by name; a valid name not yet on the roster is created. Null
+            /// when not given: the last character this account played here, else the first slot,
+            /// else a newly created default. See <see cref="CharacterSelection"/>.
+            /// </summary>
+            public string Character;
+
+            /// <summary>
+            /// <c>-cuvara-content-url</c> / <c>CUVARA_CONTENT_URL</c>: the game server's content
+            /// origin (<c>http://host:metrics-port</c>; a trailing <c>/content</c> is accepted).
+            /// Null when not given: the origin of <see cref="StatusUrl"/>, which the server serves
+            /// beside <c>/content</c> on its metrics port.
+            /// </summary>
+            public string ContentUrl;
+
             public string NakamaBaseUrl => $"{NakamaScheme}://{NakamaHost}:{NakamaPort}";
         }
 
@@ -216,6 +232,8 @@ namespace Scripts.Session
                 DungeonContentId = Str(args, env, "-cuvara-dungeon", "CUVARA_DUNGEON", null),
                 DeviceId = Str(args, env, "-cuvara-device", "CUVARA_DEVICE_ID", null),
                 InstanceLabel = Str(args, env, "-cuvara-instance", "CUVARA_INSTANCE", null),
+                Character = Str(args, env, "-cuvara-character", "CUVARA_CHARACTER", null),
+                ContentUrl = Str(args, env, "-cuvara-content-url", "CUVARA_CONTENT_URL", null),
             };
 
             var map = Str(args, env, "-cuvara-map", "CUVARA_MAP_ID", null);

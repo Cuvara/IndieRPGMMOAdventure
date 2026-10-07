@@ -1,5 +1,6 @@
 using Cuvara.Netcode.Auth;
 using Scripts.Nakama.Auth;
+using Scripts.Nakama.Characters;
 using Scripts.Nakama.Social;
 using VContainer;
 
@@ -24,6 +25,11 @@ namespace Scripts.Nakama.DI
         {
             builder.RegisterInstance(settings ?? new NakamaSettings());
             builder.Register<NakamaSessionService>(Lifetime.Singleton);
+
+            // Before the provider: it takes the selection so every gateway token -- a
+            // reconnect's included -- is minted for the character the session chose (ADR-31).
+            builder.Register<CharacterSelectionState>(Lifetime.Singleton);
+            builder.Register<CharacterService>(Lifetime.Singleton);
             builder.Register<NakamaAuthProvider>(Lifetime.Singleton).As<IAuthProvider>();
 
             // Registered as its own type, not behind an interface: nothing in the netcode

@@ -63,6 +63,11 @@ namespace Scripts.DI
                 DeviceId = deviceId,
             });
 
+            // Core v3 content (stats, statuses, abilities, items), downloaded from the game
+            // server's /content once per process and shared by every scene: the HUD names stats
+            // by key with it, the inventory names items, the cast key reads the projectile.
+            builder.Register<Scripts.Gameplay.Content.GameContentService>(Lifetime.Singleton);
+
 #if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER
             // The DOTS view layer, its MessagePipe brokers, the simulation-model seam and the
             // session predictor. Root-scoped for the same reason RegisterNetworking is: pools and

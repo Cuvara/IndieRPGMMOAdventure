@@ -32,6 +32,9 @@ namespace Scripts.Session
 
         /// <summary>Printed once the party exists, carrying the id a dungeon entry is keyed on.</summary>
         public const string PartyPrefix = Tag + " party ready: ";
+
+        /// <summary>Printed once the character is chosen: <c>character: Name (id=..., reason)</c>.</summary>
+        public const string CharacterPrefix = Tag + " character: ";
         public const string FatalPrefix = Tag + " FATAL: ";
         public const string CancelledLine = Tag + " Cancelled";
 
@@ -50,6 +53,13 @@ namespace Scripts.Session
             /// </summary>
             Task<string> EnsurePartyAsync(bool create, string partyIdToJoin, CancellationToken cancellationToken);
 
+            /// <summary>
+            /// Chooses (or creates) the roster character this session plays (ADR-31) and arranges
+            /// for the gateway token and the enter-world request to name it. Returns
+            /// <see cref="CharacterChoice.Default"/> to play the account's default character.
+            /// </summary>
+            Task<CharacterChoice> SelectCharacterAsync(string userId, CancellationToken cancellationToken);
+
             /// <summary>Joins a dungeon instance of <paramref name="contentId"/> for the party.</summary>
             Task ConnectToDungeonAsync(string contentId, string partyId, CancellationToken cancellationToken);
 
@@ -61,6 +71,7 @@ namespace Scripts.Session
         {
             Idle,
             Authenticating,
+            SelectingCharacter,
             Partying,
             Connecting,
             InWorld,
@@ -88,6 +99,9 @@ namespace Scripts.Session
         /// keyed on it (ADR-26 decision 2), so it is worth reading back rather than assuming.
         /// </summary>
         public string PartyId { get; private set; } = string.Empty;
+
+        /// <summary>The character this run plays; <see cref="CharacterChoice.Default"/> until chosen.</summary>
+        public CharacterChoice Character { get; private set; } = CharacterChoice.Default;
 
         public async Task RunAsync(
             IEndpoint endpoint,
@@ -119,6 +133,15 @@ namespace Scripts.Session
                 UserId = await endpoint.AuthenticateDeviceAsync(deviceId, cancellationToken) ?? string.Empty;
                 cancellationToken.ThrowIfCancellationRequested();
                 log($"{AuthOkPrefix}{UserId}");
+
+                // The character before the party and the world: the gateway token is minted for
+                // it (cid claim), and every connect, dungeon entry and reconnect names it.
+                CurrentPhase = Phase.SelectingCharacter;
+                Character = await endpoint.SelectCharacterAsync(UserId, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                log(Character.IsDefault
+                    ? $"{CharacterPrefix}<account default>"
+                    : $"{CharacterPrefix}{Character.Name} (id={Character.Id}{(Character.Created ? ", created" : string.Empty)})");
 
                 // A party, if this run was told to want one. Before the world, because a
                 // dungeon instance is keyed by the party (ADR-26 decision 2) -- there is

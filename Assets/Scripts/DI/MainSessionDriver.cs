@@ -5,7 +5,9 @@ namespace Scripts.DI
     using System.Threading.Tasks;
     using Cuvara.Netcode.Client;
     using Cysharp.Threading.Tasks;
+    using System.Collections.Generic;
     using Scripts.Nakama;
+    using Scripts.Nakama.Characters;
     using Scripts.Nakama.Social;
     using Scripts.Session;
     using UnityEngine;
@@ -54,18 +56,27 @@ namespace Scripts.DI
         private readonly NakamaSessionService nakama;
         private readonly BackendSettings backend;
         private readonly PartyService party;
+        private readonly CharacterService characters;
+        private readonly CharacterSelectionState characterSelection;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         private readonly int instanceId = Interlocked.Increment(ref instances);
         private static int instances;
         private bool disposed;
 
         public MainSessionDriver(
-            NetworkClient client, NakamaSessionService nakama, BackendSettings backend, PartyService party)
+            NetworkClient client,
+            NakamaSessionService nakama,
+            BackendSettings backend,
+            PartyService party,
+            CharacterService characters,
+            CharacterSelectionState characterSelection)
         {
             this.client = client ?? throw new ArgumentNullException(nameof(client));
             this.nakama = nakama ?? throw new ArgumentNullException(nameof(nakama));
             this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
             this.party = party ?? throw new ArgumentNullException(nameof(party));
+            this.characters = characters ?? throw new ArgumentNullException(nameof(characters));
+            this.characterSelection = characterSelection ?? throw new ArgumentNullException(nameof(characterSelection));
         }
 
         /// <summary>The sequence this driver ran; null until <see cref="Start"/>.</summary>
@@ -96,7 +107,9 @@ namespace Scripts.DI
         {
             this.Flow = new MainSessionFlow();
             await this.Flow.RunAsync(
-                new Endpoint(this.client, this.nakama, this.party),
+                new Endpoint(
+                    this.client, this.nakama, this.party, this.characters, this.characterSelection,
+                    this.backend.Value.Character),
                 this.backend.DeviceId,
                 this.backend.Value.MapId,
                 this.backend.Value.CreatesParty,
@@ -141,12 +154,91 @@ namespace Scripts.DI
             private readonly NetworkClient client;
             private readonly NakamaSessionService nakama;
             private readonly PartyService party;
+            private readonly CharacterService characters;
+            private readonly CharacterSelectionState selection;
+            private readonly string requestedCharacter;
 
-            public Endpoint(NetworkClient client, NakamaSessionService nakama, PartyService party)
+            public Endpoint(
+                NetworkClient client,
+                NakamaSessionService nakama,
+                PartyService party,
+                CharacterService characters,
+                CharacterSelectionState selection,
+                string requestedCharacter)
             {
                 this.client = client;
                 this.nakama = nakama;
                 this.party = party;
+                this.characters = characters;
+                this.selection = selection;
+                this.requestedCharacter = requestedCharacter;
+            }
+
+            /// <summary>PlayerPrefs key of the last character an account played on this device.</summary>
+            internal static string LastCharacterKey(string userId) => "character.last_used." + userId;
+
+            public async Task<CharacterChoice> SelectCharacterAsync(string userId, CancellationToken cancellationToken)
+            {
+                CharacterRoster roster;
+                try
+                {
+                    roster = await this.characters.ListAsync(cancellationToken);
+                }
+                catch (Exception exception) when (!(exception is OperationCanceledException) &&
+                                                  string.IsNullOrEmpty(this.requestedCharacter))
+                {
+                    // Rollout tolerance, not a silent fallback: a Nakama predating ADR-31 has no
+                    // roster RPCs, and the account's default character (no cid) is exactly what
+                    // such a backend serves. Said out loud; an explicit -cuvara-character still
+                    // fails, because then the caller asked for something specific.
+                    Debug.LogWarning(
+                        $"{MainSessionFlow.Tag} character roster unavailable ({exception.Message}); " +
+                        "playing the account's default character.");
+                    this.Apply(CharacterChoice.Default, userId);
+                    return CharacterChoice.Default;
+                }
+
+                var entries = new List<CharacterEntry>(roster.Characters.Count);
+                foreach (var character in roster.Characters)
+                {
+                    entries.Add(new CharacterEntry(character.Id, character.Name, character.Slot));
+                }
+
+                var lastUsed = PlayerPrefs.GetString(LastCharacterKey(userId), string.Empty);
+                var decision = CharacterSelection.Decide(entries, this.requestedCharacter, lastUsed, userId);
+
+                CharacterChoice choice;
+                if (decision.Create)
+                {
+                    var created = await this.characters.CreateAsync(decision.Name, -1, cancellationToken);
+                    choice = new CharacterChoice(created.Id, created.Name, created: true);
+                }
+                else
+                {
+                    choice = new CharacterChoice(decision.Id, decision.Name, created: false);
+                }
+
+                Debug.Log(
+                    $"{MainSessionFlow.Tag} character roster: {entries.Count}/{roster.MaxSlots} " +
+                    $"-> {(decision.Create ? "create" : "use")} '{choice.Name}' ({decision.Reason})");
+                this.Apply(choice, userId);
+                return choice;
+            }
+
+            private void Apply(CharacterChoice choice, string userId)
+            {
+                // Both, always: the token's cid (minted by the auth provider from the selection)
+                // and the enter-world character_id must name the same character, or the gateway
+                // answers character_mismatch.
+                var id = choice.IsDefault ? null : choice.Id;
+                this.selection.CharacterId = id;
+                this.client.CharacterId = id;
+
+                if (!choice.IsDefault && !string.IsNullOrEmpty(userId))
+                {
+                    PlayerPrefs.SetString(LastCharacterKey(userId), choice.Id);
+                    PlayerPrefs.Save();
+                }
             }
 
             public string UserId => this.client.UserId;

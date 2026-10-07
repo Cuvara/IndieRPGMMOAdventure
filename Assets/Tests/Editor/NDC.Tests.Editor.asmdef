@@ -27,7 +27,9 @@
         "Unity.Transforms",
         "Unity.Addressables",
         "Unity.ResourceManager",
-        "NDC.Scripts.Session"
+        "NDC.Scripts.Session",
+        "NDC.Scripts.Gameplay",
+        "UniTask"
     ],
     "includePlatforms": [
         "Editor"

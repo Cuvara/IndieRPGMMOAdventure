@@ -33,6 +33,17 @@ if (content.Database.TryGetItem("iron_sword", out var sword))
 the server simulates against**, so there is no client-side mirror of the schema to keep in
 sync.
 
+### What MainScene does with it (protocol 3)
+
+MainScene does not use `ContentClient` itself: its `GameContentService`
+(`Assets/Scripts/Gameplay/Content/`) downloads the same composed `/content` document once per
+process (origin from `-cuvara-content-url`, else `-cuvara-status-url`) and reads items through
+the same `ContentJsonReader`, plus the protocol 3 sections the netcode 0.46.0 reader does not
+yet read — `stats`, `statuses`, `abilities` — into `GameContentCatalog`. Stat ids are resolved
+by key (`"level"`, `"mana"`), never hard-coded. Map geometry is NOT content served at
+`/content`; the client's copy lives in `Assets/Resources/Maps/` and is baked from the scene by
+the map exporter. See `docs/CORE-V3-CLIENT.md`.
+
 ## Caching is by hash, never by time
 
 The client stores the document and its hash, and sends `?hash=` on every fetch. An unchanged

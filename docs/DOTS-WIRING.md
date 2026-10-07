@@ -41,6 +41,16 @@ Similarly the `ViewConfigCatalog` is built in code (no authored art exists); whe
 assets exist, list them in a `ViewArchetypeLibrary` asset and give `DotsWorldBridge` a
 serialized reference instead.
 
+### Protocol 3 additions (Core v3)
+
+The bridge also owns, per session: the protocol switch (`UseServerProtocol`) and map geometry
+for the predictor, a `ProjectilePredictor`, `EntityElevationSystem` (client system in
+`ViewSystemGroup`, after `ViewInterpolationGroup`, before `ViewLifecycleGroup`: wire `z` ->
+Unity `y`, extrapolated projectiles) fed by `EntityElevationFeeder`, and
+`PredictedProjectileViews`. Install/uninstall sit beside the netcode adapter's in
+`TryInstall`/`OnDestroy`. Archetypes are now `player-local`, `player-remote`, `mob`,
+`projectile`, `item`. Details: `docs/CORE-V3-CLIENT.md`.
+
 ## Defines: they do not flow from package asmdefs
 
 `versionDefines` are per-asmdef. `NDC.Scripts.DI` (and `NDC.Tests.Editor`) declare their own:

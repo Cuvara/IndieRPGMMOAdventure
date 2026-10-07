@@ -46,6 +46,8 @@ namespace Scripts.DI.Dots
                 [DotsViewArchetypes.PlayerLocal] = (PrimitiveType.Capsule, new Color(0.2f, 0.8f, 1f), 1.2f),
                 [DotsViewArchetypes.PlayerRemote] = (PrimitiveType.Capsule, new Color(0.9f, 0.9f, 0.9f), 1f),
                 [DotsViewArchetypes.Mob] = (PrimitiveType.Sphere, new Color(0.9f, 0.15f, 0.1f), 0.8f),
+                [DotsViewArchetypes.Projectile] = (PrimitiveType.Sphere, new Color(1f, 0.45f, 0.05f), 0.4f),
+                [DotsViewArchetypes.Item] = (PrimitiveType.Cube, new Color(1f, 0.85f, 0.2f), 0.5f),
             };
         }
 
