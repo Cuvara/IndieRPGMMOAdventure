@@ -63,6 +63,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Local movement no longer rubber-bands.** `DotsWorldBridge` sent input from `Update` on every
+  frame a key was held (~1000/s on an uncapped desktop loop) and sent nothing on release. The
+  server steps once per tick and coalesced almost every input, and a release never arrived, so the
+  server kept walking the player for its 250 ms silence timeout and the client was snapped back at
+  every stop. Input now goes out on a pinned `InputCadence.RecommendedSendHz` schedule (13 Hz, the
+  DOTS Sample's cadence), zero vectors included; jump and cast presses are latched until the next
+  send. Each send is reported to the DOTS clock steering (`DotsPredictionBootstrap.NoteInputSent`,
+  round trip via `TryGetClockSteering`), which netcode 0.46.1 / com.cuvara.dots 0.31.0 use to
+  reconcile against the tick that applied the input.
+
 - **The DOTS Sample the play client builds existed only on one machine (#135).**
   `PlayClientBuilder` built `Assets/Samples/Cuvara Netcode/0.35.0/DOTS Sample`, a folder that
   was **never tracked** -- a fresh clone had no such scene -- and whose name lied besides: it
