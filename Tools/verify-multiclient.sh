@@ -58,6 +58,7 @@ NAKAMA_PORT=""
 NAKAMA_KEY=""
 MAP_ID="map_01"
 STATUS_URL=""
+TRANSPORT_KEY_ARG=""
 EXTRA_ARGS=()
 KUBE_CONTEXT=""
 REDIS_CONTAINER=""
@@ -84,6 +85,10 @@ Usage: verify-multiclient.sh --exe <player.exe> --gateway-port P --nakama-port P
                              -o jsonpath='{.data.NAKAMA_SERVER_KEY}' | base64 -d
   --map ID               Default map_01
   --status-url URL       Game server /status. Required for the players_online row.
+  --transport-key HEX    KCP datagram key (the game server's TRANSPORT_KEY), passed
+                         to run-clients.sh. Unset: run-clients.sh falls back to
+                         $CUVARA_TRANSPORT_KEY / $TRANSPORT_KEY, else plaintext.
+                         Gameplay is KCP/UDP only.
   --kube-context CTX     Enables the Redis rows against a k3d/Agones backend.
   --redis-container NAME Enables the Redis rows against the docker compose stack
                          (rpg-redis for ./stack.sh up). Mutually exclusive with
@@ -110,6 +115,7 @@ while [ $# -gt 0 ]; do
         --nakama-key) NAKAMA_KEY="$2"; shift 2 ;;
         --map) MAP_ID="$2"; shift 2 ;;
         --status-url) STATUS_URL="$2"; shift 2 ;;
+        --transport-key) TRANSPORT_KEY_ARG="$2"; shift 2 ;;
         --kube-context) KUBE_CONTEXT="$2"; shift 2 ;;
         --redis-container) REDIS_CONTAINER="$2"; shift 2 ;;
         --redis-ns) REDIS_NS="$2"; shift 2 ;;
@@ -172,6 +178,9 @@ LAUNCH=(
 )
 if [ -n "$STATUS_URL" ]; then
     LAUNCH+=(--status-url "$STATUS_URL")
+fi
+if [ -n "$TRANSPORT_KEY_ARG" ]; then
+    LAUNCH+=(--transport-key "$TRANSPORT_KEY_ARG")
 fi
 LAUNCH+=(--tile)
 if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then

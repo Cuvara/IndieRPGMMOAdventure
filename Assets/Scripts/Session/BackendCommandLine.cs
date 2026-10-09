@@ -190,6 +190,18 @@ namespace Scripts.Session
             /// </summary>
             public string ContentUrl;
 
+            /// <summary>
+            /// <c>-cuvara-transport-key</c> / <c>CUVARA_TRANSPORT_KEY</c>: the pre-shared key for the
+            /// gameplay hop's KCP datagram encryption, 64 hex characters, equal to the game
+            /// server's <c>TRANSPORT_KEY</c>. Null when not given: plaintext datagrams (dev).
+            /// Realtime gameplay is KCP/UDP only; this does not touch the TCP gateway hop.
+            /// Never logged — <see cref="HasTransportKey"/> is what the startup report prints.
+            /// </summary>
+            public string TransportKey;
+
+            /// <summary>True when <see cref="TransportKey"/> was given.</summary>
+            public bool HasTransportKey => !string.IsNullOrWhiteSpace(TransportKey);
+
             public string NakamaBaseUrl => $"{NakamaScheme}://{NakamaHost}:{NakamaPort}";
         }
 
@@ -234,6 +246,7 @@ namespace Scripts.Session
                 InstanceLabel = Str(args, env, "-cuvara-instance", "CUVARA_INSTANCE", null),
                 Character = Str(args, env, "-cuvara-character", "CUVARA_CHARACTER", null),
                 ContentUrl = Str(args, env, "-cuvara-content-url", "CUVARA_CONTENT_URL", null),
+                TransportKey = Str(args, env, "-cuvara-transport-key", "CUVARA_TRANSPORT_KEY", null),
             };
 
             var map = Str(args, env, "-cuvara-map", "CUVARA_MAP_ID", null);

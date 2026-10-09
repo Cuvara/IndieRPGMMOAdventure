@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **KCP/UDP-only gameplay, client leg** (`feat/wire/kcp-only`, `.kcp-migration/CONTRACT.md`).
+  New flag `-cuvara-transport-key HEX` / env `CUVARA_TRANSPORT_KEY` (64 hex chars, the game
+  server's `TRANSPORT_KEY`; empty = plaintext datagrams) in `BackendCommandLine`;
+  `GameLifetimeScope` passes it to `DefaultTransportFactory` via
+  `RegisterNetworking(transports: ...)` together with the gateway TLS options (API present in
+  every pinned netcode, so this compiles before the pin moves). `TransportSecurityReport` logs
+  "gameplay hop = KCP/UDP" and whether a key is set (never the key), warns on a key that is not
+  64 hex characters, and errors on a WebGL player, which cannot play KCP/UDP gameplay.
+  `Tools/run-clients.sh` / `Tools/verify-multiclient.sh` gain `--transport-key` (default
+  `$CUVARA_TRANSPORT_KEY`, then `$TRANSPORT_KEY`) and forward it as `-cuvara-transport-key`.
+  The strict `"kcp"`-only transport check, the connect-timeout message and the WebGL refusal
+  themselves ship in `com.cuvara.netcode` 0.47.0 and arrive with that pin bump (separate,
+  human-gated step).
+
 - **Core v3 client leg (wire protocol 3, ADR-28..31)** against `com.cuvara.netcode` 0.46.0 and
   `com.rpgmmo.shared-gamelogic` 0.7.0 (the manifest/lock pin bump is a separate, human-gated
   step). Full description: `docs/CORE-V3-CLIENT.md`.

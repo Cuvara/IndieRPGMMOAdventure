@@ -92,8 +92,22 @@ implied by any other:
 | Hop | Flag | Default | Why that default |
 |---|---|---|---|
 | Nakama (auth, meta) | `-cuvara-nakama-scheme https`, `-cuvara-nakama-tls-cert PEM` | `http`, no pin | plaintext is the dev case; the session token crosses this hop (ADR-24) |
-| gateway | `-cuvara-gateway-tls 1`, `-cuvara-gateway-tls-cert PEM` | off | matches the gateway's own default (ADR-23) |
-| game server | `-cuvara-sealed 1` | **off** | every deployed environment pins `GAMESERVER_SEALED=off` (ADR-22) |
+| gateway (TCP) | `-cuvara-gateway-tls 1`, `-cuvara-gateway-tls-cert PEM` | off | matches the gateway's own default (ADR-23) |
+| game server (**KCP/UDP only**) | `-cuvara-sealed 1` | **off** | every deployed environment pins `GAMESERVER_SEALED=off` (ADR-22) |
+| game server datagrams | `-cuvara-transport-key HEX` (`CUVARA_TRANSPORT_KEY`; 64 hex chars = the server's `TRANSPORT_KEY`) | empty = plaintext datagrams | kcp-go AES-CFB datagram encryption, confidentiality only; the sealed session is what authenticates. Never logged |
+
+**Realtime gameplay is KCP over UDP only** (netcode 0.47.0, `.kcp-migration/CONTRACT.md`).
+The gateway hop stays TCP; the game-server hop has no TCP transport and no fallback, and an
+`enter_world_resp` whose transport is not `"kcp"` is refused by name. Consequences: the
+game-server port must be open for **UDP** (Docker `9000:9000/udp`, Agones `protocol: UDP`) —
+a closed/unmapped UDP port or a transport-key mismatch shows up as
+`KCP/UDP connect timeout to host:port ... check the firewall and the UDP port mapping`; and
+**WebGL cannot play realtime gameplay at all** (browsers have no UDP; the netcode KCP
+transport throws `NotSupportedException` there). `Tools/run-clients.sh` and
+`Tools/verify-multiclient.sh` take `--transport-key HEX` (default `$CUVARA_TRANSPORT_KEY`,
+then `$TRANSPORT_KEY`) and forward it as `-cuvara-transport-key`, because a Windows player
+started from WSL does not inherit WSL's environment. `GameLifetimeScope` hands the key to
+`DefaultTransportFactory` through `RegisterNetworking(transports: ...)`.
 
 **The Nakama hop needs the certificate as well as the scheme, and the two are separate
 flags on purpose.** `-cuvara-nakama-scheme https` alone leaves Unity's own validation
@@ -139,7 +153,8 @@ does not seal against a `require` server reaches `InWorld` and is then closed
 join/kick loop rather than an error naming the cause. Only the JSON client is refused
 outright. `TransportSecurityReport` logs, at startup, what the client will *request* for
 all three hops — it deliberately does not claim the gameplay hop is sealed, because that
-is decided at the join by the server.
+is decided at the join by the server — plus one line saying the gameplay hop is KCP/UDP and
+whether a transport key is set (never the key itself).
 
 `Tools/verify-multiclient.sh` takes a `--` passthrough for exactly this:
 

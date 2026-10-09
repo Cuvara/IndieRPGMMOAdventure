@@ -209,7 +209,7 @@ Acceptance: representative assets survive churn without reset artifacts or growi
 - EditMode: pure contracts, key validation, ownership, queue/event ordering and presets.
 - PlayMode: pooling activation, World/group ordering, scene transitions, camera, native lifetime and physics.
 - Android IL2CPP: real boot flow, reflection/stripping where relevant and profiler run. Desktop Mono is a separate target, not a substitute.
-- WebGL only if retained as a release target: coordinate the missing browser realtime transport with Netcode/backend; no DOTS-only test can close that gap.
+- WebGL only if retained as a release target: realtime gameplay is now KCP/UDP only (netcode 0.47.0) and browsers have no UDP, so a WebGL player cannot join a game server at all; a browser realtime transport would be a new Netcode/backend decision. No DOTS-only test can close that gap.
 - CI must expose absent/skipped test assemblies and preserve result artifacts. Test-count floors supplement, not replace, scenario assertions.
 
 Acceptance: each supported module/platform combination has explicit results; unsupported combinations are clearly documented.
