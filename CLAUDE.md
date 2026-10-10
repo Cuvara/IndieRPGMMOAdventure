@@ -96,7 +96,7 @@ implied by any other:
 | game server (**KCP/UDP only**) | `-cuvara-sealed 1` | **off** | every deployed environment pins `GAMESERVER_SEALED=off` (ADR-22) |
 | game server datagrams | `-cuvara-transport-key HEX` (`CUVARA_TRANSPORT_KEY`; 64 hex chars = the server's `TRANSPORT_KEY`) | empty = plaintext datagrams | kcp-go AES-CFB datagram encryption, confidentiality only; the sealed session is what authenticates. Never logged |
 
-**Realtime gameplay is KCP over UDP only** (netcode 0.47.0, `.kcp-migration/CONTRACT.md`).
+**Realtime gameplay is KCP over UDP only** (netcode 0.47.0; ADR-32, rpg-mmo-server `backend/docs/NETWORKING.md`).
 The gateway hop stays TCP; the game-server hop has no TCP transport and no fallback, and an
 `enter_world_resp` whose transport is not `"kcp"` is refused by name. Consequences: the
 game-server port must be open for **UDP** (Docker `9000:9000/udp`, Agones `protocol: UDP`) —

@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`com.cuvara.netcode` v0.46.0 → v0.47.0**, DOTS Sample recopied from the tag (`.sample-source`
+  version v0.47.0, commit 1971df4). Manifest and lock both move; the lock is what resolves. Realtime
+  gameplay is KCP/UDP only (no TCP fallback; any other advertised transport is a permanent named
+  failure), plus the `ack_applied_tick` prediction fix that removes the jerky/delayed local movement.
+- **`com.cuvara.dots` v0.29.0 → v0.31.0** (lock hash c3be200). `LocalPredictionSystem` reconciles
+  at the tick that applied the input and steers the clock; `DotsPredictionBootstrap.NoteInputSent` /
+  `TryGetClockSteering`, which `DotsWorldBridge` already calls.
+
 ### Added
 
-- **KCP/UDP-only gameplay, client leg** (`feat/wire/kcp-only`, `.kcp-migration/CONTRACT.md`).
+- **KCP/UDP-only gameplay, client leg** (`feat/wire/kcp-only`; ADR-32, rpg-mmo-server `backend/docs/NETWORKING.md`).
   New flag `-cuvara-transport-key HEX` / env `CUVARA_TRANSPORT_KEY` (64 hex chars, the game
   server's `TRANSPORT_KEY`; empty = plaintext datagrams) in `BackendCommandLine`;
   `GameLifetimeScope` passes it to `DefaultTransportFactory` via
