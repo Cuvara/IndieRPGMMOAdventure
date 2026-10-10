@@ -128,6 +128,35 @@ namespace Scripts.DI.Dots
         private bool prewarmFailureLogged;
         private long inputTick;
 
+        /// <summary>
+        /// When the next input is due. A pinned schedule at
+        /// <see cref="InputCadence.RecommendedSendHz"/>, the cadence the netcode DOTS Sample sends
+        /// at and the one the prediction fix was validated against.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why not once per frame.</b> This used to send from <c>Update</c> on every frame a
+        /// key was held, which is ~1000 inputs a second on an uncapped desktop frame loop. The
+        /// server steps once per base tick and coalesces the rest, so nearly every input
+        /// replaced a step already taken, and the client's one-recorded-step-per-input history
+        /// stopped describing what the server did.
+        /// </para>
+        /// <para>
+        /// <b>Why idle inputs are sent too.</b> Sending only while a key was down meant a
+        /// release never reached the server: it kept moving the player on the held direction
+        /// for its 250 ms silence timeout and the client was then snapped back -- a rubber-band
+        /// at every stop. <c>docs/API.md</c> requires the vector on every input tick.
+        /// </para>
+        /// </remarks>
+        private InputSendSchedule sendSchedule;
+
+        private bool sendScheduleStarted;
+
+        /// <summary>Edge-triggered presses latched until the next scheduled send, so none is lost between sends.</summary>
+        private bool pendingJump;
+
+        private bool pendingCast;
+
         // ---- protocol 3 ----
         private readonly EntityElevationTable elevationTable = new EntityElevationTable();
         private EntityElevationFeeder elevationFeeder;
@@ -188,11 +217,26 @@ namespace Scripts.DI.Dots
             {
                 // Input is sampled and SENT here, not inside the prediction driver: the tick
                 // recorded must be the tick that went to the server.
-                ReadKeyboard(out var moveX, out var moveY);
-                var jump = GameplayInputReader.JumpPressed();
-                var cast = GameplayInputReader.CastPressed();
-                if (moveX != 0f || moveY != 0f || jump || cast)
+                this.pendingJump |= GameplayInputReader.JumpPressed();
+                this.pendingCast |= GameplayInputReader.CastPressed();
+
+                var now = Time.realtimeSinceStartupAsDouble;
+                if (!this.sendScheduleStarted)
                 {
+                    this.sendSchedule.Start(InputCadence.RecommendedSendHz(GameConstants.DefaultTickRate), now);
+                    this.sendScheduleStarted = true;
+                }
+
+                if (this.sendSchedule.SecondsUntilDue(now) <= 0.0)
+                {
+                    // Sampled at the send, so the vector sent is the stick right now. Sent even
+                    // when it is zero: that is how a release reaches the server.
+                    ReadKeyboard(out var moveX, out var moveY);
+                    var jump = this.pendingJump;
+                    var cast = this.pendingCast;
+                    this.pendingJump = false;
+                    this.pendingCast = false;
+
                     this.inputTick++;
                     var input = new InputMessage { Tick = this.inputTick, MoveX = moveX, MoveY = moveY, Jump = jump };
                     if (cast)
@@ -205,7 +249,23 @@ namespace Scripts.DI.Dots
                     input.SetRenderTime(this.binder.RenderTick);
                     this.client.Session?.SendInput(input);
                     this.predictor?.RecordInput(this.inputTick, moveX, moveY, jump);
+
+                    // The prediction system steers the predictor's clock toward the server tick;
+                    // it needs to know when each input left to measure the acknowledgement lead.
+                    // The round trip sizes the lead the steering aims for; refreshed per send rather
+                    // than per frame because the lookup builds an entity query.
+                    DotsPredictionBootstrap.NoteInputSent(this.world, this.inputTick);
+                    if (DotsPredictionBootstrap.TryGetClockSteering(this.world, out var steering))
+                    {
+                        steering.RoundTripMs = this.client.Session?.RoundTripMs ?? 0L;
+                    }
+
+                    this.sendSchedule.NoteSent(now);
                 }
+            }
+            else
+            {
+                this.sendScheduleStarted = false;
             }
 
             // Polls the merged world every frame — despawn falls out of absence. This is the ONE

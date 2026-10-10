@@ -13,7 +13,8 @@ namespace Scripts.DI
     /// <para>
     /// The client talks to three things and each hop is protected differently — Nakama by
     /// the URL scheme, the gateway by TLS it terminates itself (ADR-23), the game server by
-    /// message-layer sealing (ADR-22). They are configured independently, so "the
+    /// message-layer sealing (ADR-22) over KCP/UDP, the only gameplay transport, optionally
+    /// with a KCP datagram key (<c>-cuvara-transport-key</c>). They are configured independently, so "the
     /// connection is encrypted" is a sentence that is true of one hop and believed about
     /// all three.
     /// </para>
@@ -105,6 +106,8 @@ namespace Scripts.DI
         /// </remarks>
         private static void ReportGameplayHop(BackendCommandLine.Settings backend)
         {
+            ReportGameplayTransport(backend);
+
             var encoding = backend.EncodingIsProtobuf ? "protobuf" : "JSON";
 
             if (backend.SealedOverJsonIsImpossible)
@@ -142,6 +145,78 @@ namespace Scripts.DI
                 "with no_sealed_session and this client then reconnects WITH sealing, so watch for " +
                 "'sealed session established' below. Pass -cuvara-sealed 1 to seal the first join " +
                 "instead of the second.");
+        }
+
+        /// <summary>
+        /// Says which transport the gameplay hop uses — KCP over UDP, the only one there is —
+        /// and whether its datagrams are keyed. Never prints the key.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Realtime gameplay moved to KCP/UDP only (netcode 0.47.0): there is no TCP gameplay
+        /// transport and no fallback, so a game-server port that is not open for <b>UDP</b>
+        /// shows up as a "KCP/UDP connect timeout" at the join. This line puts the transport on
+        /// the record before that can happen.
+        /// </para>
+        /// <para>
+        /// The key (<c>-cuvara-transport-key</c>, the server's <c>TRANSPORT_KEY</c>) is
+        /// kcp-go-compatible AES-CFB: confidentiality against a passive observer, not
+        /// authentication — that is the sealed session. A key that is not 64 hex characters is
+        /// still accepted (it is stretched with HKDF, as the server does), but the contract is
+        /// 32 bytes of hex, so it is flagged.
+        /// </para>
+        /// </remarks>
+        private static void ReportGameplayTransport(BackendCommandLine.Settings backend)
+        {
+            if (Application.platform == RuntimePlatform.WebGLPlayer)
+            {
+                Debug.LogError(
+                    "[transport-security] game server: realtime gameplay is KCP/UDP only and a WebGL " +
+                    "player has no UDP sockets — this build cannot join a game server (no fallback).");
+                return;
+            }
+
+            if (!backend.HasTransportKey)
+            {
+                Debug.Log(
+                    "[transport-security] game server (address assigned at join): gameplay hop = KCP/UDP, " +
+                    "transport key NOT set — datagrams are not AES-encrypted (fine in dev; set " +
+                    "-cuvara-transport-key to the server's TRANSPORT_KEY otherwise). The game-server " +
+                    "port must be open for UDP.");
+                return;
+            }
+
+            if (!IsHex64(backend.TransportKey.Trim()))
+            {
+                Debug.LogWarning(
+                    "[transport-security] game server: -cuvara-transport-key is set but is not 64 hex " +
+                    "characters (32 bytes); it will be stretched with HKDF exactly as the server would, " +
+                    "so it only works if the server's TRANSPORT_KEY is the same string.");
+            }
+
+            Debug.Log(
+                "[transport-security] game server (address assigned at join): gameplay hop = KCP/UDP, " +
+                "transport key set — datagrams are AES-encrypted (kcp-go compatible). A key that differs " +
+                "from the server's TRANSPORT_KEY makes the join fail as a KCP/UDP connect timeout.");
+        }
+
+        private static bool IsHex64(string value)
+        {
+            if (value == null || value.Length != 64)
+            {
+                return false;
+            }
+
+            foreach (var c in value)
+            {
+                var hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+                if (!hex)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>

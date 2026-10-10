@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`com.cuvara.netcode` v0.46.0 → v0.47.0**, DOTS Sample recopied from the tag (`.sample-source`
+  version v0.47.0, commit 1971df4). Manifest and lock both move; the lock is what resolves. Realtime
+  gameplay is KCP/UDP only (no TCP fallback; any other advertised transport is a permanent named
+  failure), plus the `ack_applied_tick` prediction fix that removes the jerky/delayed local movement.
+- **`com.cuvara.dots` v0.29.0 → v0.31.0** (lock hash c3be200). `LocalPredictionSystem` reconciles
+  at the tick that applied the input and steers the clock; `DotsPredictionBootstrap.NoteInputSent` /
+  `TryGetClockSteering`, which `DotsWorldBridge` already calls.
+
 ### Added
+
+- **KCP/UDP-only gameplay, client leg** (`feat/wire/kcp-only`; ADR-32, rpg-mmo-server `backend/docs/NETWORKING.md`).
+  New flag `-cuvara-transport-key HEX` / env `CUVARA_TRANSPORT_KEY` (64 hex chars, the game
+  server's `TRANSPORT_KEY`; empty = plaintext datagrams) in `BackendCommandLine`;
+  `GameLifetimeScope` passes it to `DefaultTransportFactory` via
+  `RegisterNetworking(transports: ...)` together with the gateway TLS options (API present in
+  every pinned netcode, so this compiles before the pin moves). `TransportSecurityReport` logs
+  "gameplay hop = KCP/UDP" and whether a key is set (never the key), warns on a key that is not
+  64 hex characters, and errors on a WebGL player, which cannot play KCP/UDP gameplay.
+  `Tools/run-clients.sh` / `Tools/verify-multiclient.sh` gain `--transport-key` (default
+  `$CUVARA_TRANSPORT_KEY`, then `$TRANSPORT_KEY`) and forward it as `-cuvara-transport-key`.
+  The strict `"kcp"`-only transport check, the connect-timeout message and the WebGL refusal
+  themselves ship in `com.cuvara.netcode` 0.47.0 and arrive with that pin bump (separate,
+  human-gated step).
 
 - **Core v3 client leg (wire protocol 3, ADR-28..31)** against `com.cuvara.netcode` 0.46.0 and
   `com.rpgmmo.shared-gamelogic` 0.7.0 (the manifest/lock pin bump is a separate, human-gated
@@ -62,6 +86,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Cuvara/Netcode#174). Manifest and lock both move; the lock is what resolves.
 
 ### Fixed
+
+- **Local movement no longer rubber-bands.** `DotsWorldBridge` sent input from `Update` on every
+  frame a key was held (~1000/s on an uncapped desktop loop) and sent nothing on release. The
+  server steps once per tick and coalesced almost every input, and a release never arrived, so the
+  server kept walking the player for its 250 ms silence timeout and the client was snapped back at
+  every stop. Input now goes out on a pinned `InputCadence.RecommendedSendHz` schedule (13 Hz, the
+  DOTS Sample's cadence), zero vectors included; jump and cast presses are latched until the next
+  send. Each send is reported to the DOTS clock steering (`DotsPredictionBootstrap.NoteInputSent`,
+  round trip via `TryGetClockSteering`), which netcode 0.46.1 / com.cuvara.dots 0.31.0 use to
+  reconcile against the tick that applied the input.
 
 - **The DOTS Sample the play client builds existed only on one machine (#135).**
   `PlayClientBuilder` built `Assets/Samples/Cuvara Netcode/0.35.0/DOTS Sample`, a folder that

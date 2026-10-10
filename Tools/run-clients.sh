@@ -43,6 +43,9 @@ TAG="mc"
 TILE=0
 DO_KILL=0
 EXTRA_ARGS=()
+# KCP datagram key for the gameplay hop (the game server's TRANSPORT_KEY). A Windows player
+# started from WSL does not inherit WSL's environment, so it is forwarded as a flag.
+TRANSPORT_KEY_ARG="${CUVARA_TRANSPORT_KEY:-${TRANSPORT_KEY:-}}"
 
 usage() {
     cat <<'USAGE'
@@ -63,6 +66,12 @@ Usage: run-clients.sh --exe <player.exe> [options]
   --status-url URL      Game server /status endpoint for the HUD panel, e.g.
                         http://127.0.0.1:9101/status. Agones assigns this port
                         at scheduling time, so it has no useful default.
+  --transport-key HEX   KCP datagram key for the gameplay hop (64 hex chars, the
+                        game server's TRANSPORT_KEY); forwarded as
+                        -cuvara-transport-key. Defaults to $CUVARA_TRANSPORT_KEY,
+                        then $TRANSPORT_KEY; empty = plaintext datagrams (dev).
+                        Gameplay is KCP/UDP only: the game-server port must be
+                        open for UDP.
   --log-dir DIR         Where per-instance logs go (default /tmp/cuvara-clients).
   --width N/--height N  Window size (default 800x600).
   --tag NAME            Prefix for device ids and log names (default mc).
@@ -95,6 +104,7 @@ while [ $# -gt 0 ]; do
         --nakama-key) NAKAMA_KEY="$2"; shift 2 ;;
         --map) MAP_ID="$2"; shift 2 ;;
         --status-url) STATUS_URL="$2"; shift 2 ;;
+        --transport-key) TRANSPORT_KEY_ARG="$2"; shift 2 ;;
         --log-dir) LOG_DIR="$2"; shift 2 ;;
         --width) WIDTH="$2"; shift 2 ;;
         --height) HEIGHT="$2"; shift 2 ;;
@@ -160,6 +170,7 @@ towin() {
 RUN_STAMP="$(date +%Y%m%d-%H%M%S)"
 
 echo "backend  gateway=${GATEWAY_HOST}:${GATEWAY_PORT} nakama=${NAKAMA_SCHEME}://${NAKAMA_HOST}:${NAKAMA_PORT} map=${MAP_ID}"
+echo "gameplay KCP/UDP, transport key $([ -n "$TRANSPORT_KEY_ARG" ] && echo set || echo 'not set (plaintext)')"
 echo "player   $EXE"
 echo "logs     $LOG_DIR"
 echo
@@ -188,6 +199,10 @@ for i in $(seq 1 "$COUNT"); do
 
     if [ -n "$STATUS_URL" ]; then
         ARGS+=(-cuvara-status-url "$STATUS_URL")
+    fi
+
+    if [ -n "$TRANSPORT_KEY_ARG" ]; then
+        ARGS+=(-cuvara-transport-key "$TRANSPORT_KEY_ARG")
     fi
 
     if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then

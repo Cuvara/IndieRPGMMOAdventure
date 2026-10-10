@@ -4,6 +4,7 @@ namespace Scripts.DI
     using Cuvara.Netcode.Client;
     using Cuvara.Netcode.Codec;
     using Cuvara.Netcode.DI;
+    using Cuvara.Netcode.Transport;
     using Scripts.Nakama;
     using Scripts.Nakama.DI;
     using Scripts.Session;
@@ -37,16 +38,27 @@ namespace Scripts.DI
             // decided. Its default in the package is Json, for source compatibility; this client
             // asks for protobuf, because that is what the golden vectors cover and the only
             // encoding a sealed session can use.
+            var networkSettings = new NetworkSettings
+            {
+                GatewayHost = backend.GatewayHost,
+                GatewayPort = backend.GatewayPort,
+                GatewayUseTls = backend.GatewayTls,
+                GatewayTlsPinnedCertificate = TransportSecurityReport.LoadPinOrNull(backend),
+                RequireSealedSession = backend.Sealed,
+            };
+
+            // Realtime gameplay is KCP/UDP only. The transport factory is passed explicitly so the
+            // KCP datagram key from -cuvara-transport-key / CUVARA_TRANSPORT_KEY reaches the
+            // gameplay transport (null = plaintext, dev) together with the gateway's TLS options.
+            // Passing it here is the supported substitution (a second ITransportFactory
+            // registration fails the container build). It uses only the constructor every pinned
+            // netcode version has; from netcode 0.47.0 NetworkSettings.TransportKey carries the
+            // same value for RegisterNetworking's own default factory.
             builder.RegisterNetworking(
-                new NetworkSettings
-                {
-                    GatewayHost = backend.GatewayHost,
-                    GatewayPort = backend.GatewayPort,
-                    GatewayUseTls = backend.GatewayTls,
-                    GatewayTlsPinnedCertificate = TransportSecurityReport.LoadPinOrNull(backend),
-                    RequireSealedSession = backend.Sealed,
-                },
-                encoding: backend.EncodingIsProtobuf ? WireEncoding.Protobuf : WireEncoding.Json);
+                networkSettings,
+                encoding: backend.EncodingIsProtobuf ? WireEncoding.Protobuf : WireEncoding.Json,
+                transports: new DefaultTransportFactory(
+                    backend.TransportKey, networkSettings.BuildGatewayTlsOptions()));
 
             // The device id is pinned on the settings, not only used once: the auth provider
             // re-authenticates on a cold reconnect and must land on the same account.
