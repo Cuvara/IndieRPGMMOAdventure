@@ -42,10 +42,20 @@ jobs:
       #     commits after its PR merged holds work develop does not have, and is
       #     kept (this has happened here: commits pushed onto a branch whose PR had
       #     already merged, recoverable only because the branch still existed);
+      #   - the PR was a same-repository PR into a long-lived branch;
+      #   - the branch has no open PR;
       #   - it is not a long-lived branch.
+      #
+      # Dry run (deletes nothing, prints WOULD/keep lines and a summary notice):
+      #   gh workflow run cleanup-branches.yml --ref <branch> -f dry_run=true
+      #
+      # The script is run through `bash`, not executed directly: it was committed
+      # as mode 100644 from Windows (core.fileMode=false), and every run from
+      # 2026-09-21 to 2026-10-12 died with exit 126 "Permission denied" before
+      # doing anything.
       - name: Delete stale merged branches
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-        run: .github/scripts/cleanup-merged-branches.sh
+        run: bash .github/scripts/cleanup-merged-branches.sh
