@@ -3,6 +3,17 @@
 # branch has received nothing since. See .github/workflows/cleanup-branches.yml for
 # why selection is by PR state rather than `git branch --merged`.
 #
+# A branch is deleted only when ALL of these hold:
+#   - it is not long-lived (main, develop, staging, release-*);
+#   - it has NO open pull request;
+#   - a same-repository PR from it into a long-lived branch MERGED more than
+#     CUTOFF_DAYS ago, and the branch head is EXACTLY that PR's head, so every
+#     commit on it reached the target through that merge.
+# Everything else is kept. DRY_RUN=true lists the decisions and deletes nothing.
+#
+# The workflow runs this as `bash <script>`: the executable bit is unreliable when
+# committed from Windows, and its absence made every run exit 126.
+#
 # Env: REPO (owner/name), GH_TOKEN, DRY_RUN (true|false), CUTOFF_DAYS (default 7).
 set -euo pipefail
 
@@ -28,18 +39,41 @@ if [ "${#HEAD[@]}" -eq 0 ]; then
   exit 1
 fi
 
-MERGED="$(gh pr list --repo "$REPO" --state merged --limit 500 \
-  --json headRefName,headRefOid,mergedAt,number \
-  --jq '.[] | "\(.headRefName)\t\(.headRefOid)\t\(.mergedAt)\t\(.number)"')"
+# Branches with an open PR are never touched, whatever their history.
+OPEN_LIST="$(gh pr list --repo "$REPO" --state open --limit 1000 \
+  --json headRefName,isCrossRepository \
+  --jq '.[] | select(.isCrossRepository | not) | .headRefName')"
+declare -A OPEN=()
+while read -r b; do
+  [ -n "$b" ] && OPEN["$b"]=1
+done <<< "$OPEN_LIST"
+echo "branches with an open PR: ${#OPEN[@]}"
+
+# Only same-repository PRs merged INTO a long-lived branch count: a PR merged into
+# another feature branch does not put its commits on develop/main, and a fork PR's
+# headRefName names a branch in the fork, not here. --limit caps the window; a
+# branch whose PR falls outside it is kept, never deleted.
+MERGED="$(gh pr list --repo "$REPO" --state merged --limit 1000 \
+  --json headRefName,headRefOid,mergedAt,number,baseRefName,isCrossRepository \
+  --jq '.[] | select(.isCrossRepository | not)
+             | select(.baseRefName | test("^(main|develop|staging|release-.*)$"))
+             | "\(.headRefName)\t\(.headRefOid)\t\(.mergedAt)\t\(.number)"')"
 
 declare -A DONE=()
-deleted=0; kept_after=0; kept_recent=0
+deleted=0; kept_after=0; kept_recent=0; kept_open=0; failed=0
 while IFS=$'\t' read -r branch pr_head merged_at number; do
   [ -z "$branch" ] && continue
   [[ "$branch" =~ $PROTECTED ]] && continue
   [ -n "${DONE[$branch]:-}" ] && continue
   cur="${HEAD[$branch]:-}"
   [ -z "$cur" ] && continue                     # already gone
+
+  if [ -n "${OPEN[$branch]:-}" ]; then
+    DONE[$branch]=1
+    echo "keep   ${branch}  (has an open PR)"
+    kept_open=$((kept_open+1))
+    continue
+  fi
 
   if [ "$cur" != "$pr_head" ]; then
     # Several PRs can share a branch name; only this row disagrees so far.
@@ -56,9 +90,13 @@ while IFS=$'\t' read -r branch pr_head merged_at number; do
 
   if [ "$DRY_RUN" = "true" ]; then
     echo "WOULD  delete ${branch}  (#${number} merged ${merged_at}, head ${cur:0:7} == PR head)"
-  else
-    gh api -X DELETE "repos/${REPO}/git/refs/heads/${branch}" >/dev/null
+  elif gh api -X DELETE "repos/${REPO}/git/refs/heads/${branch}" >/dev/null; then
     echo "delete ${branch}  (#${number} merged ${merged_at}, head ${cur:0:7})"
+  else
+    # e.g. a ruleset forbids deletion: report it, keep going, fail at the end.
+    echo "::warning::could not delete ${branch} (#${number}); left in place"
+    failed=$((failed+1))
+    continue
   fi
   deleted=$((deleted+1))
 done <<< "$MERGED"
@@ -75,4 +113,8 @@ while IFS=$'\t' read -r branch pr_head merged_at number; do
 done <<< "$MERGED"
 
 verb=$([ "$DRY_RUN" = "true" ] && echo "would delete" || echo "deleted")
-echo "::notice::${verb} ${deleted}; kept ${kept_after} with commits after merge; kept ${kept_recent} merged within ${CUTOFF_DAYS} days."
+echo "::notice::${verb} ${deleted}; kept ${kept_open} with an open PR; kept ${kept_after} with commits after merge; kept ${kept_recent} merged within ${CUTOFF_DAYS} days; ${failed} deletion(s) failed."
+if [ "$failed" -gt 0 ]; then
+  echo "::error::${failed} branch deletion(s) failed."
+  exit 1
+fi

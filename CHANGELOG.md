@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`cleanup-branches.yml` ("Cleanup — Stale merged branches") failed every run since #136** with
+  exit 126 `.github/scripts/cleanup-merged-branches.sh: Permission denied` (e.g. run 38264603517 on
+  develop @ 845a237): the script was committed as mode `100644` from Windows. The workflow now runs
+  it as `bash <script>` and the file is `100755`. Selection is also tightened: a branch with an open
+  PR is kept, only same-repository PRs merged into `main`/`develop`/`staging`/`release-*` count, and
+  a failed deletion is reported and fails the run at the end instead of aborting mid-loop.
+  `workflow_dispatch` input `dry_run=true` lists the decisions without deleting.
+
 ### Changed
 
 - **`com.cuvara.netcode` v0.46.0 → v0.47.0**, DOTS Sample recopied from the tag (`.sample-source`
