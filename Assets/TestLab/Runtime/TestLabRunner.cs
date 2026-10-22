@@ -78,6 +78,13 @@ namespace TestLab
         private double nextControlPoll;
         private double nextSampleAt;
         private double nextFlush;
+
+        // The overlay's frame p95, recomputed at most once a second. FrameStats.Percentile copies
+        // and sorts every sample of the run; called from OnGUI (several times a frame) it made each
+        // frame cost grow with the run's length - 7 ms to 41 ms over a one-hour soak, on every
+        // client at once (rpg-factory testlab run 20261022T100043Z-S09-zo1i).
+        private double overlayP95 = double.NaN;
+        private double nextOverlayStats;
         private int nextScreenshot;
         private int anomalyShots;
         private double lastAnomalyShot = double.NegativeInfinity;
@@ -760,6 +767,18 @@ namespace TestLab
             }
         }
 
+        private double OverlayP95()
+        {
+            double now = Time.realtimeSinceStartupAsDouble;
+            if (now >= this.nextOverlayStats)
+            {
+                this.nextOverlayStats = now + 1.0;
+                this.overlayP95 = this.frames.Percentile(95);
+            }
+
+            return this.overlayP95;
+        }
+
         private void OnGUI()
         {
             if (this.plan == null || !this.plan.overlay)
@@ -771,7 +790,7 @@ namespace TestLab
             string text =
                 $"TESTLAB {this.plan.scenario_id} c{this.plan.client_index}  phase {this.phase}  t {Math.Max(0, this.ScenarioTime):0.0}/{this.plan.duration_s:0}s\n" +
                 $"user {this.client?.UserId}  tick {this.client?.World.Tick}  rtt {this.client?.Session?.RoundTripMs}ms  ents {this.client?.World.EntityMap.Count}\n" +
-                $"frame p95 {this.frames.Percentile(95):0.0}ms  long {this.frames.LongFrames}  jumps {this.jumps.Jumps} (local {this.jumps.LocalJumps})\n" +
+                $"frame p95 {this.OverlayP95():0.0}ms  long {this.frames.LongFrames}  jumps {this.jumps.Jumps} (local {this.jumps.LocalJumps})\n" +
                 (p != null ? $"predict err {p.LastCorrection:0.000} snaps {p.Snaps} pending {p.PendingCount}" : "predict n/a");
             GUI.color = Color.black;
             GUI.Label(new Rect(11, 11, 900, 80), text);

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TestLab overlay frame cost grew with run length.** The overlay recomputed the frame p95 by
+  sorting every recorded frame on each `OnGUI` call; over a one-hour soak each frame went from 7 ms
+  to 41 ms on every test client. It is now recomputed once a second. Test-only (`CUVARA_TESTLAB`).
 - **The local player rubber-banded whenever it moved into negative x or y.** The predictor was
   registered with corner-anchored bounds `MapBounds(0, 0, 1000, 1000)` while the server uses
   `MapBounds.FromSize(1000, 1000)` (-500..500). Every predicted step left of or "below" the
