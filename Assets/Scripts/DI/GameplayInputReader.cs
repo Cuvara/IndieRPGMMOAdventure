@@ -5,7 +5,7 @@ namespace Scripts.DI
     /// <summary>
     /// The protocol 3 buttons and the pointer, read through whichever input backend the project
     /// enables (new Input System today, <c>activeInputHandler: 1</c>) — the same guard
-    /// <c>DotsWorldBridge.ReadKeyboard</c> uses, because the legacy <c>Input</c> class THROWS
+    /// <c>DeviceGameplayInputSource.ReadMove</c> uses, because the legacy <c>Input</c> class THROWS
     /// under the new backend.
     /// </summary>
     /// <remarks>

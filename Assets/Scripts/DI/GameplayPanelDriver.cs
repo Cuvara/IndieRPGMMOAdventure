@@ -106,11 +106,11 @@ namespace Scripts.DI
 
             if (this.presenter != null)
             {
-                if (GameplayInputReader.InventoryTogglePressed()) this.presenter.ToggleInventory();
-                if (GameplayInputReader.PickupPressed()) this.presenter.Pickup();
+                if (GameplayInput.Source.InventoryTogglePressed()) this.presenter.ToggleInventory();
+                if (GameplayInput.Source.PickupPressed()) this.presenter.Pickup();
                 this.PushStats();
             }
-            else if (GameplayInputReader.PickupPressed())
+            else if (GameplayInput.Source.PickupPressed())
             {
                 var target = this.FindNearestItem();
                 if (target != null) this.inventory.PickupAsync(target, this.lifetime.Token).Forget();

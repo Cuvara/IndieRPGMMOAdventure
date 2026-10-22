@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The local player rubber-banded whenever it moved into negative x or y.** The predictor was
+  registered with corner-anchored bounds `MapBounds(0, 0, 1000, 1000)` while the server uses
+  `MapBounds.FromSize(1000, 1000)` (-500..500). Every predicted step left of or "below" the
+  (0, 0) spawn was clamped to 0, the server accepted it, and the player snapped back by the whole
+  distance on every snapshot. Found by the rpg-factory testlab: scenario S10, three rendered
+  clients walking off the spawn in every quadrant. Before: 3013 major and 1809 minor local render
+  jumps in 40 s, and a local divergence p95 of 15.07 units (max 29.25). After: 0 major, 18 minor,
+  and a p95 of 0.00 (max 0.54). `DotsRegistration.PredictorBounds` is now `MapBounds.Default`.
+  Regression test: `DotsRegistrationTests.Predictor_MovesIntoNegativeCoordinates_LikeTheServer`
+  (symmetric walk, plus a control proving the old bounds clamp).
+
+### Added
+
+- **Input seam for automated play:** `IGameplayInputSource` / `GameplayInput.Source`
+  (`Assets/Scripts/DI/GameplayInput.cs`). `DotsWorldBridge` and `GameplayPanelDriver` read every
+  control through it. The default `DeviceGameplayInputSource` keeps today's keyboard, mouse and
+  pointer reads, so behaviour is unchanged. See `docs/TESTLAB.md`.
+- **`NDC.TestLab`** (`Assets/TestLab/`): scripted input, run recorder, screenshots and overlay
+  for the rpg-factory testlab. It compiles into a player only with `CUVARA_TESTLAB` and runs
+  only with `-testlab-plan`. Pure parts are covered by `TestLabTests` (EditMode).
+- **`Assets/Scenes/Tests/MultiplayerCombatTest.unity`**, generated from MainScene by
+  `TestLabSceneBuilder.Build` and checked by `TestLabSceneBuilder.Validate`. It is not in
+  `EditorBuildSettings`.
+- **`PlayerBuilder -extraDefines A;B`:** scripting defines for one build
+  (`BuildPlayerOptions.extraScriptingDefines`); ProjectSettings are untouched. Contract tests
+  cover the parsing and the refusal of invalid names.
+
+### Fixed (earlier in this cycle)
+
 - **`cleanup-branches.yml` ("Cleanup — Stale merged branches") failed every run since #136** with
   exit 126 `.github/scripts/cleanup-merged-branches.sh: Permission denied` (e.g. run 38264603517 on
   develop @ 845a237): the script was committed as mode `100644` from Windows. The workflow now runs
