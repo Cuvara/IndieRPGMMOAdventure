@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TestLab players skipped netcode 0.48.0's leave flush and read 0 for its receive counters.**
+  The testlab's KCP wrapper (`FrameReadTap`) hid `IFlushableTransport`, so a scripted `quit` closed
+  the socket with the disconnect frame still queued, and `GameSessionClient.Transport*` counters
+  (`as KcpTransport`) read 0. The wrapper now forwards `FlushAsync`, and `summary.json`
+  `actions.kcp` reports the receive counters from the wrapped transport. Needs netcode >= 0.48.0.
 - **A TestLab output that failed to write was only a warning (review R6-1).** `BackgroundFileWriter`
   kept the first write/flush exception and silently discarded later buffers, and the run could finish
   as successful with truncated files. The writer now exposes `Failure` and `DroppedChars`, closing the

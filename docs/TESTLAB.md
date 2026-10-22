@@ -96,6 +96,11 @@ Written from `RenderPipelineManager.beginContextRendering`, once per frame. A pl
 
 One side effect: `GameSessionClient.DescribeJoinTimeout` recognises a `KcpTransport` by type. Through the wrapper, a join timeout uses its generic message, not "no UDP datagram came back".
 
+**Netcode 0.48.0 and the wrapper** (branch `fix/interpolation/autonomous-playtest`, which compiles against 0.48.0):
+
+- **Leave flush is forwarded.** A graceful leave waits for the KCP send queue to be acknowledged only through `IFlushableTransport`, and the wrapper implements it by forwarding to the KCP transport. So a testlab `quit` delivers its leave exactly as the shipping client does.
+- **Receive counters come from the tap.** `GameSessionClient.TransportDatagramsRead`, `TransportReceiveWakeups` and `TransportMaxDatagramsPerWake` find the transport with `as KcpTransport`, which the wrapper defeats, so they read 0 in a testlab player. `summary.json` `actions.kcp` reads the same counters from the wrapped transport instead: `present`, `datagrams_read`, `receive_wakeups`, `max_datagrams_per_wake` and `datagrams_received`. They cover the current (last) gameplay session only.
+
 ### Cost
 
 Each snapshot writes one row and each frame writes one row. Nothing is retained per snapshot or per frame, and no call does work proportional to the run's length. Files are flushed once a second with the other outputs. At 60 fps and 20 snapshots/s a one-hour soak is about 216k render rows and 72k delivery rows.

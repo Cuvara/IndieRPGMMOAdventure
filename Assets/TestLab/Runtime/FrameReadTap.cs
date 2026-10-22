@@ -28,6 +28,10 @@ namespace TestLab
     /// a <c>KcpTransport</c> by type to say "no UDP datagram came back"; through the wrapper a
     /// join timeout uses its generic message instead. Nothing else in netcode tests the transport's
     /// type.</para>
+    /// <para><b>Leave flush forwarded.</b> From netcode 0.48.0 the KCP transport is an
+    /// <c>IFlushableTransport</c>, and a graceful leave waits for its send queue to be acknowledged
+    /// only through that interface. The wrapper implements it and forwards to the KCP transport, so a
+    /// testlab <c>quit</c> leaves exactly as the shipping client does.</para>
     /// <para><b>Threading.</b> The read loop's continuations run on the PlayerLoop (the KCP pump is
     /// <c>UniTask.Delay(..., PlayerLoopTiming.Update)</c>), and the frame is decoded, resolved and
     /// merged synchronously after the read, so the last read when a snapshot is published is that
@@ -61,6 +65,14 @@ namespace TestLab
         /// reconnect - the production recovery path, run unchanged. Returns false when the current
         /// session was not opened through the tap.
         /// </summary>
+        /// <summary>
+        /// The current session's KCP transport, or null. Netcode 0.48.0's receive counters
+        /// (<c>GameSessionClient.TransportDatagramsRead</c> and friends) find it with
+        /// <c>_transport as KcpTransport</c>, which the wrapper defeats - they read 0 in a testlab
+        /// player - so the runner reads the counters here instead.
+        /// </summary>
+        public KcpTransport CurrentKcp => Volatile.Read(ref this.current)?.Inner as KcpTransport;
+
         public bool DropLink()
         {
             var transport = Volatile.Read(ref this.current);
@@ -142,9 +154,16 @@ namespace TestLab
             }
         }
 
-        private sealed class TappedTransport : ITransport
+        // IFlushableTransport (netcode 0.48.0): WireConnection's graceful leave waits for the KCP
+        // send queue to be acknowledged only when the transport says it can (`is
+        // IFlushableTransport`). A wrapper that hid the interface would turn every testlab leave back
+        // into the race 0.48.0 fixed - the disconnect frame queued, the socket closed - so the
+        // wrapper forwards it.
+        private sealed class TappedTransport : ITransport, IFlushableTransport
         {
             private readonly ITransport inner;
+
+            internal ITransport Inner => this.inner;
             private readonly FrameReadTap tap;
             private int dropped;
 
@@ -181,6 +200,11 @@ namespace TestLab
                 this.inner.WriteFrameAsync(body, cancellationToken);
 
             public void Close() => this.inner.Close();
+
+            public UniTask<bool> FlushAsync(CancellationToken cancellationToken) =>
+                this.inner is IFlushableTransport flushable
+                    ? flushable.FlushAsync(cancellationToken)
+                    : UniTask.FromResult(true);
 
             internal void Drop()
             {
