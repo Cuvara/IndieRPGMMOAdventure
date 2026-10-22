@@ -505,6 +505,15 @@ namespace Scripts.DI.Dots
             // backlog, which the new server never acknowledged; then the camera, which would
             // otherwise sweep from the last known position to the re-placed avatar.
             var generation = this.view.BeginGeneration();
+
+            // The binder's interpolation clock, last world tick and live set belong to the old
+            // session too. NetworkClient resets the world on reconnect, and a new server (a drain
+            // to another pod, a restart) counts ticks from far below the old ones: without this,
+            // `world.Tick > lastWorldTick` stays false until the new ticks pass the old, so no
+            // sample is buffered (remotes drawn at raw snapshot positions) and RenderTick - sent
+            // as the lag-compensation render time - stays frozen in the old tick space. After
+            // BeginGeneration, so its despawns are stale no-ops for the drain.
+            this.binder.Reset();
             this.predictor?.Reset();
             this.projectilePredictor?.Reset();
             this.elevationFeeder?.Reset();

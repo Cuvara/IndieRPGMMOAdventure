@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Remote players lost interpolation after a reconnect to a server with lower ticks.**
+  `DotsWorldBridge.OnReconnected` bumped the view generation and reset the predictor but not the
+  `WorldViewBinder`, whose interpolation clock and last world tick belong to the old session.
+  After a reconnect to another pod or a restarted server, `world.Tick > lastWorldTick` stayed
+  false until the new ticks passed the old ones: no sample was buffered, remotes were drawn at raw
+  snapshot positions, and `RenderTick` (sent as the lag-compensation render time) stayed frozen
+  in the old tick space. The bridge now calls `binder.Reset()` right after `BeginGeneration()`.
+  `ReconnectBinderResetTests` drives the binder through the same sequence, with a control that
+  shows the frozen clock without the reset. Found by the T05 DOTS audit (F2).
 - **TestLab overlay frame cost grew with run length.** The overlay recomputed the frame p95 by
   sorting every recorded frame on each `OnGUI` call; over a one-hour soak each frame went from 7 ms
   to 41 ms on every test client. It is now recomputed once a second. Test-only (`CUVARA_TESTLAB`).
