@@ -11,7 +11,8 @@
         "Unity.Entities",
         "Unity.Collections",
         "Unity.Mathematics",
-        "Unity.Transforms"
+        "Unity.Transforms",
+        "UniTask"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

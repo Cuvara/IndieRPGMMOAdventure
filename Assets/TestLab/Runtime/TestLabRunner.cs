@@ -15,6 +15,7 @@ namespace TestLab
     using Unity.Profiling;
     using Unity.Transforms;
     using UnityEngine;
+    using UnityEngine.Rendering;
     using VContainer.Unity;
 
     /// <summary>
@@ -36,7 +37,8 @@ namespace TestLab
     ///
     /// <para><b>Output</b> (the directory given by <c>-testlab-out</c>): <c>status.json</c>
     /// (phase, user id; rewritten on every change), <c>events.ndjson</c>, <c>inputs.ndjson</c>,
-    /// <c>snapshots.ndjson</c>, <c>samples.ndjson</c>, <c>frames.csv</c>, <c>summary.json</c>
+    /// <c>snapshots.ndjson</c>, <c>samples.ndjson</c>, <c>frames.csv</c>, <c>delivery.csv</c>,
+    /// <c>render.csv</c> (<see cref="DeliveryRecorder"/>), <c>summary.json</c>
     /// and <c>shots/*.png</c>. Times are seconds since process start
     /// (<c>Time.realtimeSinceStartupAsDouble</c>, monotonic) plus the scenario clock where one
     /// exists; never wall-clock deltas (this host's clock runs fast, rpg-mmo-server#153).</para>
@@ -53,6 +55,7 @@ namespace TestLab
         private readonly List<PlannerEntity> plannerEntities = new List<PlannerEntity>(256);
         private readonly List<Vector2> clientPositions = new List<Vector2>(8);
         private readonly StringBuilder line = new StringBuilder(4096);
+        private readonly FrameReadTap tap = new FrameReadTap();
 
         private TestLabPlan plan;
         private TestLabInputPlanner planner;
@@ -64,12 +67,18 @@ namespace TestLab
         private LocalMovePredictor predictor;
         private EntityQuery renderedQuery;
         private bool queryCreated;
+        private EntityQuery timelineQuery;
+        private bool timelineQueryCreated;
 
         private StreamWriter events;
         private StreamWriter inputs;
         private StreamWriter snapshots;
         private StreamWriter samples;
         private StreamWriter frameCsv;
+        private DeliveryRecorder delivery;
+        private string tapStatus = "not_installed";
+        private long tapReadsConsumed;
+        private int lastRenderRowFrame = -1;
 
         private string phase = "booting";
         private string error;
@@ -114,6 +123,8 @@ namespace TestLab
 
         internal void Configure(TestLabPlan plan, string outDir, string controlPath)
         {
+            // First, so every LabClock value written by this run is on the realtime axis.
+            LabClock.Anchor(Time.realtimeSinceStartupAsDouble);
             this.plan = plan;
             this.planner = new TestLabInputPlanner(plan);
             this.jumps = new RenderJumpDetector(plan.max_speed, plan.jump_factor, plan.jump_slack);
@@ -128,6 +139,8 @@ namespace TestLab
             this.samples = Open("samples.ndjson");
             this.frameCsv = Open("frames.csv");
             this.frameCsv.WriteLine("frame,t,dt_ms,scenario_t");
+            this.delivery = new DeliveryRecorder(Open(DeliveryRecorder.DeliveryFile), Open(DeliveryRecorder.RenderFile));
+            RenderPipelineManager.beginContextRendering += this.OnBeginContextRendering;
 
             this.source.MoveRead = this.OnMoveRead;
             GameplayInput.Source = this.source;
@@ -140,7 +153,8 @@ namespace TestLab
             this.Event("configured", "\"scenario\":" + Quote(plan.scenario_id) + ",\"client_index\":" + plan.client_index +
                                       ",\"run_id\":" + Quote(plan.run_id) +
                                       ",\"gc_recorder\":" + Bool(this.gcAllocRecorder.Valid) +
-                                      ",\"memory_recorder\":" + Bool(this.usedMemoryRecorder.Valid));
+                                      ",\"memory_recorder\":" + Bool(this.usedMemoryRecorder.Valid) +
+                                      ",\"delivery_schema\":" + Quote(DeliveryRecorder.Schema));
             this.WriteStatus();
 
             StreamWriter Open(string name) =>
@@ -476,11 +490,50 @@ namespace TestLab
                 this.client.SnapshotReceived += this.OnSnapshot;
                 this.client.StateChanged += this.OnStateChanged;
                 this.Event("services", "\"predictor\":" + Bool(this.predictor != null));
+                this.InstallTap();
             }
+        }
+
+        /// <summary>
+        /// Wraps the gameplay transport so <c>delivery.csv</c> gets a receive time and a byte count
+        /// per snapshot (<see cref="FrameReadTap"/>). A session that already exists was opened
+        /// through the unwrapped factory, so its rows have empty <c>recv_us</c>/<c>bytes</c> until
+        /// the next join; that is recorded as <c>late</c>, never papered over.
+        /// </summary>
+        private void InstallTap()
+        {
+            string why;
+            try
+            {
+                why = this.tap.TryInstall(this.client);
+            }
+            catch (Exception ex)
+            {
+                why = ex.GetType().Name + ": " + ex.Message;
+            }
+
+            this.tapStatus = why != null ? "unavailable" : this.client.Session != null ? "late" : "installed";
+            this.Event("delivery_tap", "\"status\":" + Quote(this.tapStatus) + ",\"reason\":" + Quote(why));
         }
 
         private void OnSnapshot(ResolvedSnapshot snapshot)
         {
+            long appliedUs = LabClock.NowUs();
+            long recvUs = -1;
+            int bytes = -1;
+            long reads = this.tap.Reads;
+            if (reads != this.tapReadsConsumed)
+            {
+                // The frame read last is this snapshot's: netcode decodes, resolves and merges it
+                // synchronously after the read, before the next read (FrameReadTap remarks).
+                this.tapReadsConsumed = reads;
+                recvUs = this.tap.LastReadUs;
+                bytes = this.tap.LastBytes;
+            }
+
+            this.delivery?.OnSnapshot(snapshot.Tick, recvUs, appliedUs, bytes, snapshot.Full, snapshot.Entities.Count,
+                this.frameIndex + 1);
+
             double now = Time.realtimeSinceStartupAsDouble;
             this.snapshotsReceived++;
             if (snapshot.Full)
@@ -502,6 +555,11 @@ namespace TestLab
         private void OnStateChanged(NetworkClientState state)
         {
             this.stateChanges++;
+            if (state != NetworkClientState.InWorld)
+            {
+                this.delivery?.ResetSession();
+            }
+
             this.Event("net_state", "\"state\":" + Quote(state.ToString()));
         }
 
@@ -640,6 +698,11 @@ namespace TestLab
                 .Append(",\"rtt_ms\":").Append(this.client?.Session?.RoundTripMs ?? -1)
                 .Append(",\"state_changes\":").Append(this.stateChanges)
                 .Append(",\"final_state\":").Append(Quote(this.client?.State.ToString())).Append('}')
+                .Append(",\"delivery\":{\"schema\":").Append(Quote(DeliveryRecorder.Schema))
+                .Append(",\"tap\":").Append(Quote(this.tapStatus))
+                .Append(",\"snapshots\":").Append(this.delivery?.Snapshots ?? 0)
+                .Append(",\"snapshots_with_bytes\":").Append(this.delivery?.SnapshotsWithBytes ?? 0)
+                .Append(",\"render_rows\":").Append(this.delivery?.Frames ?? 0).Append('}')
                 .Append(",\"input\":{\"moves_read\":").Append(this.movesRead)
                 .Append(",\"casts_planned\":").Append(this.castsPlanned)
                 .Append(",\"jumps_planned\":").Append(this.jumpsPlanned).Append('}')
@@ -730,6 +793,7 @@ namespace TestLab
             this.snapshots?.Flush();
             this.samples?.Flush();
             this.frameCsv?.Flush();
+            this.delivery?.Flush();
         }
 
         private void CloseAll()
@@ -739,11 +803,67 @@ namespace TestLab
             this.snapshots?.Dispose();
             this.samples?.Dispose();
             this.frameCsv?.Dispose();
+            this.delivery?.Dispose();
+            this.delivery = null;
+            RenderPipelineManager.beginContextRendering -= this.OnBeginContextRendering;
             this.events = this.inputs = this.snapshots = this.samples = this.frameCsv = null;
+        }
+
+        /// <summary>
+        /// One <c>render.csv</c> row per rendered frame, taken when the render pipeline starts the
+        /// frame: after <c>PresentationSystemGroup</c> (where <c>InterpolationClockSystem</c>
+        /// advances the clock) has run, so <c>render_tick</c> is the one this frame is drawn at.
+        /// <c>LateUpdate</c> would be too early: Entities appends the presentation group to the
+        /// end of <c>PreLateUpdate</c>, after <c>ScriptRunBehaviourLateUpdate</c>.
+        /// </summary>
+        private void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
+        {
+            if (this.finished || this.delivery == null || this.frameIndex == this.lastRenderRowFrame)
+            {
+                return;
+            }
+
+            this.lastRenderRowFrame = this.frameIndex;
+            try
+            {
+                bool hasClock = this.TryReadClock(out double renderTick, out long clockNewest);
+                this.delivery.OnFrame(this.frameIndex, LabClock.NowUs(), hasClock, renderTick, clockNewest);
+            }
+            catch (Exception ex)
+            {
+                this.Fail("render row: " + ex);
+            }
+        }
+
+        private bool TryReadClock(out double renderTick, out long newestTick)
+        {
+            renderTick = double.NaN;
+            newestTick = -1;
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !world.IsCreated)
+            {
+                return false;
+            }
+
+            if (!this.timelineQueryCreated)
+            {
+                this.timelineQuery = world.EntityManager.CreateEntityQuery(ComponentType.ReadOnly<InterpolationTimeline>());
+                this.timelineQueryCreated = true;
+            }
+
+            if (!this.timelineQuery.TryGetSingleton<InterpolationTimeline>(out var timeline) || !timeline.Clock.HasSamples)
+            {
+                return false;
+            }
+
+            renderTick = timeline.Clock.RenderTick;
+            newestTick = timeline.Clock.NewestTick;
+            return true;
         }
 
         private void OnDestroy()
         {
+            RenderPipelineManager.beginContextRendering -= this.OnBeginContextRendering;
             if (this.client != null)
             {
                 this.client.SnapshotReceived -= this.OnSnapshot;

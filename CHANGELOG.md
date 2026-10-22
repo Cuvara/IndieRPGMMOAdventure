@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **TestLab delivery instrumentation (contract C2, `rpg.testlab.delivery.v1`).** Two new
+  streamed files per client: `delivery.csv` (one row per received snapshot: `world_tick`,
+  `recv_us`, `applied_us`, `bytes`) and `render.csv` (one row per rendered frame: `render_tick`
+  of the ECS interpolation clock, newest tick received, `snapshot_age_ms`). Microseconds since
+  player start on a monotonic `Stopwatch` (`LabClock`). Receive time and byte count come from a
+  test-only wrapper around the KCP transport (`FrameReadTap`); bounded for a soak of any length
+  (no per-frame retention, no per-frame work over history). Existing outputs are unchanged;
+  `summary.json` gains a `delivery` object and `events.ndjson` a `delivery_tap` event. Columns:
+  `docs/TESTLAB.md` "Delivery instrumentation". Test-only (`CUVARA_TESTLAB`).
 - **Input seam for automated play:** `IGameplayInputSource` / `GameplayInput.Source`
   (`Assets/Scripts/DI/GameplayInput.cs`). `DotsWorldBridge` and `GameplayPanelDriver` read every
   control through it. The default `DeviceGameplayInputSource` keeps today's keyboard, mouse and
