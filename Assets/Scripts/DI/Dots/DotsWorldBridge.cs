@@ -636,6 +636,11 @@ namespace Scripts.DI.Dots
                 // against. Null geometry restores the flat world of the predictor's own bounds,
                 // which is what the server runs for a map with no file.
                 this.predictor.UseServerProtocol(version);
+                // The predictor is registered before any join with a guessed rate; the server's
+                // advertised tick_rate (60 Hz base ticks) replaces it. Left at the 15 Hz guess,
+                // every reconcile missed the history and corrected in whole 15 Hz steps
+                // (rpg-mmo-server#183, netcode 0.48.0).
+                this.predictor.UseServerTickRate(this.client.TickRate);
                 this.predictor.SetMapGeometry(geometry);
             }
 

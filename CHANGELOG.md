@@ -53,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows the frozen clock without the reset on netcode 0.47.0 (newer netcode restarts the binder's
   tick line itself, `TickLineRestarts`; the test asserts whichever is compiled in, and that the
   explicit reset leaves that fallback unused). Found by the T05 DOTS audit (F2).
+- **The local player corrected in whole 15 Hz steps and occasionally jumped up to 1.6 units.**
+  The predictor was registered with `GameConstants.DefaultTickRate` (15, the world rate) while the
+  server simulates and stamps ticks at 60 Hz, and nothing replaced the rate after the join.
+  `DotsWorldBridge` now calls `LocalMovePredictor.UseServerTickRate(client.TickRate)` next to
+  `UseServerProtocol` on every join. Needs `com.cuvara.netcode` 0.48.0 (rpg-mmo-server#183,
+  rpg-factory testlab run 20261022T042952Z-S09-h87z).
 - **TestLab overlay frame cost grew with run length.** The overlay recomputed the frame p95 by
   sorting every recorded frame on each `OnGUI` call; over a one-hour soak each frame went from 7 ms
   to 41 ms on every test client. It is now recomputed once a second. Test-only (`CUVARA_TESTLAB`).
