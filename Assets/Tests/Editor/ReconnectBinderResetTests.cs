@@ -15,6 +15,13 @@ namespace Tests.Editor
     /// one level down: <c>WorldState.Reset</c> (what <c>NetworkClient</c> does on reconnect), then
     /// the new session's snapshots, with and without <c>binder.Reset()</c>.
     /// </summary>
+    /// <remarks>
+    /// Netcode after 0.47.0 also defends itself: <c>WorldViewBinder</c> treats a world tick below
+    /// its last one as an unreported session boundary and restarts its tick line, counting it in
+    /// <c>TickLineRestarts</c>. The control therefore asserts the behaviour of whichever netcode is
+    /// compiled in (frozen clock on 0.47.0, a counted restart after), and the reset test asserts
+    /// that the bridge's explicit reset leaves that fallback unused.
+    /// </remarks>
     public sealed class ReconnectBinderResetTests
     {
         private const string Local = "local-1";
@@ -29,9 +36,18 @@ namespace Tests.Editor
             Reconnect(world);
             Feed(binder, world, clock, firstTick: 100, count: 20);
 
-            // The control: the defect the bridge's Reset call removes.
-            Assert.That(binder.RenderTick, Is.GreaterThan(9_000.0),
-                "a binder that is not reset keeps rendering in the old session's tick space");
+            if (TickLineRestarts(binder) is int restarts)
+            {
+                // Netcode with the binder-side fallback: it caught the unreported boundary itself.
+                Assert.That(restarts, Is.EqualTo(1), "the binder restarts its tick line once");
+                Assert.That(binder.RenderTick, Is.GreaterThan(100.0).And.LessThan(120.0));
+            }
+            else
+            {
+                // Netcode 0.47.0, no fallback: the defect the bridge's Reset call removes.
+                Assert.That(binder.RenderTick, Is.GreaterThan(9_000.0),
+                    "a binder that is not reset keeps rendering in the old session's tick space");
+            }
         }
 
         [Test]
@@ -45,7 +61,15 @@ namespace Tests.Editor
 
             Assert.That(binder.RenderTick, Is.GreaterThan(100.0).And.LessThan(120.0),
                 "after Reset the render clock is rebuilt from the new session's ticks");
+            if (TickLineRestarts(binder) is int restarts)
+            {
+                Assert.That(restarts, Is.EqualTo(0), "an explicit Reset leaves the binder's fallback unused");
+            }
         }
+
+        /// <summary><c>WorldViewBinder.TickLineRestarts</c>, or null on a netcode without it (0.47.0).</summary>
+        private static int? TickLineRestarts(WorldViewBinder binder) =>
+            typeof(WorldViewBinder).GetProperty("TickLineRestarts")?.GetValue(binder) as int?;
 
         private static (WorldViewBinder, WorldState, FakeClock) Session(long oldStartTick)
         {

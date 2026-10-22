@@ -30,7 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   snapshot positions, and `RenderTick` (sent as the lag-compensation render time) stayed frozen
   in the old tick space. The bridge now calls `binder.Reset()` right after `BeginGeneration()`.
   `ReconnectBinderResetTests` drives the binder through the same sequence, with a control that
-  shows the frozen clock without the reset. Found by the T05 DOTS audit (F2).
+  shows the frozen clock without the reset on netcode 0.47.0 (newer netcode restarts the binder's
+  tick line itself, `TickLineRestarts`; the test asserts whichever is compiled in, and that the
+  explicit reset leaves that fallback unused). Found by the T05 DOTS audit (F2).
 - **TestLab overlay frame cost grew with run length.** The overlay recomputed the frame p95 by
   sorting every recorded frame on each `OnGUI` call; over a one-hour soak each frame went from 7 ms
   to 41 ms on every test client. It is now recomputed once a second. Test-only (`CUVARA_TESTLAB`).
