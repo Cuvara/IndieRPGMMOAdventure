@@ -66,6 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a p95 of 0.00 (max 0.54). `DotsRegistration.PredictorBounds` is now `MapBounds.Default`.
   Regression test: `DotsRegistrationTests.Predictor_MovesIntoNegativeCoordinates_LikeTheServer`
   (symmetric walk, plus a control proving the old bounds clamp).
+- **A respawned or teleported remote entity was drawn past its destination.** The remote
+  interpolation binder sets `InterpolationConfig.MaxExtrapolationSpeed` = 15 u/s (three times the
+  fastest legitimate ground speed). **Needs com.cuvara.netcode >= 0.48.0** (Netcode branch
+  `fix/interpolation/autonomous-playtest`), which also settles stopped enemies onto their target
+  instead of drawing them 0.125 units past it. Merge only together with that pin bump.
 
 ### Added
 
