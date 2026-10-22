@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TestLab frame statistics stalled the main thread more the longer a run lasted.** `FrameStats`
+  kept every frame time and sorted a copy once a second for the overlay: about a 200 ms stall per
+  second by the end of a one-hour soak (testlab soak 20261022T112220Z-S09-eeoa), contaminating the
+  frame times it reported. It now holds fixed memory: whole-run percentiles from a 0.1 ms histogram
+  (each bucket reports its largest sample, so a value is never below exact and at most 0.1 ms
+  above; mean, max, count and long frames stay exact; `summary.json` `frames.percentile_bucket_ms`
+  states the resolution) and the overlay p95 over the last 600 frames. `RenderJumpDetector` keeps
+  two frames of positions instead of every id ever seen. Test-only (`CUVARA_TESTLAB`).
+- **TestLab `render.csv` `render_tick` was always empty in the shipping client.** The shipping
+  client draws remotes through `WorldViewBinder` and feeds the ECS view untimed states, so the ECS
+  interpolation clock never has a sample. `render_tick` now comes from the binder (one frame of
+  drain latency accounted for), with a new `clock_source` column (`binder` / `ecs`). Schema
+  `rpg.testlab.delivery.v2`. Test-only.
 - **Remote players lost interpolation after a reconnect to a server with lower ticks.**
   `DotsWorldBridge.OnReconnected` bumped the view generation and reset the predictor but not the
   `WorldViewBinder`, whose interpolation clock and last world tick belong to the old session.
@@ -34,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **TestLab coverage hooks (T14).** `tick_hz` in `samples.ndjson` `pred` and `summary.json`
+  `prediction` (C1); plan action `stall` with a `stall` event (C2); `entity_added` /
+  `entity_removed` events with the first rendered position (C3); `render_tick` / `render_clock` per
+  sample (C4); plan actions `cast_at_point` and `cast_spam` through the real cast path, with
+  `cast_read` records (C5); plan actions `quit` (leaves through `NetworkClient.Disconnect`, writes
+  the summary) and `reconnect` (drops the gameplay link so netcode's own automatic reconnect runs)
+  (C6). All inert unless a plan uses them; no production code changed. `docs/TESTLAB.md` "Coverage
+  hooks". Test-only (`CUVARA_TESTLAB`).
 - **TestLab delivery instrumentation (contract C2, `rpg.testlab.delivery.v1`).** Two new
   streamed files per client: `delivery.csv` (one row per received snapshot: `world_tick`,
   `recv_us`, `applied_us`, `bytes`) and `render.csv` (one row per rendered frame: `render_tick`

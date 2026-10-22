@@ -56,6 +56,25 @@ namespace TestLab
         private readonly List<Vector2> clientPositions = new List<Vector2>(8);
         private readonly StringBuilder line = new StringBuilder(4096);
         private readonly FrameReadTap tap = new FrameReadTap();
+        private readonly BinderProbe binderProbe = new BinderProbe();
+        private EntityLifecycle lifecycle;
+        private bool[] oneShotFired;
+        private long castsRead;
+        private long stalls;
+        private int reconnectsRequested;
+        private int reconnectEvents;
+
+        // The render clock of the positions drawn THIS frame (see BinderProbe remarks): the binder's
+        // RenderTick captured in the previous LateUpdate, or the ECS clock read at the previous
+        // render callback. Source is "binder", "ecs" or null (none readable).
+        private double drawnRenderTick = double.NaN;
+        private long drawnServerTick = -1;
+        private string drawnClockSource;
+        private double capturedRenderTick = double.NaN;
+        private long capturedServerTick = -1;
+        private bool capturedFromBinder;
+        private double lastEcsRenderTick = double.NaN;
+        private long lastEcsNewestTick = -1;
 
         private TestLabPlan plan;
         private TestLabInputPlanner planner;
@@ -88,10 +107,11 @@ namespace TestLab
         private double nextSampleAt;
         private double nextFlush;
 
-        // The overlay's frame p95, recomputed at most once a second. FrameStats.Percentile copies
-        // and sorts every sample of the run; called from OnGUI (several times a frame) it made each
-        // frame cost grow with the run's length - 7 ms to 41 ms over a one-hour soak, on every
-        // client at once (rpg-factory testlab run 20261022T100043Z-S09-zo1i).
+        // The overlay's frame p95 over the last FrameStats.WindowFrames frames, recomputed at most
+        // once a second. Its cost is fixed (FrameStats.RecentPercentile sorts a 600-frame window into
+        // a preallocated buffer); it used to sort every frame of the run, which grew to a ~200 ms
+        // stall per second over a one-hour soak (testlab soaks 20261022T100043Z-S09-zo1i and
+        // 20261022T112220Z-S09-eeoa).
         private double overlayP95 = double.NaN;
         private double nextOverlayStats;
         private int nextScreenshot;
@@ -143,6 +163,9 @@ namespace TestLab
             RenderPipelineManager.beginContextRendering += this.OnBeginContextRendering;
 
             this.source.MoveRead = this.OnMoveRead;
+            this.source.CastRead = this.OnCastRead;
+            this.lifecycle = new EntityLifecycle(this.Event);
+            this.oneShotFired = new bool[plan.actions.Length];
             GameplayInput.Source = this.source;
 
             this.gcAllocRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
@@ -228,6 +251,12 @@ namespace TestLab
                 this.WriteStatus();
             }
 
+            this.RunOneShots(t);
+            if (this.finished)
+            {
+                return;
+            }
+
             this.CollectWorld(out float selfX, out float selfY, out bool selfKnown);
             var planned = this.planner.Plan(t, selfX, selfY, selfKnown, this.plannerEntities, this.clientPositions);
             this.source.Set(planned);
@@ -235,7 +264,9 @@ namespace TestLab
             {
                 this.castsPlanned++;
                 this.inputs.WriteLine("{\"t\":" + Num(now) + ",\"st\":" + Num(t) + ",\"kind\":\"cast\",\"target\":" +
-                                      Quote(planned.CastTarget) + (planned.HasAim
+                                      Quote(planned.CastTarget) +
+                                      (planned.CastKind != null ? ",\"action\":" + Quote(planned.CastKind) : string.Empty) +
+                                      (planned.HasAim
                                           ? ",\"aim\":[" + Num(planned.Aim.x) + "," + Num(planned.Aim.y) + "]"
                                           : string.Empty) + "}");
             }
@@ -280,6 +311,7 @@ namespace TestLab
             double now = Time.realtimeSinceStartupAsDouble;
             double dt = Time.unscaledDeltaTime;
             this.frameIndex++;
+            this.ResolveDrawnClock();
             double t = this.ScenarioTime;
 
             if (t >= 0)
@@ -312,7 +344,9 @@ namespace TestLab
                 this.line.Append("{\"t\":").Append(Num(now)).Append(",\"st\":").Append(Num(t))
                     .Append(",\"frame\":").Append(this.frameIndex)
                     .Append(",\"world_tick\":").Append(this.client != null ? this.client.World.Tick : -1)
-                    .Append(",\"rtt_ms\":").Append(this.client?.Session?.RoundTripMs ?? -1);
+                    .Append(",\"rtt_ms\":").Append(this.client?.Session?.RoundTripMs ?? -1)
+                    .Append(",\"render_tick\":").Append(Num(this.drawnRenderTick))
+                    .Append(",\"render_clock\":").Append(Quote(this.drawnClockSource));
                 if (this.predictor != null)
                 {
                     var p = this.predictor.Position3;
@@ -321,7 +355,8 @@ namespace TestLab
                         .Append(",\"snaps\":").Append(this.predictor.Snaps)
                         .Append(",\"smoothed\":").Append(this.predictor.SmoothedCorrections)
                         .Append(",\"pending\":").Append(this.predictor.PendingCount)
-                        .Append(",\"reconciles\":").Append(this.predictor.Reconciles).Append('}');
+                        .Append(",\"reconciles\":").Append(this.predictor.Reconciles)
+                        .Append(",\"tick_hz\":").Append(this.predictor.TickRateHz).Append('}');
                 }
 
                 this.line.Append(",\"ents\":[");
@@ -338,6 +373,85 @@ namespace TestLab
             {
                 this.nextFlush = now + 1.0;
                 this.FlushAll();
+            }
+
+            // The binder has ticked for this frame (DotsWorldBridge.Update); the drain applies what
+            // it enqueued at the start of the next frame, so that frame is drawn at this RenderTick.
+            this.capturedFromBinder = this.binderProbe.TryRead(now, out this.capturedRenderTick, out this.capturedServerTick);
+        }
+
+        /// <summary>Sets the drawn* fields for the frame now being recorded (see the field remarks).</summary>
+        private void ResolveDrawnClock()
+        {
+            if (this.capturedFromBinder)
+            {
+                this.drawnRenderTick = this.capturedRenderTick;
+                this.drawnServerTick = this.capturedServerTick;
+                this.drawnClockSource = "binder";
+            }
+            else if (!double.IsNaN(this.lastEcsRenderTick))
+            {
+                this.drawnRenderTick = this.lastEcsRenderTick;
+                this.drawnServerTick = this.lastEcsNewestTick;
+                this.drawnClockSource = "ecs";
+            }
+            else
+            {
+                this.drawnRenderTick = double.NaN;
+                this.drawnServerTick = -1;
+                this.drawnClockSource = null;
+            }
+        }
+
+        /// <summary>
+        /// The one-shot plan actions (stall, reconnect, quit), each fired once at the first frame
+        /// with <c>t &gt;= t0</c>. Inert unless the plan lists them.
+        /// </summary>
+        private void RunOneShots(double t)
+        {
+            var actions = this.plan.actions;
+            for (int i = 0; i < actions.Length; i++)
+            {
+                var action = actions[i];
+                if (this.oneShotFired[i] || !TestLabAction.IsOneShot(action.kind) || t < action.t0)
+                {
+                    continue;
+                }
+
+                this.oneShotFired[i] = true;
+                switch (action.kind)
+                {
+                    case TestLabAction.Stall:
+                    {
+                        int ms = Math.Max(0, action.ms);
+                        long start = LabClock.NowUs();
+                        System.Threading.Thread.Sleep(ms);
+                        long end = LabClock.NowUs();
+                        this.stalls++;
+                        this.Event("stall", "\"ms\":" + ms + ",\"start\":" + Num(start / 1e6) + ",\"end\":" + Num(end / 1e6) +
+                                            ",\"start_us\":" + start + ",\"end_us\":" + end +
+                                            ",\"actual_ms\":" + Num((end - start) / 1000.0));
+                        break;
+                    }
+
+                    case TestLabAction.Reconnect:
+                    {
+                        bool dropped = this.tap.DropLink();
+                        this.reconnectsRequested++;
+                        this.Event("reconnect_requested", "\"dropped\":" + Bool(dropped) + ",\"tap\":" + Quote(this.tapStatus) +
+                                                          ",\"state\":" + Quote(this.client.State.ToString()) +
+                                                          ",\"generation\":" + this.client.Generation);
+                        break;
+                    }
+
+                    case TestLabAction.Quit:
+                        this.Event("quit_requested", "\"state\":" + Quote(this.client.State.ToString()));
+                        // The player's own way out: a polite leave, no automatic reconnect.
+                        this.client.Disconnect();
+                        this.Event("disconnected", "\"state\":" + Quote(this.client.State.ToString()));
+                        this.Finish("left");
+                        return;
+                }
             }
         }
 
@@ -371,6 +485,10 @@ namespace TestLab
                 // Snapshot space is the XZ plane: wire (x, y) is Unity (x, z).
                 float rx = transforms[i].Position.x;
                 float ry = transforms[i].Position.z;
+                if (this.lifecycle.AwaitingRender)
+                {
+                    this.lifecycle.OnRendered(id, rx, ry, this.frameIndex);
+                }
 
                 if (this.ScenarioTime >= 0 &&
                     this.jumps.Observe(id, isLocal, rx, ry, this.frameIndex, dt, out var jump))
@@ -489,6 +607,9 @@ namespace TestLab
             {
                 this.client.SnapshotReceived += this.OnSnapshot;
                 this.client.StateChanged += this.OnStateChanged;
+                this.client.ReconnectAttemptStarted += this.OnReconnectAttempt;
+                this.client.Reconnected += this.OnReconnected;
+                this.client.ReconnectFailed += this.OnReconnectFailed;
                 this.Event("services", "\"predictor\":" + Bool(this.predictor != null));
                 this.InstallTap();
             }
@@ -533,6 +654,10 @@ namespace TestLab
 
             this.delivery?.OnSnapshot(snapshot.Tick, recvUs, appliedUs, bytes, snapshot.Full, snapshot.Entities.Count,
                 this.frameIndex + 1);
+            if (!this.finished)
+            {
+                this.lifecycle?.OnSnapshot(snapshot.Tick, snapshot.Full, snapshot.Entities, snapshot.Removed);
+            }
 
             double now = Time.realtimeSinceStartupAsDouble;
             this.snapshotsReceived++;
@@ -558,9 +683,39 @@ namespace TestLab
             if (state != NetworkClientState.InWorld)
             {
                 this.delivery?.ResetSession();
+                int dropped = this.lifecycle?.Reset() ?? 0;
+                if (dropped > 0)
+                {
+                    this.Event("entities_reset", "\"count\":" + dropped);
+                }
             }
 
             this.Event("net_state", "\"state\":" + Quote(state.ToString()));
+        }
+
+        private void OnReconnectAttempt(int attempt)
+        {
+            this.reconnectEvents++;
+            this.Event("reconnect_attempt", "\"attempt\":" + attempt);
+        }
+
+        private void OnReconnected()
+        {
+            this.reconnectEvents++;
+            this.Event("reconnected", "\"generation\":" + this.client.Generation + ",\"tapped_sessions\":" + this.tap.TappedSessions);
+        }
+
+        private void OnReconnectFailed(Exception ex)
+        {
+            this.reconnectEvents++;
+            this.Event("reconnect_failed", "\"error\":" + Quote(ex?.Message));
+        }
+
+        private void OnCastRead()
+        {
+            this.castsRead++;
+            this.inputs?.WriteLine("{\"t\":" + Num(Time.realtimeSinceStartupAsDouble) + ",\"st\":" + Num(this.ScenarioTime) +
+                                   ",\"kind\":\"cast_read\"}");
         }
 
         private void OnMoveRead(float x, float y)
@@ -686,7 +841,8 @@ namespace TestLab
                 .Append(",\"p99_ms\":").Append(Num(this.frames.Percentile(99)))
                 .Append(",\"max_ms\":").Append(Num(this.frames.Max()))
                 .Append(",\"long_frames\":").Append(this.frames.LongFrames)
-                .Append(",\"long_frame_ms\":").Append(Num(this.frames.LongFrameMs)).Append('}')
+                .Append(",\"long_frame_ms\":").Append(Num(this.frames.LongFrameMs))
+                .Append(",\"percentile_bucket_ms\":").Append(Num(FrameStats.BucketMs)).Append('}')
                 .Append(",\"gc\":{\"valid\":").Append(Bool(this.gcAllocRecorder.Valid))
                 .Append(",\"alloc_bytes_total\":").Append(this.gcAllocTotal)
                 .Append(",\"alloc_bytes_per_frame\":").Append(Num(this.gcAllocFrames > 0 ? (double)this.gcAllocTotal / this.gcAllocFrames : double.NaN))
@@ -705,14 +861,23 @@ namespace TestLab
                 .Append(",\"render_rows\":").Append(this.delivery?.Frames ?? 0).Append('}')
                 .Append(",\"input\":{\"moves_read\":").Append(this.movesRead)
                 .Append(",\"casts_planned\":").Append(this.castsPlanned)
-                .Append(",\"jumps_planned\":").Append(this.jumpsPlanned).Append('}')
+                .Append(",\"jumps_planned\":").Append(this.jumpsPlanned)
+                .Append(",\"casts_read\":").Append(this.castsRead).Append('}')
+                .Append(",\"actions\":{\"stalls\":").Append(this.stalls)
+                .Append(",\"reconnects_requested\":").Append(this.reconnectsRequested)
+                .Append(",\"reconnect_events\":").Append(this.reconnectEvents)
+                .Append(",\"tapped_sessions\":").Append(this.tap.TappedSessions).Append('}')
+                .Append(",\"entities\":{\"added\":").Append(this.lifecycle?.Added ?? 0)
+                .Append(",\"removed\":").Append(this.lifecycle?.Removed ?? 0)
+                .Append(",\"live\":").Append(this.lifecycle?.Live ?? 0).Append('}')
                 .Append(",\"prediction\":{\"present\":").Append(Bool(this.predictor != null));
             if (this.predictor != null)
             {
                 sb.Append(",\"snaps\":").Append(this.predictor.Snaps)
                     .Append(",\"smoothed\":").Append(this.predictor.SmoothedCorrections)
                     .Append(",\"reconciles\":").Append(this.predictor.Reconciles)
-                    .Append(",\"max_correction\":").Append(Num(this.maxPredictionCorrection));
+                    .Append(",\"max_correction\":").Append(Num(this.maxPredictionCorrection))
+                    .Append(",\"tick_hz\":").Append(this.predictor.TickRateHz);
             }
 
             sb.Append('}')
@@ -811,10 +976,10 @@ namespace TestLab
 
         /// <summary>
         /// One <c>render.csv</c> row per rendered frame, taken when the render pipeline starts the
-        /// frame: after <c>PresentationSystemGroup</c> (where <c>InterpolationClockSystem</c>
-        /// advances the clock) has run, so <c>render_tick</c> is the one this frame is drawn at.
-        /// <c>LateUpdate</c> would be too early: Entities appends the presentation group to the
-        /// end of <c>PreLateUpdate</c>, after <c>ScriptRunBehaviourLateUpdate</c>.
+        /// frame. <c>render_tick</c> is the clock the drawn positions were evaluated at: the
+        /// binder's (captured one frame earlier, <see cref="BinderProbe"/>) in the shipping client,
+        /// else the ECS clock, which <c>PresentationSystemGroup</c> has advanced by now - Entities
+        /// appends that group to the end of <c>PreLateUpdate</c>, after <c>LateUpdate</c>.
         /// </summary>
         private void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
         {
@@ -826,8 +991,20 @@ namespace TestLab
             this.lastRenderRowFrame = this.frameIndex;
             try
             {
-                bool hasClock = this.TryReadClock(out double renderTick, out long clockNewest);
-                this.delivery.OnFrame(this.frameIndex, LabClock.NowUs(), hasClock, renderTick, clockNewest);
+                // The ECS clock has just advanced for this frame; it is the drawn clock only when
+                // the binder is not (a timed-path consumer). Kept for the next frame's samples.
+                bool ecs = this.TryReadClock(out double ecsTick, out long ecsNewest);
+                this.lastEcsRenderTick = ecs ? ecsTick : double.NaN;
+                this.lastEcsNewestTick = ecs ? ecsNewest : -1;
+
+                if (this.drawnClockSource == "binder")
+                {
+                    this.delivery.OnFrame(this.frameIndex, LabClock.NowUs(), true, this.drawnRenderTick, this.drawnServerTick, "binder");
+                }
+                else
+                {
+                    this.delivery.OnFrame(this.frameIndex, LabClock.NowUs(), ecs, ecsTick, ecsNewest, "ecs");
+                }
             }
             catch (Exception ex)
             {
@@ -868,6 +1045,9 @@ namespace TestLab
             {
                 this.client.SnapshotReceived -= this.OnSnapshot;
                 this.client.StateChanged -= this.OnStateChanged;
+                this.client.ReconnectAttemptStarted -= this.OnReconnectAttempt;
+                this.client.Reconnected -= this.OnReconnected;
+                this.client.ReconnectFailed -= this.OnReconnectFailed;
             }
 
             if (!this.finished && this.plan != null)
@@ -893,7 +1073,7 @@ namespace TestLab
             if (now >= this.nextOverlayStats)
             {
                 this.nextOverlayStats = now + 1.0;
-                this.overlayP95 = this.frames.Percentile(95);
+                this.overlayP95 = this.frames.RecentPercentile(95);
             }
 
             return this.overlayP95;
@@ -910,7 +1090,7 @@ namespace TestLab
             string text =
                 $"TESTLAB {this.plan.scenario_id} c{this.plan.client_index}  phase {this.phase}  t {Math.Max(0, this.ScenarioTime):0.0}/{this.plan.duration_s:0}s\n" +
                 $"user {this.client?.UserId}  tick {this.client?.World.Tick}  rtt {this.client?.Session?.RoundTripMs}ms  ents {this.client?.World.EntityMap.Count}\n" +
-                $"frame p95 {this.OverlayP95():0.0}ms  long {this.frames.LongFrames}  jumps {this.jumps.Jumps} (local {this.jumps.LocalJumps})\n" +
+                $"frame p95(last {FrameStats.WindowFrames}) {this.OverlayP95():0.0}ms  long {this.frames.LongFrames}  jumps {this.jumps.Jumps} (local {this.jumps.LocalJumps})\n" +
                 (p != null ? $"predict err {p.LastCorrection:0.000} snaps {p.Snaps} pending {p.PendingCount}" : "predict n/a");
             GUI.color = Color.black;
             GUI.Label(new Rect(11, 11, 900, 80), text);

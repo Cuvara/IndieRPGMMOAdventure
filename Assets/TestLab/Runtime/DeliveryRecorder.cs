@@ -18,11 +18,11 @@ namespace TestLab
     /// </remarks>
     public sealed class DeliveryRecorder : IDisposable
     {
-        public const string Schema = "rpg.testlab.delivery.v1";
+        public const string Schema = "rpg.testlab.delivery.v2";
         public const string DeliveryFile = "delivery.csv";
         public const string RenderFile = "render.csv";
         public const string DeliveryHeader = "world_tick,recv_us,applied_us,bytes,full,entities,frame";
-        public const string RenderHeader = "frame,t_us,render_tick,clock_newest_tick,newest_tick,newest_recv_us,snapshot_age_ms";
+        public const string RenderHeader = "frame,t_us,render_tick,clock_newest_tick,newest_tick,newest_recv_us,snapshot_age_ms,clock_source";
 
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -92,10 +92,12 @@ namespace TestLab
         }
 
         /// <summary>
-        /// One rendered frame. <paramref name="hasClock"/> is false until the ECS interpolation
-        /// clock exists and has a sample; its two columns are then empty.
+        /// One rendered frame. <paramref name="hasClock"/> is false until a render clock is
+        /// readable; <c>render_tick</c>, <c>clock_newest_tick</c> and <c>clock_source</c> are then
+        /// empty. <paramref name="clockSource"/> names the clock: <c>binder</c> (the shipping
+        /// client's <c>WorldViewBinder</c>) or <c>ecs</c> (the ECS <c>InterpolationTimeline</c>).
         /// </summary>
-        public void OnFrame(int frame, long nowUs, bool hasClock, double renderTick, long clockNewestTick)
+        public void OnFrame(int frame, long nowUs, bool hasClock, double renderTick, long clockNewestTick, string clockSource)
         {
             this.Frames++;
             var w = this.render;
@@ -127,6 +129,12 @@ namespace TestLab
             if (this.newestRecvUs >= 0)
             {
                 w.Write(((nowUs - this.newestRecvUs) / 1000.0).ToString("0.###", Inv));
+            }
+
+            w.Write(',');
+            if (hasClock)
+            {
+                w.Write(clockSource);
             }
 
             w.WriteLine();

@@ -28,13 +28,17 @@ namespace TestLab
     /// extrapolation correction). Pure, so the threshold logic is testable in EditMode.
     /// </summary>
     /// <remarks>
-    /// The first frame an entity is seen sets its position and is never a jump: spawning is not
-    /// moving. An entity that disappears and comes back starts over for the same reason.
+    /// <para>The first frame an entity is seen sets its position and is never a jump: spawning is not
+    /// moving. An entity that disappears and comes back starts over for the same reason.</para>
+    /// <para>Bounded: only the previous frame's positions are kept (two maps, swapped when the
+    /// frame advances), so memory follows the entities on screen, not every id a long run has ever
+    /// seen - a soak with respawning mobs used to grow this map without limit.</para>
     /// </remarks>
     public sealed class RenderJumpDetector
     {
-        private readonly Dictionary<string, (float X, float Y, int Frame)> last =
-            new Dictionary<string, (float X, float Y, int Frame)>();
+        private Dictionary<string, (float X, float Y)> previous = new Dictionary<string, (float X, float Y)>();
+        private Dictionary<string, (float X, float Y)> current = new Dictionary<string, (float X, float Y)>();
+        private int currentFrame = int.MinValue;
 
         private readonly float maxSpeed;
         private readonly float factor;
@@ -55,6 +59,9 @@ namespace TestLab
 
         public float MaxStepSpeed { get; private set; }
 
+        /// <summary>Positions held: the previous and the current frame's entities, nothing older.</summary>
+        public int Tracked => this.previous.Count + this.current.Count;
+
         /// <summary>
         /// Feed one rendered position for <paramref name="frame"/>. Returns true and the jump when
         /// the step from the previous frame exceeds the allowance.
@@ -62,8 +69,27 @@ namespace TestLab
         public bool Observe(string id, bool isLocal, float x, float y, int frame, double dt, out RenderJump jump)
         {
             jump = default;
-            bool continuous = this.last.TryGetValue(id, out var prev) && prev.Frame == frame - 1;
-            this.last[id] = (x, y, frame);
+            if (frame != this.currentFrame)
+            {
+                if (frame == this.currentFrame + 1)
+                {
+                    var swap = this.previous;
+                    this.previous = this.current;
+                    this.current = swap;
+                    this.current.Clear();
+                }
+                else
+                {
+                    // A gap: nothing is continuous with a frame that was not observed.
+                    this.previous.Clear();
+                    this.current.Clear();
+                }
+
+                this.currentFrame = frame;
+            }
+
+            bool continuous = this.previous.TryGetValue(id, out var prev);
+            this.current[id] = (x, y);
             if (!continuous || dt <= 0)
             {
                 return false;

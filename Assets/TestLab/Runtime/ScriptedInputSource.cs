@@ -25,6 +25,12 @@ namespace TestLab
         /// <summary>Raised from <see cref="ReadMove"/>: the vector the game is about to send.</summary>
         public System.Action<float, float> MoveRead;
 
+        /// <summary>
+        /// Raised when the game consumes a latched cast press. Presses planned faster than the game
+        /// reads them collapse into one, exactly as a held key would.
+        /// </summary>
+        public System.Action CastRead;
+
         public void Set(in PlannedInput input)
         {
             this.moveX = input.MoveX;
@@ -66,6 +72,11 @@ namespace TestLab
             // The aim stays latched: the bridge asks for it after it has consumed the press.
             bool value = this.cast;
             this.cast = false;
+            if (value)
+            {
+                this.CastRead?.Invoke();
+            }
+
             return value;
         }
 

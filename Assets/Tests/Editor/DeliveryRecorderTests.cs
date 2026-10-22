@@ -24,7 +24,7 @@ namespace Tests.Editor
 
             Assert.That(Lines(delivery)[0], Is.EqualTo("world_tick,recv_us,applied_us,bytes,full,entities,frame"));
             Assert.That(Lines(render)[0],
-                Is.EqualTo("frame,t_us,render_tick,clock_newest_tick,newest_tick,newest_recv_us,snapshot_age_ms"));
+                Is.EqualTo("frame,t_us,render_tick,clock_newest_tick,newest_tick,newest_recv_us,snapshot_age_ms,clock_source"));
         }
 
         [Test]
@@ -49,15 +49,15 @@ namespace Tests.Editor
             var render = new StringWriter();
             var recorder = new DeliveryRecorder(new StringWriter(), render);
 
-            recorder.OnFrame(1, 1_000, false, double.NaN, -1);
+            recorder.OnFrame(1, 1_000, false, double.NaN, -1, null);
             recorder.OnSnapshot(200, 10_000, 10_050, 500, false, 1, 2);
             // An older tick arriving late must not become "newest".
             recorder.OnSnapshot(199, 12_000, 12_010, 500, false, 1, 2);
-            recorder.OnFrame(2, 26_500, true, 198.25, 200);
+            recorder.OnFrame(2, 26_500, true, 198.25, 200, "binder");
 
             var lines = Lines(render);
-            Assert.That(lines[1], Is.EqualTo("1,1000,,,,,"));
-            Assert.That(lines[2], Is.EqualTo("2,26500,198.25,200,200,10000,16.5"));
+            Assert.That(lines[1], Is.EqualTo("1,1000,,,,,,"));
+            Assert.That(lines[2], Is.EqualTo("2,26500,198.25,200,200,10000,16.5,binder"));
         }
 
         [Test]
@@ -67,9 +67,9 @@ namespace Tests.Editor
             var recorder = new DeliveryRecorder(new StringWriter(), render);
 
             recorder.OnSnapshot(50, -1, 2_000, -1, true, 1, 1);
-            recorder.OnFrame(1, 3_000, true, 49.5, 50);
+            recorder.OnFrame(1, 3_000, true, 49.5, 50, "ecs");
 
-            Assert.That(Lines(render)[1], Is.EqualTo("1,3000,49.5,50,50,2000,1"));
+            Assert.That(Lines(render)[1], Is.EqualTo("1,3000,49.5,50,50,2000,1,ecs"));
         }
 
         [Test]
@@ -81,9 +81,9 @@ namespace Tests.Editor
             recorder.OnSnapshot(900, 1_000, 1_001, 10, true, 1, 1);
             recorder.ResetSession();
             recorder.OnSnapshot(5, 2_000, 2_001, 10, true, 1, 2);
-            recorder.OnFrame(2, 2_500, false, double.NaN, -1);
+            recorder.OnFrame(2, 2_500, false, double.NaN, -1, null);
 
-            Assert.That(Lines(render)[1], Is.EqualTo("2,2500,,,5,2000,0.5"));
+            Assert.That(Lines(render)[1], Is.EqualTo("2,2500,,,5,2000,0.5,"));
         }
     }
 }

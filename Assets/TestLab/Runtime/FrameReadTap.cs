@@ -39,6 +39,11 @@ namespace TestLab
         private long reads;
         private long lastReadUs = -1;
         private int lastBytes = -1;
+        private TappedTransport current;
+        private int tappedSessions;
+
+        /// <summary>Gameplay transports created through the tap (one per join or reconnect).</summary>
+        public int TappedSessions => Volatile.Read(ref this.tappedSessions);
 
         /// <summary>Frames read through the tap since it was installed.</summary>
         public long Reads => Volatile.Read(ref this.reads);
@@ -48,6 +53,25 @@ namespace TestLab
 
         /// <summary>Body length of the last frame read, or -1.</summary>
         public int LastBytes => Volatile.Read(ref this.lastBytes);
+
+        /// <summary>
+        /// Simulates a dead link on the current gameplay session: closes the KCP transport and
+        /// makes its pending read fail with a <see cref="TransportException"/>. Netcode sees a
+        /// <c>TransportError</c> close, which <c>ReconnectPolicy</c> answers with its own automatic
+        /// reconnect - the production recovery path, run unchanged. Returns false when the current
+        /// session was not opened through the tap.
+        /// </summary>
+        public bool DropLink()
+        {
+            var transport = Volatile.Read(ref this.current);
+            if (transport == null || !transport.IsConnected)
+            {
+                return false;
+            }
+
+            transport.Drop();
+            return true;
+        }
 
         internal void OnFrameRead(int bytes)
         {
@@ -106,7 +130,15 @@ namespace TestLab
             {
                 var transport = this.inner.Create(kind);
                 // Gameplay only: the gateway hop carries no snapshots.
-                return kind == TransportKind.Kcp ? new TappedTransport(transport, this.tap) : transport;
+                if (kind != TransportKind.Kcp)
+                {
+                    return transport;
+                }
+
+                var tapped = new TappedTransport(transport, this.tap);
+                Volatile.Write(ref this.tap.current, tapped);
+                Interlocked.Increment(ref this.tap.tappedSessions);
+                return tapped;
             }
         }
 
@@ -114,6 +146,7 @@ namespace TestLab
         {
             private readonly ITransport inner;
             private readonly FrameReadTap tap;
+            private int dropped;
 
             public TappedTransport(ITransport inner, FrameReadTap tap)
             {
@@ -131,6 +164,11 @@ namespace TestLab
             public async UniTask<byte[]> ReadFrameAsync(CancellationToken cancellationToken)
             {
                 var body = await this.inner.ReadFrameAsync(cancellationToken);
+                if (Volatile.Read(ref this.dropped) != 0)
+                {
+                    throw new TransportException("testlab: gameplay link dropped on purpose (plan action 'reconnect')");
+                }
+
                 if (body != null)
                 {
                     this.tap.OnFrameRead(body.Length);
@@ -143,6 +181,12 @@ namespace TestLab
                 this.inner.WriteFrameAsync(body, cancellationToken);
 
             public void Close() => this.inner.Close();
+
+            internal void Drop()
+            {
+                Volatile.Write(ref this.dropped, 1);
+                this.inner.Close();
+            }
 
             public void Dispose() => this.inner.Dispose();
         }

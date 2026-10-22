@@ -32,6 +32,9 @@ namespace TestLab
         public Vector3 Aim;
         public string StepMode;
         public string CastTarget;
+
+        /// <summary>The action kind that planned the cast, when it is not <c>cast_nearest_enemy</c>/<c>cast_forward</c>.</summary>
+        public string CastKind;
     }
 
     /// <summary>
@@ -143,14 +146,19 @@ namespace TestLab
             for (int i = 0; i < this.plan.actions.Length; i++)
             {
                 var action = this.plan.actions[i];
-                if (t < action.t0 || t >= action.t1 || t < this.nextActionAt[i])
+                if (TestLabAction.IsOneShot(action.kind) ||
+                    t < action.t0 || t >= action.t1 || t < this.nextActionAt[i])
                 {
                     continue;
                 }
 
                 // Next slot on the action's own grid strictly after t: a frame that arrives late
-                // fires once and skips the slots it missed rather than catching up.
-                double interval = Math.Max(0.05, action.interval_s);
+                // fires once and skips the slots it missed rather than catching up. cast_spam may
+                // go below the usual 50 ms floor (it exists to beat the cooldown), but never below
+                // one frame: at most one cast is planned per frame.
+                double interval = action.kind == TestLabAction.CastSpam
+                    ? Math.Max(0.001, action.interval_ms / 1000.0)
+                    : Math.Max(0.05, action.interval_s);
                 double slots = Math.Floor((t - action.t0) / interval) + 1;
                 this.nextActionAt[i] = action.t0 + (slots * interval);
 
@@ -169,6 +177,24 @@ namespace TestLab
                             result.HasAim = true;
                             result.Aim = new Vector3(target.X, target.Y, 0f);
                             result.CastTarget = target.Id;
+                        }
+
+                        break;
+                    case TestLabAction.CastAtPoint:
+                        // No range check on purpose: an out-of-range point is the negative path.
+                        result.Cast = true;
+                        result.HasAim = true;
+                        result.Aim = new Vector3(action.x, action.y, 0f);
+                        result.CastKind = action.kind;
+                        break;
+                    case TestLabAction.CastSpam:
+                        result.Cast = true;
+                        result.CastKind = action.kind;
+                        if (selfKnown && TryNearestEnemy(selfX, selfY, entities, action.range, out var spamTarget))
+                        {
+                            result.HasAim = true;
+                            result.Aim = new Vector3(spamTarget.X, spamTarget.Y, 0f);
+                            result.CastTarget = spamTarget.Id;
                         }
 
                         break;

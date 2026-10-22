@@ -134,7 +134,11 @@ namespace TestLab
             mode == TowardNearestEnemy || mode == AwayFromNearestEnemy || mode == TowardClient;
     }
 
-    /// <summary>A repeated one-shot action, fired every <c>interval_s</c> while <c>t0 &lt;= t &lt; t1</c>.</summary>
+    /// <summary>
+    /// An action. Input actions repeat every <c>interval_s</c> (<see cref="CastSpam"/>:
+    /// <c>interval_ms</c>) while <c>t0 &lt;= t &lt; t1</c>; the one-shot actions
+    /// (<see cref="IsOneShot"/>) fire once, at the first frame with <c>t &gt;= t0</c>.
+    /// </summary>
     [Serializable]
     public sealed class TestLabAction
     {
@@ -142,15 +146,44 @@ namespace TestLab
         public const string CastForward = "cast_forward";
         public const string Jump = "jump";
 
+        /// <summary>Cast aimed at the wire-space point (<see cref="x"/>, <see cref="y"/>), in range or not.</summary>
+        public const string CastAtPoint = "cast_at_point";
+
+        /// <summary>Cast every <see cref="interval_ms"/>, at the nearest enemy in range, else forward.</summary>
+        public const string CastSpam = "cast_spam";
+
+        /// <summary>One-shot: block the main thread for <see cref="ms"/> milliseconds.</summary>
+        public const string Stall = "stall";
+
+        /// <summary>One-shot: leave through <c>NetworkClient.Disconnect</c>, write the summary, end the run.</summary>
+        public const string Quit = "quit";
+
+        /// <summary>One-shot: drop the gameplay link so netcode's own automatic reconnect runs.</summary>
+        public const string Reconnect = "reconnect";
+
         public float t0;
         public float t1;
         public string kind = CastNearestEnemy;
         public float interval_s = 1f;
 
-        /// <summary>Only enemies within this range count for <see cref="CastNearestEnemy"/>.</summary>
+        /// <summary>Only enemies within this range count for <see cref="CastNearestEnemy"/> and <see cref="CastSpam"/>.</summary>
         public float range = 12f;
 
+        /// <summary><see cref="CastAtPoint"/>: wire-space aim point.</summary>
+        public float x;
+        public float y;
+
+        /// <summary><see cref="CastSpam"/>: interval in milliseconds; below the cooldown on purpose.</summary>
+        public float interval_ms = 100f;
+
+        /// <summary><see cref="Stall"/>: how long to block, milliseconds.</summary>
+        public int ms = 250;
+
         public static bool IsKnownKind(string kind) =>
-            kind == CastNearestEnemy || kind == CastForward || kind == Jump;
+            kind == CastNearestEnemy || kind == CastForward || kind == Jump ||
+            kind == CastAtPoint || kind == CastSpam || IsOneShot(kind);
+
+        /// <summary>Fired once by the runner, never by the input planner.</summary>
+        public static bool IsOneShot(string kind) => kind == Stall || kind == Quit || kind == Reconnect;
     }
 }
