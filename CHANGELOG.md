@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The predictor was registered with `GameConstants.DefaultTickRate` (15, the world rate) while the
   server simulates and stamps ticks at 60 Hz, and nothing replaced the rate after the join.
   `DotsWorldBridge` now calls `LocalMovePredictor.UseServerTickRate(client.TickRate)` next to
-  `UseServerProtocol` on every join. Needs `com.cuvara.netcode` 0.48.0 (rpg-mmo-server#183,
+  `UseServerProtocol` on every join. Needs `com.cuvara.netcode` 0.48.0 (Cuvara/Netcode#183,
   rpg-factory testlab run 20261022T042952Z-S09-h87z).
 - **TestLab overlay frame cost grew with run length.** The overlay recomputed the frame p95 by
   sorting every recorded frame on each `OnGUI` call; over a one-hour soak each frame went from 7 ms
