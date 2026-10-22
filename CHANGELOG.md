@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TestLab summary of a client that left had `user_id: ""`.** `TestLabRunner` writes
+  `summary.json` / `status.json` after the `quit` action's `Disconnect()`, and
+  `NetworkClient.UserId` is empty once the session is released. The runner now latches the id the
+  client joined with (`UserIdLatch`) and reports it; the live id still wins while there is one.
+  Test-only (`CUVARA_TESTLAB`).
 - **TestLab frame statistics stalled the main thread more the longer a run lasted.** `FrameStats`
   kept every frame time and sorted a copy once a second for the overlay: about a 200 ms stall per
   second by the end of a one-hour soak (testlab soak 20261022T112220Z-S09-eeoa), contaminating the

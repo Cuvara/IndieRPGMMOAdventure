@@ -202,6 +202,23 @@ namespace Tests.Editor
             Assert.That(lifecycle.Live, Is.EqualTo(0));
         }
 
+        [Test]
+        public void UserIdLatch_KeepsTheJoinedIdAfterTheSessionIsReleased()
+        {
+            var latch = new UserIdLatch();
+            Assert.That(latch.Resolve(""), Is.EqualTo(""), "never joined: reported as before");
+            Assert.That(latch.Resolve(null), Is.Null);
+
+            latch.Observe("user-a");
+            // After Disconnect(): NetworkClient.UserId reads the released session and is empty.
+            Assert.That(latch.Resolve(""), Is.EqualTo("user-a"));
+            Assert.That(latch.Resolve(null), Is.EqualTo("user-a"));
+
+            // A live id always wins, and a rejoin under another id replaces the latched one.
+            Assert.That(latch.Resolve("user-b"), Is.EqualTo("user-b"));
+            Assert.That(latch.Resolve(""), Is.EqualTo("user-b"));
+        }
+
         private static List<ResolvedEntity> Ents(params (string Id, string Type, float X, float Y)[] items)
         {
             var list = new List<ResolvedEntity>();

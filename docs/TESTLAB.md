@@ -167,6 +167,7 @@ Compare two clients at the same server tick with `render_tick`, not `world_tick`
   - **Sequence:** at T it writes `quit_requested`, calls `NetworkClient.Disconnect()` (the player's own way out: a polite leave, `ReconnectPolicy` never fires), then writes `disconnected`.
   - **Finishing:** it finishes the run with outcome `left`. That writes `summary.json` and `status.json` (`phase: "left"`), then quits the process if `quit_on_done`.
   - **Not a process kill.**
+  - **`user_id` survives the leave:** `NetworkClient.UserId` is empty once `Disconnect()` releases the session, so `summary.json` and `status.json` report the id the client joined with (`UserIdLatch`: the live id while there is one, else the last non-empty id seen). Before this fix a leaver's summary had `user_id: ""`.
 - **`{"kind":"reconnect","t0":T}`: drop the link.**
   - **Mechanism:** at T, `FrameReadTap.DropLink()` closes the current gameplay KCP transport and fails its pending read with a `TransportException`.
   - **What netcode does:** it sees a `TransportError` close, and `ReconnectPolicy` answers with its own automatic reconnect: back through the gateway with a fresh token, and `DotsWorldBridge.OnReconnected`.

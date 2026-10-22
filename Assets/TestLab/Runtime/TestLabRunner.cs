@@ -56,6 +56,7 @@ namespace TestLab
         private readonly List<Vector2> clientPositions = new List<Vector2>(8);
         private readonly StringBuilder line = new StringBuilder(4096);
         private readonly FrameReadTap tap = new FrameReadTap();
+        private readonly UserIdLatch userId = new UserIdLatch();
         private readonly BinderProbe binderProbe = new BinderProbe();
         private EntityLifecycle lifecycle;
         private bool[] oneShotFired;
@@ -227,6 +228,7 @@ namespace TestLab
         {
             double now = Time.realtimeSinceStartupAsDouble;
             this.TryResolveServices();
+            this.userId.Observe(this.client?.UserId);
             this.PollControl(now);
 
             if (this.client != null && this.client.State == NetworkClientState.InWorld && double.IsNaN(this.inWorldAt))
@@ -447,6 +449,7 @@ namespace TestLab
                     case TestLabAction.Quit:
                         this.Event("quit_requested", "\"state\":" + Quote(this.client.State.ToString()));
                         // The player's own way out: a polite leave, no automatic reconnect.
+                        this.userId.Observe(this.client.UserId);
                         this.client.Disconnect();
                         this.Event("disconnected", "\"state\":" + Quote(this.client.State.ToString()));
                         this.Finish("left");
@@ -827,7 +830,7 @@ namespace TestLab
                 .Append(",\"client_index\":").Append(this.plan.client_index)
                 .Append(",\"outcome\":").Append(Quote(outcome))
                 .Append(",\"error\":").Append(Quote(this.error))
-                .Append(",\"user_id\":").Append(Quote(this.client?.UserId))
+                .Append(",\"user_id\":").Append(Quote(this.userId.Resolve(this.client?.UserId)))
                 .Append(",\"in_world_at\":").Append(Num(this.inWorldAt))
                 .Append(",\"start_realtime\":").Append(Num(this.startRealtime))
                 .Append(",\"scenario_seconds\":").Append(Num(Math.Max(0, this.ScenarioTime)))
@@ -899,7 +902,7 @@ namespace TestLab
                 return;
             }
 
-            string json = "{\"phase\":" + Quote(this.phase) + ",\"user_id\":" + Quote(this.client?.UserId) +
+            string json = "{\"phase\":" + Quote(this.phase) + ",\"user_id\":" + Quote(this.userId.Resolve(this.client?.UserId)) +
                           ",\"client_index\":" + this.plan.client_index + ",\"realtime\":" + Num(Time.realtimeSinceStartupAsDouble) +
                           ",\"error\":" + Quote(this.error) + "}";
             string path = Path.Combine(this.outDir, "status.json");
