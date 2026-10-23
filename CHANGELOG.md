@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Pin `com.cuvara.netcode` v0.47.0 → v0.48.0.** The released package improves prediction recovery after client frame stalls; the imported DOTS Sample was recopied from the v0.48.0 tag.
+- **Pin `com.cuvara.dots` v0.31.0 → v0.32.0.** The released package identifies the local prediction entity with `LocalNetworkEntity` and resets interpolation state on reconnect.
+
 ### Fixed
 
 - **TestLab `trace.ndjson` started with a frame marker, not the header.** The runner wrote the
