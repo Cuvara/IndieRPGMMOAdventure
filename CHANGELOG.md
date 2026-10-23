@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A TestLab output that failed to write was only a warning (review R6-1).** `BackgroundFileWriter`
+  kept the first write/flush exception and silently discarded later buffers, and the run could finish
+  as successful with truncated files. The writer now exposes `Failure` and `DroppedChars`, closing the
+  file can no longer throw out of its thread, and the runner fails the run (once a second while
+  running, and after closing the files), with `summary.json` `writers.failed` / `failure` /
+  `dropped_chars`. The summary and status are now written after the files close. Test-only
+  (`CUVARA_TESTLAB`).
 - **TestLab file output stalled the measured frames.** Every `samples.ndjson` line (~16 KB, four
   times `StreamWriter`'s buffer) was a synchronous disk write on the main thread, 20 times a
   second. In soak 20261023T015749Z-S09-4zym, 11 of 18 frames over 100 ms followed a sample frame

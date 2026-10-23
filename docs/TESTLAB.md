@@ -187,6 +187,10 @@ Every streamed output goes through `BackgroundFileWriter`: `events.ndjson`, `inp
 - **Bounded memory:** the buffer pool is fixed. `samples.ndjson` gets 64 buffers of 64K chars (about 25 s of samples). Every other file gets 8 buffers of 32K chars. Writing allocates nothing.
 - **Disk slower than the pool:** the main thread waits rather than dropping data. The wait is reported in `summary.json` `writers.backpressure_ms`, so a run that its own instrumentation slowed says so. `0` means the instrumentation never blocked a frame on the disk.
 - **Flushing:** `Flush()` (once a second) hands the buffer to the writer thread and does not wait. The end of the run waits until every file is written and closed.
+- **A failed write fails the run (R6-1).** If a write, flush or close throws (for example, a full disk), the writer keeps draining so the game never waits, counts what it discarded, and exposes the first exception.
+  - **Detection:** the runner checks every writer once a second and again after the files close.
+  - **Result:** the run fails with `outcome` `error`, the `error` names the file (`output samples.ndjson failed: IOException: ...`), the player exits with code 3, and `summary.json` `writers` reports `failed`, `failure` and `dropped_chars`.
+  - **Order:** `summary.json` and `status.json` are now written after the streamed files are closed, so a failure while closing is reported too.
 - **Tests:** `BackgroundFileWriterTests` covers four cases:
   - output byte-identical to the old `StreamWriter`;
   - a 100 ms-per-write disk does not block 40 sample-sized lines (under 150 ms total, 0 backpressure, with the slow drain as the control);

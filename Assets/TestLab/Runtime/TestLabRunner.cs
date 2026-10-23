@@ -99,6 +99,11 @@ namespace TestLab
         private BackgroundFileWriter frameCsv;
         private BackgroundFileWriter deliveryCsv;
         private BackgroundFileWriter renderCsv;
+
+        // Every output writer, kept after CloseAll so the summary can report how each one ended
+        // (R6-1: a writer failure fails the run, it is never only a warning).
+        private readonly List<KeyValuePair<string, BackgroundFileWriter>> writers = new List<KeyValuePair<string, BackgroundFileWriter>>(8);
+        private string writerFailure;
         private DeliveryRecorder delivery;
         private string tapStatus = "not_installed";
         private long tapReadsConsumed;
@@ -188,8 +193,12 @@ namespace TestLab
                                       ",\"delivery_schema\":" + Quote(DeliveryRecorder.Schema));
             this.WriteStatus();
 
-            BackgroundFileWriter Open(string name, int chars = BackgroundFileWriter.DefaultBufferChars, int count = BackgroundFileWriter.DefaultBufferCount) =>
-                new BackgroundFileWriter(Path.Combine(outDir, name), chars, count);
+            BackgroundFileWriter Open(string name, int chars = BackgroundFileWriter.DefaultBufferChars, int count = BackgroundFileWriter.DefaultBufferCount)
+            {
+                var writer = new BackgroundFileWriter(Path.Combine(outDir, name), chars, count);
+                this.writers.Add(new KeyValuePair<string, BackgroundFileWriter>(name, writer));
+                return writer;
+            }
         }
 
         /// <summary>
@@ -382,6 +391,12 @@ namespace TestLab
             {
                 this.nextFlush = now + 1.0;
                 this.FlushAll();
+                if (this.CheckWriters())
+                {
+                    // An output that stopped being written fails the run now, not silently at the end.
+                    this.Fail(this.writerFailure);
+                    return;
+                }
             }
 
             // The binder has ticked for this frame (DotsWorldBridge.Update); the drain applies what
@@ -800,10 +815,21 @@ namespace TestLab
             this.phase = outcome == "completed" ? "done" : outcome;
             this.source.Clear();
             this.Event("finish", "\"outcome\":" + Quote(outcome));
-            this.WriteSummary(outcome);
-            this.WriteStatus();
             this.FlushAll();
             this.CloseAll();
+
+            // The files are complete only now; a writer that failed (even while closing) makes the
+            // run an error, with the failure in summary.json and status.json.
+            if (this.CheckWriters() && this.error == null)
+            {
+                this.error = this.writerFailure;
+                outcome = "error";
+                this.phase = outcome;
+                Debug.LogError("[TestLab] " + this.writerFailure);
+            }
+
+            this.WriteSummary(outcome);
+            this.WriteStatus();
             GameplayInput.Source = null;
 
             if (this.plan.quit_on_done)
@@ -853,7 +879,10 @@ namespace TestLab
                 .Append(",\"long_frames\":").Append(this.frames.LongFrames)
                 .Append(",\"long_frame_ms\":").Append(Num(this.frames.LongFrameMs))
                 .Append(",\"percentile_bucket_ms\":").Append(Num(FrameStats.BucketMs)).Append('}')
-                .Append(",\"writers\":{\"mode\":\"background\",\"backpressure_ms\":").Append(Num(this.WriterBackpressureMs())).Append('}')
+                .Append(",\"writers\":{\"mode\":\"background\",\"backpressure_ms\":").Append(Num(this.WriterBackpressureMs()))
+                .Append(",\"failed\":").Append(Bool(this.writerFailure != null))
+                .Append(",\"failure\":").Append(Quote(this.writerFailure))
+                .Append(",\"dropped_chars\":").Append(this.WriterDroppedChars()).Append('}')
                 .Append(",\"gc\":{\"valid\":").Append(Bool(this.gcAllocRecorder.Valid))
                 .Append(",\"alloc_bytes_total\":").Append(this.gcAllocTotal)
                 .Append(",\"alloc_bytes_per_frame\":").Append(Num(this.gcAllocFrames > 0 ? (double)this.gcAllocTotal / this.gcAllocFrames : double.NaN))
@@ -963,10 +992,59 @@ namespace TestLab
         }
 
         /// <summary>Sum over every output stream of the time the main thread waited for a free buffer.</summary>
-        private double WriterBackpressureMs() =>
-            (this.events?.BackpressureMs ?? 0) + (this.inputs?.BackpressureMs ?? 0) + (this.snapshots?.BackpressureMs ?? 0) +
-            (this.samples?.BackpressureMs ?? 0) + (this.frameCsv?.BackpressureMs ?? 0) +
-            (this.deliveryCsv?.BackpressureMs ?? 0) + (this.renderCsv?.BackpressureMs ?? 0);
+        /// <summary>
+        /// True when an output writer has failed; the first failure is kept in writerFailure. Checked
+        /// once a second while running (the run fails at once) and again after the files close.
+        /// </summary>
+        internal bool CheckWriters()
+        {
+            if (this.writerFailure != null)
+            {
+                return true;
+            }
+
+            this.writerFailure = WriterFailure(this.writers);
+            return this.writerFailure != null;
+        }
+
+        /// <summary>The first failed writer as "output NAME failed: TYPE: MESSAGE", or null.</summary>
+        public static string WriterFailure(IReadOnlyList<KeyValuePair<string, BackgroundFileWriter>> writers)
+        {
+            foreach (var pair in writers)
+            {
+                var failure = pair.Value.Failure;
+                if (failure != null)
+                {
+                    return "output " + pair.Key + " failed: " + failure.GetType().Name + ": " + failure.Message;
+                }
+            }
+
+            return null;
+        }
+
+        private long WriterDroppedChars()
+        {
+            long dropped = 0;
+            foreach (var pair in this.writers)
+            {
+                dropped += pair.Value.DroppedChars;
+            }
+
+            return dropped;
+        }
+
+        // Over every writer ever opened, so it still reads right after CloseAll (the summary is
+        // written once the files are closed).
+        private double WriterBackpressureMs()
+        {
+            double ms = 0;
+            foreach (var pair in this.writers)
+            {
+                ms += pair.Value.BackpressureMs;
+            }
+
+            return ms;
+        }
 
         private void FlushAll()
         {

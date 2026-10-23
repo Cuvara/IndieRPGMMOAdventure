@@ -123,6 +123,100 @@ namespace Tests.Editor
             w.Dispose();
         }
 
+        [Test]
+        public void AFailingDisk_IsReported_AndNamesTheFile_NotSwallowed()
+        {
+            var failing = new FailingStream(failAfterWrites: 1, failOnDispose: false);
+            var w = new BackgroundFileWriter(failing, "samples", bufferChars: 100, bufferCount: 4);
+            for (int i = 0; i < 10; i++)
+            {
+                w.Write(new string('f', 100));
+            }
+
+            w.Dispose();
+            Assert.That(w.Failure, Is.InstanceOf<IOException>());
+            Assert.That(w.DroppedChars, Is.GreaterThan(0), "what was not written is counted");
+
+            using (var ok = new BackgroundFileWriter(Stream.Null, "ok"))
+            {
+                var report = TestLabRunner.WriterFailure(new[]
+                {
+                    new System.Collections.Generic.KeyValuePair<string, BackgroundFileWriter>("events.ndjson", ok),
+                    new System.Collections.Generic.KeyValuePair<string, BackgroundFileWriter>("samples.ndjson", w),
+                });
+                Assert.That(report, Is.EqualTo("output samples.ndjson failed: IOException: disk full"));
+            }
+        }
+
+        [Test]
+        public void AFailingClose_IsReported_AndDoesNotEscapeTheWriterThread()
+        {
+            var failing = new FailingStream(failAfterWrites: int.MaxValue, failOnDispose: true);
+            var w = new BackgroundFileWriter(failing, "close", bufferChars: 100, bufferCount: 4);
+            w.Write("data");
+            Assert.DoesNotThrow(() => w.Dispose());
+            Assert.That(w.Failure, Is.InstanceOf<IOException>());
+            Assert.That(w.Failure.Message, Is.EqualTo("close failed"));
+            Assert.That(w.DroppedChars, Is.EqualTo(0), "the data itself was written");
+            using (var ok = new BackgroundFileWriter(Stream.Null, "ok"))
+            {
+                Assert.That(TestLabRunner.WriterFailure(new[]
+                {
+                    new System.Collections.Generic.KeyValuePair<string, BackgroundFileWriter>("frames.csv", ok),
+                }), Is.Null, "a healthy writer reports nothing");
+            }
+        }
+
+        private sealed class FailingStream : Stream
+        {
+            private readonly int failAfterWrites;
+            private readonly bool failOnDispose;
+            private int writes;
+
+            public FailingStream(int failAfterWrites, bool failOnDispose)
+            {
+                this.failAfterWrites = failAfterWrites;
+                this.failOnDispose = failOnDispose;
+            }
+
+            public override bool CanRead => false;
+
+            public override bool CanSeek => false;
+
+            public override bool CanWrite => true;
+
+            public override long Length => 0;
+
+            public override long Position { get => 0; set => throw new NotSupportedException(); }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                if (++this.writes > this.failAfterWrites)
+                {
+                    throw new IOException("disk full");
+                }
+            }
+
+            public override void Flush()
+            {
+            }
+
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            protected override void Dispose(bool disposing)
+            {
+                base.Dispose(disposing);
+                if (disposing && this.failOnDispose)
+                {
+                    throw new IOException("close failed");
+                }
+            }
+        }
+
         private sealed class SlowStream : Stream
         {
             private readonly int delayMs;

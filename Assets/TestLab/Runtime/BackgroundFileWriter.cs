@@ -49,7 +49,8 @@ namespace TestLab
         private int queueHead;
         private int queueCount;
         private bool closing;
-        private Exception failure;
+        private volatile Exception failure;
+        private long droppedChars;
 
         private char[] current;
         private int currentLength;
@@ -86,6 +87,17 @@ namespace TestLab
         }
 
         public override Encoding Encoding => this.encoding;
+
+        /// <summary>
+        /// The first exception the writer thread hit (a write, a flush, or closing the file), or null.
+        /// Once set, the file is incomplete: later buffers are drained without being written, so the
+        /// main thread never waits on a dead disk, and <see cref="DroppedChars"/> counts them. The
+        /// runner turns a non-null value into a failed run (R6-1); it is never only a log line.
+        /// </summary>
+        public Exception Failure => this.failure;
+
+        /// <summary>Characters discarded because of <see cref="Failure"/>.</summary>
+        public long DroppedChars => Interlocked.Read(ref this.droppedChars);
 
         /// <summary>Total milliseconds the writing thread waited because every buffer was queued.</summary>
         public double BackpressureMs => Interlocked.Read(ref this.backpressureTicks) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
@@ -168,10 +180,6 @@ namespace TestLab
 
                 this.thread.Join();
                 this.current = null;
-                if (this.failure != null)
-                {
-                    UnityEngine.Debug.LogWarning("[TestLab] background writer failed: " + this.failure.Message);
-                }
             }
 
             base.Dispose(disposing);
@@ -226,7 +234,11 @@ namespace TestLab
                         length = this.queuedLength[this.queueHead];
                     }
 
-                    if (this.failure == null)
+                    if (this.failure != null)
+                    {
+                        Interlocked.Add(ref this.droppedChars, length);
+                    }
+                    else
                     {
                         try
                         {
@@ -236,8 +248,10 @@ namespace TestLab
                         }
                         catch (Exception ex)
                         {
-                            // Keep draining so the main thread never waits on a dead disk.
+                            // Keep draining so the main thread never waits on a dead disk; the
+                            // failure is surfaced through Failure, and this chunk counts as dropped.
                             this.failure = ex;
+                            Interlocked.Add(ref this.droppedChars, length);
                         }
                     }
 
@@ -253,7 +267,18 @@ namespace TestLab
             }
             finally
             {
-                this.stream.Dispose();
+                try
+                {
+                    // Closing flushes the OS buffers: a full disk can fail here too.
+                    this.stream.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    if (this.failure == null)
+                    {
+                        this.failure = ex;
+                    }
+                }
             }
         }
     }
