@@ -132,5 +132,30 @@ namespace Tests.Editor
             Assert.That(PlayerBuilder.ApplyBootSceneOverride(scenes, null), Is.SameAs(scenes));
             Assert.That(PlayerBuilder.ApplyBootSceneOverride(scenes, ""), Is.SameAs(scenes));
         }
+        // ── -extraDefines ────────────────────────────────────────────────────────
+        // The testlab assembly is switched on by a define passed per build. A define that
+        // parses to nothing would build a player without the harness and every scenario
+        // would time out waiting for a client that never reports.
+
+        [Test]
+        public void ExtraDefines_SplitOnSemicolonOrComma_TrimmedAndDeduplicated()
+        {
+            Assert.That(PlayerBuilder.ParseDefines(" CUVARA_TESTLAB; FOO,FOO ;; "),
+                Is.EqualTo(new[] { "CUVARA_TESTLAB", "FOO" }));
+        }
+
+        [Test]
+        public void ExtraDefines_AbsentOrBlank_IsEmpty()
+        {
+            Assert.That(PlayerBuilder.ParseDefines(null), Is.Empty);
+            Assert.That(PlayerBuilder.ParseDefines("  "), Is.Empty);
+        }
+
+        [Test]
+        public void ExtraDefines_RefuseANameThatCannotBeADefine()
+        {
+            Assert.Throws<System.ArgumentException>(() => PlayerBuilder.ParseDefines("CUVARA-TESTLAB"));
+            Assert.Throws<System.ArgumentException>(() => PlayerBuilder.ParseDefines("1ABC"));
+        }
     }
 }

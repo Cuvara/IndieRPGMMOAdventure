@@ -9,6 +9,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A TestLab output that failed to write was only a warning (review R6-1).** `BackgroundFileWriter`
+  kept the first write/flush exception and silently discarded later buffers, and the run could finish
+  as successful with truncated files. The writer now exposes `Failure` and `DroppedChars`, closing the
+  file can no longer throw out of its thread, and the runner fails the run (once a second while
+  running, and after closing the files), with `summary.json` `writers.failed` / `failure` /
+  `dropped_chars`. The summary and status are now written after the files close. Test-only
+  (`CUVARA_TESTLAB`).
+- **TestLab file output stalled the measured frames.** Every `samples.ndjson` line (~16 KB, four
+  times `StreamWriter`'s buffer) was a synchronous disk write on the main thread, 20 times a
+  second. In soak 20261023T015749Z-S09-4zym, 11 of 18 frames over 100 ms followed a sample frame
+  (about 1 expected by chance), including the two single-process stalls (271 ms, 274 ms) that the
+  snapshot check classed CLIENT. All streamed outputs now go through `BackgroundFileWriter`: the
+  main thread copies into a fixed buffer pool and a per-file thread writes, with contents
+  unchanged. `summary.json` `writers.backpressure_ms` reports any wait for a free buffer.
+  Test-only (`CUVARA_TESTLAB`).
+- **TestLab summary of a client that left had `user_id: ""`.** `TestLabRunner` writes
+  `summary.json` / `status.json` after the `quit` action's `Disconnect()`, and
+  `NetworkClient.UserId` is empty once the session is released. The runner now latches the id the
+  client joined with (`UserIdLatch`) and reports it; the live id still wins while there is one.
+  Test-only (`CUVARA_TESTLAB`).
+- **TestLab frame statistics stalled the main thread more the longer a run lasted.** `FrameStats`
+  kept every frame time and sorted a copy once a second for the overlay: about a 200 ms stall per
+  second by the end of a one-hour soak (testlab soak 20261022T112220Z-S09-eeoa), contaminating the
+  frame times it reported. It now holds fixed memory: whole-run percentiles from a 0.1 ms histogram
+  (each bucket reports its largest sample, so a value is never below exact and at most 0.1 ms
+  above; mean, max, count and long frames stay exact; `summary.json` `frames.percentile_bucket_ms`
+  states the resolution) and the overlay p95 over the last 600 frames. `RenderJumpDetector` keeps
+  two frames of positions instead of every id ever seen. Test-only (`CUVARA_TESTLAB`).
+- **TestLab `render.csv` `render_tick` was always empty in the shipping client.** The shipping
+  client draws remotes through `WorldViewBinder` and feeds the ECS view untimed states, so the ECS
+  interpolation clock never has a sample. `render_tick` now comes from the binder (one frame of
+  drain latency accounted for), with a new `clock_source` column (`binder` / `ecs`). Schema
+  `rpg.testlab.delivery.v2`. Test-only.
+- **Remote players lost interpolation after a reconnect to a server with lower ticks.**
+  `DotsWorldBridge.OnReconnected` bumped the view generation and reset the predictor but not the
+  `WorldViewBinder`, whose interpolation clock and last world tick belong to the old session.
+  After a reconnect to another pod or a restarted server, `world.Tick > lastWorldTick` stayed
+  false until the new ticks passed the old ones: no sample was buffered, remotes were drawn at raw
+  snapshot positions, and `RenderTick` (sent as the lag-compensation render time) stayed frozen
+  in the old tick space. The bridge now calls `binder.Reset()` right after `BeginGeneration()`.
+  `ReconnectBinderResetTests` drives the binder through the same sequence, with a control that
+  shows the frozen clock without the reset on netcode 0.47.0 (newer netcode restarts the binder's
+  tick line itself, `TickLineRestarts`; the test asserts whichever is compiled in, and that the
+  explicit reset leaves that fallback unused). Found by the T05 DOTS audit (F2).
+- **TestLab overlay frame cost grew with run length.** The overlay recomputed the frame p95 by
+  sorting every recorded frame on each `OnGUI` call; over a one-hour soak each frame went from 7 ms
+  to 41 ms on every test client. It is now recomputed once a second. Test-only (`CUVARA_TESTLAB`).
+- **The local player rubber-banded whenever it moved into negative x or y.** The predictor was
+  registered with corner-anchored bounds `MapBounds(0, 0, 1000, 1000)` while the server uses
+  `MapBounds.FromSize(1000, 1000)` (-500..500). Every predicted step left of or "below" the
+  (0, 0) spawn was clamped to 0, the server accepted it, and the player snapped back by the whole
+  distance on every snapshot. Found by the rpg-factory testlab: scenario S10, three rendered
+  clients walking off the spawn in every quadrant. Before: 3013 major and 1809 minor local render
+  jumps in 40 s, and a local divergence p95 of 15.07 units (max 29.25). After: 0 major, 18 minor,
+  and a p95 of 0.00 (max 0.54). `DotsRegistration.PredictorBounds` is now `MapBounds.Default`.
+  Regression test: `DotsRegistrationTests.Predictor_MovesIntoNegativeCoordinates_LikeTheServer`
+  (symmetric walk, plus a control proving the old bounds clamp).
+
+### Added
+
+- **TestLab coverage hooks (T14).** `tick_hz` in `samples.ndjson` `pred` and `summary.json`
+  `prediction` (C1); plan action `stall` with a `stall` event (C2); `entity_added` /
+  `entity_removed` events with the first rendered position (C3); `render_tick` / `render_clock` per
+  sample (C4); plan actions `cast_at_point` and `cast_spam` through the real cast path, with
+  `cast_read` records (C5); plan actions `quit` (leaves through `NetworkClient.Disconnect`, writes
+  the summary) and `reconnect` (drops the gameplay link so netcode's own automatic reconnect runs)
+  (C6). All inert unless a plan uses them; no production code changed. `docs/TESTLAB.md` "Coverage
+  hooks". Test-only (`CUVARA_TESTLAB`).
+- **TestLab delivery instrumentation (contract C2, `rpg.testlab.delivery.v1`).** Two new
+  streamed files per client: `delivery.csv` (one row per received snapshot: `world_tick`,
+  `recv_us`, `applied_us`, `bytes`) and `render.csv` (one row per rendered frame: `render_tick`
+  of the ECS interpolation clock, newest tick received, `snapshot_age_ms`). Microseconds since
+  player start on a monotonic `Stopwatch` (`LabClock`). Receive time and byte count come from a
+  test-only wrapper around the KCP transport (`FrameReadTap`); bounded for a soak of any length
+  (no per-frame retention, no per-frame work over history). Existing outputs are unchanged;
+  `summary.json` gains a `delivery` object and `events.ndjson` a `delivery_tap` event. Columns:
+  `docs/TESTLAB.md` "Delivery instrumentation". Test-only (`CUVARA_TESTLAB`).
+- **Input seam for automated play:** `IGameplayInputSource` / `GameplayInput.Source`
+  (`Assets/Scripts/DI/GameplayInput.cs`). `DotsWorldBridge` and `GameplayPanelDriver` read every
+  control through it. The default `DeviceGameplayInputSource` keeps today's keyboard, mouse and
+  pointer reads, so behaviour is unchanged. See `docs/TESTLAB.md`.
+- **`NDC.TestLab`** (`Assets/TestLab/`): scripted input, run recorder, screenshots and overlay
+  for the rpg-factory testlab. It compiles into a player only with `CUVARA_TESTLAB` and runs
+  only with `-testlab-plan`. Pure parts are covered by `TestLabTests` (EditMode).
+- **`Assets/Scenes/Tests/MultiplayerCombatTest.unity`**, generated from MainScene by
+  `TestLabSceneBuilder.Build` and checked by `TestLabSceneBuilder.Validate`. It is not in
+  `EditorBuildSettings`.
+- **`PlayerBuilder -extraDefines A;B`:** scripting defines for one build
+  (`BuildPlayerOptions.extraScriptingDefines`); ProjectSettings are untouched. Contract tests
+  cover the parsing and the refusal of invalid names.
+
+### Fixed (earlier in this cycle)
+
 - **`cleanup-branches.yml` ("Cleanup — Stale merged branches") failed every run since #136** with
   exit 126 `.github/scripts/cleanup-merged-branches.sh: Permission denied` (e.g. run 38264603517 on
   develop @ 845a237): the script was committed as mode `100644` from Windows. The workflow now runs

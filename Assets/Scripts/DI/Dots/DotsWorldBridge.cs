@@ -217,8 +217,9 @@ namespace Scripts.DI.Dots
             {
                 // Input is sampled and SENT here, not inside the prediction driver: the tick
                 // recorded must be the tick that went to the server.
-                this.pendingJump |= GameplayInputReader.JumpPressed();
-                this.pendingCast |= GameplayInputReader.CastPressed();
+                var inputSource = GameplayInput.Source;
+                this.pendingJump |= inputSource.JumpPressed();
+                this.pendingCast |= inputSource.CastPressed();
 
                 var now = Time.realtimeSinceStartupAsDouble;
                 if (!this.sendScheduleStarted)
@@ -231,7 +232,7 @@ namespace Scripts.DI.Dots
                 {
                     // Sampled at the send, so the vector sent is the stick right now. Sent even
                     // when it is zero: that is how a release reaches the server.
-                    ReadKeyboard(out var moveX, out var moveY);
+                    inputSource.ReadMove(out var moveX, out var moveY);
                     var jump = this.pendingJump;
                     var cast = this.pendingCast;
                     this.pendingJump = false;
@@ -504,6 +505,15 @@ namespace Scripts.DI.Dots
             // backlog, which the new server never acknowledged; then the camera, which would
             // otherwise sweep from the last known position to the re-placed avatar.
             var generation = this.view.BeginGeneration();
+
+            // The binder's interpolation clock, last world tick and live set belong to the old
+            // session too. NetworkClient resets the world on reconnect, and a new server (a drain
+            // to another pod, a restart) counts ticks from far below the old ones: without this,
+            // `world.Tick > lastWorldTick` stays false until the new ticks pass the old, so no
+            // sample is buffered (remotes drawn at raw snapshot positions) and RenderTick - sent
+            // as the lag-compensation render time - stays frozen in the old tick space. After
+            // BeginGeneration, so its despawns are stale no-ops for the drain.
+            this.binder.Reset();
             this.predictor?.Reset();
             this.projectilePredictor?.Reset();
             this.elevationFeeder?.Reset();
@@ -710,49 +720,20 @@ namespace Scripts.DI.Dots
         /// </summary>
         private Vec3 AimFrom(in Vec3 feet)
         {
+            if (GameplayInput.Source.TryAimPoint(new Vector3(feet.X, feet.Y, feet.Z), out var explicitAim))
+            {
+                return new Vec3(explicitAim.x, explicitAim.y, explicitAim.z);
+            }
+
             var camera = this.followCamera != null ? this.followCamera : Camera.main;
             if (camera != null &&
-                GameplayInputReader.TryPointerPosition(out var screen) &&
+                GameplayInput.Source.TryPointerPosition(out var screen) &&
                 AimPoint.TryGroundAim(camera.ScreenPointToRay(screen), feet.Z, out var aim))
             {
                 return aim;
             }
 
             return new Vec3(feet.X, feet.Y + 10f, feet.Z);
-        }
-
-        /// <summary>
-        /// WASD/arrows through whichever input backend the project enables. This project runs
-        /// "Input System Package (New)" (<c>activeInputHandler: 1</c>), under which the legacy
-        /// <c>UnityEngine.Input</c> class THROWS rather than returning zero — so the legacy call
-        /// is compiled only when the legacy manager is actually enabled.
-        /// </summary>
-        private static void ReadKeyboard(out float x, out float y)
-        {
-#if ENABLE_INPUT_SYSTEM
-            var keyboard = UnityEngine.InputSystem.Keyboard.current;
-            if (keyboard == null)
-            {
-                // No keyboard device — a headless or automated run. Not an error.
-                x = 0f;
-                y = 0f;
-                return;
-            }
-
-            static float Axis(bool positive, bool negative) => (positive ? 1f : 0f) - (negative ? 1f : 0f);
-            x = Axis(keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed,
-                     keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed);
-            y = Axis(keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed,
-                     keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed);
-#elif ENABLE_LEGACY_INPUT_MANAGER
-            // Raw, not smoothed: GetAxis's acceleration curve would make the predicted vector
-            // differ from what the player would say they pressed.
-            x = Input.GetAxisRaw("Horizontal");
-            y = Input.GetAxisRaw("Vertical");
-#else
-            x = 0f;
-            y = 0f;
-#endif
         }
 
         /// <summary>

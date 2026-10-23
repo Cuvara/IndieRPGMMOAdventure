@@ -6,6 +6,7 @@ namespace Tests.Editor
     using Cuvara.DOTS.Simulation;
     using Cuvara.DOTS.Views;
     using Cuvara.Netcode.Prediction;
+    using Shared.GameLogic.Components;
     using NUnit.Framework;
     using Scripts.DI.Dots;
     using Unity.Entities;
@@ -129,6 +130,57 @@ namespace Tests.Editor
             Assert.That(second, Is.SameAs(first),
                 "The predictor must be one instance shared between input recording and the " +
                 "prediction driver, or replay diverges by construction.");
+        }
+
+        /// <summary>
+        /// The predictor's play area must be the server's: centred on the origin
+        /// (MapBounds.FromSize), not anchored at (0,0). With corner-anchored bounds every
+        /// predicted step into negative x or y was clamped to 0, the server accepted it, and the
+        /// local player snapped back by the whole distance on every snapshot (testlab S05:
+        /// 1964 rendered jumps for a client walking toward -x, 0 for one walking toward +x).
+        /// </summary>
+        [Test]
+        public void Predictor_MovesIntoNegativeCoordinates_LikeTheServer()
+        {
+            var bounds = DotsRegistration.PredictorBounds;
+            var server = MapBounds.FromSize(GameConstants.DefaultMapWidth, GameConstants.DefaultMapHeight);
+            Assert.That(bounds.MinX, Is.EqualTo(server.MinX));
+            Assert.That(bounds.MinY, Is.EqualTo(server.MinY));
+            Assert.That(bounds.MaxX, Is.EqualTo(server.MaxX));
+            Assert.That(bounds.MaxY, Is.EqualTo(server.MaxY));
+            Assert.That(bounds.Contains(new Vec2(-100f, -100f)), Is.True,
+                "the server's default map spans negative coordinates; the predictor's must too");
+
+            // Behaviour, not only the value: walking toward -x must cover the same distance as
+            // walking toward +x (symmetric about the spawn at the origin) instead of stopping at 0.
+            float left = Walk(bounds, -1f);
+            float right = Walk(bounds, +1f);
+            Assert.That(right, Is.GreaterThan(0.5f), "the predictor did not move at all; the test proves nothing");
+            Assert.That(left, Is.EqualTo(-right).Within(1e-3f), "predicted position was clamped at x = 0");
+
+            // Control: the corner-anchored bounds this replaced DO clamp, so this test can fail.
+            var corner = new MapBounds(0f, 0f, GameConstants.DefaultMapWidth, GameConstants.DefaultMapHeight);
+            Assert.That(Walk(corner, -1f), Is.EqualTo(0f).Within(1e-4f));
+        }
+
+        /// <summary>Ten inputs held in one direction at the 60 Hz base rate, 4 frames per input.</summary>
+        private static float Walk(MapBounds bounds, float direction)
+        {
+            // Same construction as HeldMovementParityTests in com.cuvara.netcode: 60 Hz base, a
+            // 4-tick hold, anchored at the spawn by a first reconcile.
+            var predictor = new LocalMovePredictor(new PredictionSettings(60, 5f, bounds));
+            predictor.SetHoldTicks(4);
+            predictor.Reconcile(Vec2.Zero, 0);
+            for (long tick = 1; tick <= 10; tick++)
+            {
+                predictor.RecordInput(tick, direction, 0f);
+                for (int frame = 0; frame < 4; frame++)
+                {
+                    predictor.Advance(1f / 60f);
+                }
+            }
+
+            return predictor.SimulatedPosition.X;
         }
 
         [Test]

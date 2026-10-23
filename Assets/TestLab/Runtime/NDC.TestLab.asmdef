@@ -1,0 +1,39 @@
+{
+    "name": "NDC.TestLab",
+    "rootNamespace": "TestLab",
+    "references": [
+        "NDC.Scripts.DI",
+        "VContainer",
+        "Cuvara.Netcode.Runtime",
+        "Cuvara.DOTS.Runtime",
+        "Cuvara.DOTS.Netcode",
+        "Shared.GameLogic",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Unity.Transforms",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "CUVARA_TESTLAB || UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.dots",
+            "expression": "",
+            "define": "CUVARA_DOTS"
+        },
+        {
+            "name": "com.cuvara.netcode",
+            "expression": "0.19.0",
+            "define": "CUVARA_NETCODE"
+        }
+    ],
+    "noEngineReferences": false
+}

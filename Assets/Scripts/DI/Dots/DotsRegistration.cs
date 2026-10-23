@@ -36,6 +36,15 @@ namespace Scripts.DI.Dots
     /// </remarks>
     public static class DotsRegistration
     {
+#if CUVARA_NETCODE && CUVARA_SHARED_GAMELOGIC
+        /// <summary>
+        /// The play area the local predictor clamps to before a map file supplies geometry: the
+        /// server's default, centred on the origin (<see cref="MapBounds.Default"/> =
+        /// <c>MapBounds.FromSize(DefaultMapWidth, DefaultMapHeight)</c>).
+        /// </summary>
+        public static MapBounds PredictorBounds => MapBounds.Default;
+#endif
+
         /// <summary>
         /// Registers the DOTS view layer, its messaging, the simulation model seam and (when
         /// netcode + shared game logic are present) the session's single
@@ -150,7 +159,13 @@ namespace Scripts.DI.Dots
                 _ => new LocalMovePredictor(new PredictionSettings(
                     GameConstants.DefaultTickRate,
                     fallbackMoveSpeed,
-                    new MapBounds(0f, 0f, GameConstants.DefaultMapWidth, GameConstants.DefaultMapHeight))),
+                    // CENTRED, like the server's MapBounds.FromSize: -width/2..+width/2. The
+                    // corner-anchored (0,0)-(width,height) this used to be clamped every predicted
+                    // step into negative x or y to 0 while the server accepted it, so a player who
+                    // walked left or "down" from the (0,0) spawn rubber-banded on every snapshot
+                    // (found by the rpg-factory testlab, scenario S05). A map file still replaces
+                    // this through SetMapGeometry.
+                    PredictorBounds)),
                 Lifetime.Singleton);
 #endif
 

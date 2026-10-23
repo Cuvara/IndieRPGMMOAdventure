@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -102,6 +103,16 @@ public static class PlayerBuilder
             Debug.Log("[PlayerBuilder] -development set -> development build");
         }
 
+        // -extraDefines A;B: scripting defines for THIS build only (BuildPlayerOptions,
+        // not PlayerSettings, so nothing is written to ProjectSettings). The rpg-factory
+        // testlab passes CUVARA_TESTLAB, which is the only thing that compiles the test-only
+        // NDC.TestLab assembly into a player. Absent, the build is exactly what it always was.
+        string[] extraDefines = ParseDefines(ReadArg("-extraDefines"));
+        if (extraDefines.Length > 0)
+        {
+            Debug.Log($"[PlayerBuilder] -extraDefines -> {string.Join(";", extraDefines)}");
+        }
+
         var options = new BuildPlayerOptions
         {
             scenes = scenes,
@@ -109,6 +120,7 @@ public static class PlayerBuilder
             target = target,
             targetGroup = BuildPipeline.GetBuildTargetGroup(target),
             options = buildOptions,
+            extraScriptingDefines = extraDefines,
         };
 
         BuildReport report = BuildPipeline.BuildPlayer(options);
@@ -162,6 +174,39 @@ public static class PlayerBuilder
     /// error rather than a silent no-op: silently building the wrong boot scene is the failure
     /// this flag exists to prevent.
     /// </remarks>
+    /// <summary>
+    /// Splits a <c>-extraDefines</c> value on <c>;</c> or <c>,</c>, trims, drops empties and
+    /// duplicates. Refuses a name that is not a valid C# identifier: a define with a space or a
+    /// dash compiles as nothing and the asmdef it was meant to switch on stays off silently.
+    /// </summary>
+    internal static string[] ParseDefines(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        var result = new List<string>();
+        foreach (string raw in value.Split(';', ','))
+        {
+            string name = raw.Trim();
+            if (name.Length == 0 || result.Contains(name))
+            {
+                continue;
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^[A-Za-z_][A-Za-z0-9_]*$"))
+            {
+                throw new ArgumentException(
+                    $"[PlayerBuilder] -extraDefines: '{name}' is not a valid scripting define name.");
+            }
+
+            result.Add(name);
+        }
+
+        return result.ToArray();
+    }
+
     internal static string[] ApplyBootSceneOverride(string[] scenes, string bootScene)
     {
         if (string.IsNullOrEmpty(bootScene))
