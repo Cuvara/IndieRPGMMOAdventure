@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **unity-build-workflows v6 → v7.** Updated every reusable pipeline and platform promotion caller to `@v7` and `toolkit-ref: 'v7'`; the v7 migration notes require no caller input or output changes for these workflows. Pinned the local toolkit submodule to the `v7.0.2` release commit `ff1181a3fbfddc136cf6807f7bbc0670ddf86d0b`.
+- **unity-build-workflows v6 → v7.** Updated every reusable pipeline and platform promotion caller to `@v7` and `toolkit-ref: 'v7'`; the v7 migration notes require no caller input or output changes for these workflows. Pinned the local toolkit submodule to the `v7.0.3` release commit `734f4fa67f84ce6914b44aacb68d58c3bcd3ca0f`, which fixes the test Docker build context for consumers.
 
 - **`com.cuvara.netcode` v0.46.0 → v0.47.0**, DOTS Sample recopied from the tag (`.sample-source`
   version v0.47.0, commit 1971df4). Manifest and lock both move; the lock is what resolves. Realtime
