@@ -91,6 +91,8 @@ namespace Tests.Editor
             var writer = new BackgroundFileWriter(Stream.Null, "trace-test", 64 * 1024, 4);
             var recorder = new PredictorTraceRecorder(writer);
             var predictor = new LocalMovePredictor(new PredictionSettings(60, 6f, MapBounds.Default)) { Trace = recorder.Sink };
+            PredictorTraceRecorder.TryReadSettings(predictor, out var settings);
+            recorder.WriteHeader("dev_arena", true, settings, false);
             int tick = 0;
 
             void Frames(int n)
@@ -112,6 +114,53 @@ namespace Tests.Editor
 
             Assert.That(late, Is.LessThanOrEqualTo((early * 1.1) + 0.1),
                 $"allocations per frame grew with the run: {early:0.##} early, {late:0.##} after 20k frames");
+        }
+
+        [Test]
+        public void TheHeaderIsLineOne_NothingIsWrittenBeforeIt()
+        {
+            var output = new StringWriter();
+            var recorder = new PredictorTraceRecorder(output);
+            var predictor = new LocalMovePredictor(new PredictionSettings(15, 6f, MapBounds.Default)) { Trace = recorder.Sink };
+
+            // The runner's old order (T59): a frame marker and a call before the header.
+            recorder.WriteFrame(1, 0.1, 0.016, 0.016);
+            predictor.RecordInput(1, 1f, 0f, false);
+            recorder.WriteSession("dev_arena", 3, 60, true, 60);
+            Assert.That(output.ToString(), Is.Empty);
+            Assert.That(recorder.DroppedBeforeHeader, Is.EqualTo(3));
+
+            PredictorTraceRecorder.TryReadSettings(predictor, out var settings);
+            recorder.WriteHeader("dev_arena", true, settings, predictor.UsesCharacterMotor);
+            recorder.WriteFrame(2, 0.2, 0.016, 0.016);
+            predictor.RecordInput(2, 1f, 0f, false);
+
+            var lines = Lines(output);
+            Assert.That(lines[0], Does.StartWith("{\"kind\":\"header\""));
+            Assert.That(lines[0], Does.Contain("\"tick_rate\":15"), "the construction rate; UseServerTickRate is a traced call");
+            Assert.That(lines[1], Does.StartWith("{\"frame\":2,"));
+            Assert.That(lines[2], Does.StartWith("{\"c\":"));
+        }
+
+        [Test]
+        public void KcpDiagnostics_WritesNullsNotZeros_WhenThereIsNoSession()
+        {
+            var none = new System.Text.StringBuilder();
+            KcpDiagnostics.AppendFields(none, null);
+            Assert.That(none.ToString(), Does.StartWith("\"present\":false").And.Contain("\"rto_ms\":null").And.Contain("\"failure_reason\":null"));
+
+            var unconnected = new System.Text.StringBuilder();
+            KcpDiagnostics.AppendFields(unconnected, new Cuvara.Netcode.Transport.KcpTransport());
+            string json = "{" + unconnected + "}";
+            Assert.That(json, Does.Contain("\"present\":true").And.Contain("\"session\":false").And.Contain("\"rto_ms\":null")
+                .And.Contain("\"datagrams_received\":0"));
+            Assert.That(UnityEngine.JsonUtility.FromJson<KcpShape>(json).present, Is.True, "well-formed JSON");
+        }
+
+        [Serializable]
+        private sealed class KcpShape
+        {
+            public bool present;
         }
 
         private static int CountAllocations(Action action)

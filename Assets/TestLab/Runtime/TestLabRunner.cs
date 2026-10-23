@@ -62,6 +62,8 @@ namespace TestLab
         private EntityLifecycle lifecycle;
         private bool[] oneShotFired;
         private long castsRead;
+        private int sessionCloses;
+        private string lastSessionClose;
         private long stalls;
         private int reconnectsRequested;
         private int reconnectEvents;
@@ -249,8 +251,15 @@ namespace TestLab
                 // DOTS Simulation group (Reconcile, Advance), so the marker precedes the frame's calls.
                 try
                 {
+                    // Resolve (and so write the header) before the first frame marker: a replay
+                    // reads the header from line 1 (T59). Frames before the predictor exists carry
+                    // no predictor calls and are not written.
+                    this.TryResolveServices();
                     this.AttachTraceSteering();
-                    this.trace.WriteFrame(this.frameIndex + 1, Time.realtimeSinceStartupAsDouble, Time.unscaledDeltaTime, Time.deltaTime);
+                    if (this.tracePredictorAttached)
+                    {
+                        this.trace.WriteFrame(this.frameIndex + 1, Time.realtimeSinceStartupAsDouble, Time.unscaledDeltaTime, Time.deltaTime);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -679,6 +688,7 @@ namespace TestLab
                 this.client.ReconnectAttemptStarted += this.OnReconnectAttempt;
                 this.client.Reconnected += this.OnReconnected;
                 this.client.ReconnectFailed += this.OnReconnectFailed;
+                this.client.SessionClosed += this.OnSessionClosed;
                 this.Event("services", "\"predictor\":" + Bool(this.predictor != null));
                 this.InstallTap();
             }
@@ -783,6 +793,32 @@ namespace TestLab
         {
             this.reconnectEvents++;
             this.Event("reconnect_failed", "\"error\":" + Quote(ex?.Message));
+        }
+
+        /// <summary>
+        /// Why a gameplay session ended, with the KCP transport's state at that moment: failure
+        /// reason, retransmission timeout and silence counters (KcpDiagnostics). Raised before any
+        /// reconnect replaces the transport, so the fields describe the session that closed.
+        /// </summary>
+        private void OnSessionClosed(Cuvara.Netcode.Connection.DisconnectInfo info)
+        {
+            this.sessionCloses++;
+            var b = new StringBuilder(384);
+            b.Append("\"cause\":").Append(Quote(info.Cause.ToString()))
+                .Append(",\"reason\":").Append(Quote(info.Reason))
+                .Append(",\"exception\":").Append(Quote(info.Exception?.Message))
+                .Append(",\"kcp\":{");
+            KcpDiagnostics.AppendFields(b, this.tap.CurrentKcp);
+            b.Append('}');
+            this.lastSessionClose = b.ToString();
+            this.Event("session_closed", this.lastSessionClose);
+        }
+
+        private static string KcpFields(Cuvara.Netcode.Transport.KcpTransport transport)
+        {
+            var b = new StringBuilder(256);
+            KcpDiagnostics.AppendFields(b, transport);
+            return b.ToString();
         }
 
         private void OnCastRead()
@@ -963,11 +999,12 @@ namespace TestLab
                 .Append(",\"reconnects_requested\":").Append(this.reconnectsRequested)
                 .Append(",\"reconnect_events\":").Append(this.reconnectEvents)
                 .Append(",\"tapped_sessions\":").Append(this.tap.TappedSessions).Append('}')
-                .Append(",\"kcp\":{\"present\":").Append(Bool(this.tap.CurrentKcp != null))
+                .Append(",\"kcp\":{").Append(KcpFields(this.tap.CurrentKcp))
                 .Append(",\"datagrams_read\":").Append(this.tap.CurrentKcp?.DatagramsRead ?? 0)
                 .Append(",\"receive_wakeups\":").Append(this.tap.CurrentKcp?.ReceiveWakeups ?? 0)
-                .Append(",\"max_datagrams_per_wake\":").Append(this.tap.CurrentKcp?.MaxDatagramsPerWake ?? 0)
-                .Append(",\"datagrams_received\":").Append(this.tap.CurrentKcp?.DatagramsReceived ?? 0).Append('}')
+                .Append(",\"max_datagrams_per_wake\":").Append(this.tap.CurrentKcp?.MaxDatagramsPerWake ?? 0).Append('}')
+                .Append(",\"session_closes\":").Append(this.sessionCloses)
+                .Append(",\"last_session_close\":").Append(this.lastSessionClose != null ? "{" + this.lastSessionClose + "}" : "null")
                 .Append(",\"entities\":{\"added\":").Append(this.lifecycle?.Added ?? 0)
                 .Append(",\"removed\":").Append(this.lifecycle?.Removed ?? 0)
                 .Append(",\"live\":").Append(this.lifecycle?.Live ?? 0).Append('}')
@@ -1255,6 +1292,7 @@ namespace TestLab
                 this.client.ReconnectAttemptStarted -= this.OnReconnectAttempt;
                 this.client.Reconnected -= this.OnReconnected;
                 this.client.ReconnectFailed -= this.OnReconnectFailed;
+                this.client.SessionClosed -= this.OnSessionClosed;
             }
 
             if (!this.finished && this.plan != null)

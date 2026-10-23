@@ -48,6 +48,12 @@ namespace TestLab
 
         public long Frames { get; private set; }
 
+        /// <summary>True once the header line is written; nothing else is written before it.</summary>
+        public bool HeaderWritten { get; private set; }
+
+        /// <summary>Frame markers and events refused because the header was not written yet.</summary>
+        public long DroppedBeforeHeader { get; private set; }
+
         /// <summary>Stops writing (the file is about to close); a call still traced afterwards is dropped.</summary>
         public bool Closed { get; set; }
 
@@ -96,11 +102,18 @@ namespace TestLab
 
             this.sb.Append(",\"motor_3d\":").Append(motor3D ? "true" : "false").Append('}');
             this.Emit();
+            this.HeaderWritten = true;
         }
 
         /// <summary>One line per join: what the server selected for this session.</summary>
         public void WriteSession(string mapId, uint protocol, uint serverTickRate, bool motor3D, int predictorTickRate)
         {
+            if (!this.HeaderWritten)
+            {
+                this.DroppedBeforeHeader++;
+                return;
+            }
+
             this.sb.Clear();
             this.sb.Append("{\"kind\":\"session\",\"map\":").Append(EntityLifecycle.Quote(mapId))
                 .Append(",\"protocol\":").Append(protocol.ToString(Inv))
@@ -116,6 +129,13 @@ namespace TestLab
         /// </summary>
         public void WriteFrame(int frame, double realtime, double unscaledDeltaTime, double deltaTime)
         {
+            if (!this.HeaderWritten)
+            {
+                // The header is line 1 by contract (a replay reads it first; T59 found it on line 2).
+                this.DroppedBeforeHeader++;
+                return;
+            }
+
             this.Frames++;
             this.sb.Clear();
             this.sb.Append("{\"frame\":").Append(frame)
@@ -129,6 +149,12 @@ namespace TestLab
         {
             if (this.Closed)
             {
+                return;
+            }
+
+            if (!this.HeaderWritten)
+            {
+                this.DroppedBeforeHeader++;
                 return;
             }
 

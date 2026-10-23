@@ -9,10 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TestLab `trace.ndjson` started with a frame marker, not the header.** The runner wrote the
+  first frame marker before it had resolved the predictor and written the header, so the replayer
+  found the header on line 2 (T59). The runner now resolves (and writes the header) before the first
+  marker, and the recorder refuses anything before the header. The header's `tick_rate` is the
+  predictor's construction rate (15); the server's 60 is the traced `UseServerTickRate` call.
+  Test-only (`CUVARA_TESTLAB`).
 - **TestLab players skipped netcode 0.48.0's leave flush and read 0 for its receive counters.**
   The testlab's KCP wrapper (`FrameReadTap`) hid `IFlushableTransport`, so a scripted `quit` closed
   the socket with the disconnect frame still queued, and `GameSessionClient.Transport*` counters
   (`as KcpTransport`) read 0. The wrapper now forwards `FlushAsync`, and `summary.json`
+  `kcp` reports the receive counters from the wrapped transport. Needs netcode >= 0.48.0.
   `actions.kcp` reports the receive counters from the wrapped transport. Needs netcode >= 0.48.0.
 - **A TestLab output that failed to write was only a warning (review R6-1).** `BackgroundFileWriter`
   kept the first write/flush exception and silently discarded later buffers, and the run could finish
@@ -85,6 +92,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **TestLab session close diagnostics.** An `events.ndjson` `session_closed` event per gameplay session
+  end (cause, reason, exception, and the KCP transport's failure reason, RTO, silence counters and
+  pending segments) and `summary.json` `session_closes` / `last_session_close`, so a dead link no
+  longer has to be inferred (T57). Read-only; test-only (`CUVARA_TESTLAB`).
 - **TestLab predictor call trace (`trace.ndjson`, plan `predictor_trace: true`).** Wires netcode's
   opt-in `PredictorTraceSink` (netcode >= 8986908) into `LocalMovePredictor` and
   `PredictionClockSteering`, with a header of the predictor's `PredictionSettings` and the map id, a

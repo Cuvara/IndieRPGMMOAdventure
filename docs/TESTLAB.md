@@ -99,7 +99,7 @@ One side effect: `GameSessionClient.DescribeJoinTimeout` recognises a `KcpTransp
 **Netcode 0.48.0 and the wrapper** (branch `fix/interpolation/autonomous-playtest`, which compiles against 0.48.0):
 
 - **Leave flush is forwarded.** A graceful leave waits for the KCP send queue to be acknowledged only through `IFlushableTransport`, and the wrapper implements it by forwarding to the KCP transport. So a testlab `quit` delivers its leave exactly as the shipping client does.
-- **Receive counters come from the tap.** `GameSessionClient.TransportDatagramsRead`, `TransportReceiveWakeups` and `TransportMaxDatagramsPerWake` find the transport with `as KcpTransport`, which the wrapper defeats, so they read 0 in a testlab player. `summary.json` `actions.kcp` reads the same counters from the wrapped transport instead: `present`, `datagrams_read`, `receive_wakeups`, `max_datagrams_per_wake` and `datagrams_received`. They cover the current (last) gameplay session only.
+- **Receive counters come from the tap.** `GameSessionClient.TransportDatagramsRead`, `TransportReceiveWakeups` and `TransportMaxDatagramsPerWake` find the transport with `as KcpTransport`, which the wrapper defeats, so they read 0 in a testlab player. `summary.json` `kcp` reads the same counters from the wrapped transport instead: `present`, `datagrams_read`, `receive_wakeups`, `max_datagrams_per_wake` and `datagrams_received`. They cover the current (last) gameplay session only.
 
 ### Cost
 
@@ -197,7 +197,7 @@ Compare two clients at the same server tick with `render_tick`, not `world_tick`
 
 | First key | Line | Fields |
 |---|---|---|
-| `"kind":"header"` | one, first | `schema` (`rpg.testlab.predictor-trace.v1`), `map` (plan map id), `settings_read`, `tick_rate`, `speed`, `bounds` `[minX,minY,maxX,maxY]`, `tick_rate_is_fallback` (the predictor's construction `PredictionSettings`, read from its private field), `motor_3d` (at attach time, before the join) |
+| `"kind":"header"` | **line 1**, always: nothing (no frame, event or session line) is written before it, and refused lines are counted in the recorder's `DroppedBeforeHeader` | `schema` (`rpg.testlab.predictor-trace.v1`), `map` (plan map id), `settings_read`, `tick_rate`, `speed`, `bounds` `[minX,minY,maxX,maxY]`, `tick_rate_is_fallback` (the predictor's **construction** `PredictionSettings`, read from its private field: the client registers it with `GameConstants.DefaultTickRate` = 15; the server's 60 arrives later as a traced `UseServerTickRate` call (`c` 2) and in the `session` line's `predictor_tick_rate`), `motor_3d` (at attach time, before the join) |
 | `"kind":"session"` | one per join (`in_world`) | `map`, `protocol` (server protocol version), `server_tick_rate`, `motor_3d` (the live client uses the 3D CharacterMotor), `predictor_tick_rate` |
 | `"frame"` | one per frame, **before** that frame's predictor calls | `frame` (same index as `frames.csv`), `t` (realtime s), `udt` (`Time.unscaledDeltaTime`), `dt` (`Time.deltaTime`, what the DOTS world advances by) |
 | `"c"` | one per traced call | netcode's `PredictorTraceEvent.AppendJson` form (`c`, `a`, `b`, `c2`, `x`..`v`, `f`, `t`); parse with `PredictorTraceEvent.TryParseJson` |
@@ -210,6 +210,28 @@ Compare two clients at the same server tick with `render_tick`, not `world_tick`
 **Summary.** `summary.json` `trace` reports `enabled`, `file`, `events`, `frames`, `predictor_attached`, `steering_attached` and `steering_attached_after_snapshots`.
 
 **Cost.** One line per traced call and per frame. Netcode's number formatting allocates a constant amount per event; `PredictorTraceRecorderTests` asserts that per-frame allocations do not grow over 20k frames. The trace is for test players only.
+
+## Session close diagnostics (branch `fix/interpolation/autonomous-playtest`)
+
+**Event.** Every end of a gameplay session (`NetworkClient.SessionClosed`) writes an `events.ndjson` `session_closed` event. It is raised before any reconnect replaces the transport, so its fields describe the session that closed:
+
+| Field | Meaning |
+|---|---|
+| `cause` | The `DisconnectCause` (`TransportError`, `HeartbeatTimeout`, `PeerClosed`, ...). |
+| `reason` | The close reason. |
+| `exception` | The exception message, if any. |
+| `kcp.failure_reason` | `KcpTransport.FailureReason`. For example, the dead-link stream failure, or the silence detection of netcode >= 4520ccf. |
+| `kcp.rto_ms` | The retransmission timeout at the close. |
+| `kcp.awake_silent_ms`, `kcp.silence_failures` | The netcode >= 4520ccf silence counters. |
+| `kcp.pending_send_segments` | Segments still waiting to be sent. |
+| `kcp.session`, `kcp.present`, `kcp.datagrams_received` | Presence and receive counters. |
+
+`KcpDiagnostics` reads them from `KcpTransport` and its internal `KcpClientSession` by reflection. A member a netcode version lacks is `null`, never 0.
+
+**Summary.** `summary.json` gets:
+- `session_closes`: the count;
+- `last_session_close`: the same object as the event;
+- `kcp`: the same fields for the session alive at the end of the run, plus the receive counters.
 
 ## Output files are written off the main thread
 
