@@ -182,6 +182,35 @@ Compare two clients at the same server tick with `render_tick`, not `world_tick`
   - **Summary:** `summary.json` `actions`: `reconnects_requested`, `reconnect_events`, `tapped_sessions`.
 - **Not done: a manual disconnect-then-`ConnectAsync`.** `DotsWorldBridge` resets its view, binder and predictor only on `NetworkClient.Reconnected`, which an explicit `ConnectAsync` does not raise. A manual rejoin would exercise a path the game never takes, and making it safe would need a production change.
 
+## Predictor call trace (netcode >= 8986908; branch `fix/interpolation/autonomous-playtest`)
+
+**Turning it on.** Set `"predictor_trace": true` in the plan (`TestLabPlan.predictor_trace`, default `false`). With the flag off, the runner creates no recorder and writes no file.
+
+**Output.** The trace goes to **`trace.ndjson`** in the client's `-testlab-out` directory, next to `events.ndjson`. It is written by a `BackgroundFileWriter` (64 x 64K-char pool), so the main thread never touches the disk.
+
+**What it records.** Netcode's opt-in call trace of `LocalMovePredictor` and `PredictionClockSteering`, which is what `PredictorTraceReplayer` needs to replay the live session headlessly.
+- **Predictor sink:** attached when the runner first resolves the predictor from the root scope, which is before the join.
+- **Steering sink:** attached as soon as `DotsPredictionBootstrap.TryGetClockSteering` finds the steering. The lookup runs every frame and on every snapshot until it succeeds. A snapshot is received in the KCP pump before the Simulation group runs the steering's `OnSnapshot`, so attaching there still catches it.
+- **Late attach:** both attach times are logged as `events.ndjson` `trace_attached` with `snapshots_before`, so an attach after the first snapshot is visible.
+
+**Line kinds.** There is one JSON object per line. A consumer tells them apart by the first key.
+
+| First key | Line | Fields |
+|---|---|---|
+| `"kind":"header"` | one, first | `schema` (`rpg.testlab.predictor-trace.v1`), `map` (plan map id), `settings_read`, `tick_rate`, `speed`, `bounds` `[minX,minY,maxX,maxY]`, `tick_rate_is_fallback` (the predictor's construction `PredictionSettings`, read from its private field), `motor_3d` (at attach time, before the join) |
+| `"kind":"session"` | one per join (`in_world`) | `map`, `protocol` (server protocol version), `server_tick_rate`, `motor_3d` (the live client uses the 3D CharacterMotor), `predictor_tick_rate` |
+| `"frame"` | one per frame, **before** that frame's predictor calls | `frame` (same index as `frames.csv`), `t` (realtime s), `udt` (`Time.unscaledDeltaTime`), `dt` (`Time.deltaTime`, what the DOTS world advances by) |
+| `"c"` | one per traced call | netcode's `PredictorTraceEvent.AppendJson` form (`c`, `a`, `b`, `c2`, `x`..`v`, `f`, `t`); parse with `PredictorTraceEvent.TryParseJson` |
+
+**Replay recipe.**
+1. Build `new LocalMovePredictor(new PredictionSettings(tick_rate, speed, new MapBounds(bounds...)))` from the header.
+2. Create `new PredictorTraceReplayer(predictor) { Geometry = <the map's geometry for header.map> }`.
+3. `Apply` every `"c"` line in order. The `"frame"` lines give the frame boundaries and timing.
+
+**Summary.** `summary.json` `trace` reports `enabled`, `file`, `events`, `frames`, `predictor_attached`, `steering_attached` and `steering_attached_after_snapshots`.
+
+**Cost.** One line per traced call and per frame. Netcode's number formatting allocates a constant amount per event; `PredictorTraceRecorderTests` asserts that per-frame allocations do not grow over 20k frames. The trace is for test players only.
+
 ## Output files are written off the main thread
 
 Every streamed output goes through `BackgroundFileWriter`: `events.ndjson`, `inputs.ndjson`, `snapshots.ndjson`, `samples.ndjson`, `frames.csv`, `delivery.csv` and `render.csv`. The main thread only copies characters into a pooled buffer. A dedicated thread per file encodes the bytes and writes them to disk. File contents and line endings are unchanged (UTF-8 without BOM, `Environment.NewLine`).

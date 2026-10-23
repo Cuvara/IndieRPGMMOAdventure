@@ -85,6 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **TestLab predictor call trace (`trace.ndjson`, plan `predictor_trace: true`).** Wires netcode's
+  opt-in `PredictorTraceSink` (netcode >= 8986908) into `LocalMovePredictor` and
+  `PredictionClockSteering`, with a header of the predictor's `PredictionSettings` and the map id, a
+  session line per join (protocol, 3D motor) and a marker per frame (`frame`, `t`, `udt`, `dt`), so a
+  live session can be replayed headlessly. Written off the main thread. Off by default; branch
+  `fix/interpolation/autonomous-playtest` only (needs netcode >= 8986908). Test-only (`CUVARA_TESTLAB`).
 - **TestLab coverage hooks (T14).** `tick_hz` in `samples.ndjson` `pred` and `summary.json`
   `prediction` (C1); plan action `stall` with a `stall` event (C2); `entity_added` /
   `entity_removed` events with the first rendered position (C3); `render_tick` / `render_clock` per

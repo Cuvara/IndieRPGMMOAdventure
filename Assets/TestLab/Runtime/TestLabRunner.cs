@@ -6,6 +6,7 @@ namespace TestLab
     using System.IO;
     using System.Text;
     using Cuvara.DOTS.Netcode;
+    using Cuvara.DOTS.Netcode.Prediction;
     using Cuvara.Netcode.Client;
     using Cuvara.Netcode.Prediction;
     using Cuvara.Netcode.Snapshot;
@@ -104,6 +105,13 @@ namespace TestLab
         // (R6-1: a writer failure fails the run, it is never only a warning).
         private readonly List<KeyValuePair<string, BackgroundFileWriter>> writers = new List<KeyValuePair<string, BackgroundFileWriter>>(8);
         private string writerFailure;
+        // Predictor call trace (plan.predictor_trace; netcode >= 8986908). Null when not asked for.
+        private BackgroundFileWriter traceFile;
+        private PredictorTraceRecorder trace;
+        private PredictionClockSteering tracedSteering;
+        private bool tracePredictorAttached;
+        private long traceSteeringAttachedAfterSnapshots = -1;
+
         private DeliveryRecorder delivery;
         private string tapStatus = "not_installed";
         private long tapReadsConsumed;
@@ -173,6 +181,11 @@ namespace TestLab
             this.deliveryCsv = Open(DeliveryRecorder.DeliveryFile);
             this.renderCsv = Open(DeliveryRecorder.RenderFile);
             this.delivery = new DeliveryRecorder(this.deliveryCsv, this.renderCsv);
+            if (plan.predictor_trace)
+            {
+                this.traceFile = Open(PredictorTraceRecorder.FileName, 64 * 1024, 16);
+                this.trace = new PredictorTraceRecorder(this.traceFile);
+            }
             RenderPipelineManager.beginContextRendering += this.OnBeginContextRendering;
 
             this.source.MoveRead = this.OnMoveRead;
@@ -230,6 +243,22 @@ namespace TestLab
                 return;
             }
 
+            if (this.trace != null)
+            {
+                // Runs at execution order -1000: before DotsWorldBridge.Update (RecordInput) and the
+                // DOTS Simulation group (Reconcile, Advance), so the marker precedes the frame's calls.
+                try
+                {
+                    this.AttachTraceSteering();
+                    this.trace.WriteFrame(this.frameIndex + 1, Time.realtimeSinceStartupAsDouble, Time.unscaledDeltaTime, Time.deltaTime);
+                }
+                catch (Exception ex)
+                {
+                    this.Fail("trace: " + ex);
+                    return;
+                }
+            }
+
             try
             {
                 this.UpdateCore();
@@ -252,6 +281,11 @@ namespace TestLab
                 this.inWorldAt = now;
                 this.phase = "in_world";
                 this.Event("in_world", "\"user_id\":" + Quote(this.client.UserId));
+                if (this.trace != null && this.client.Session != null)
+                {
+                    this.trace.WriteSession(this.plan.map, this.client.Session.ServerProtocolVersion, this.client.Session.TickRate,
+                        this.predictor?.UsesCharacterMotor ?? false, this.predictor?.TickRateHz ?? 0);
+                }
                 this.WriteStatus();
             }
 
@@ -628,6 +662,16 @@ namespace TestLab
                 this.predictor = null;
             }
 
+            if (this.trace != null && this.predictor != null && !this.tracePredictorAttached)
+            {
+                bool read = PredictorTraceRecorder.TryReadSettings(this.predictor, out var settings);
+                this.trace.WriteHeader(this.plan.map, read, settings, this.predictor.UsesCharacterMotor);
+                this.predictor.Trace = this.trace.Sink;
+                this.tracePredictorAttached = true;
+                this.Event("trace_attached", "\"target\":\"predictor\",\"snapshots_before\":" + this.snapshotsReceived +
+                                              ",\"settings_read\":" + Bool(read));
+            }
+
             if (this.client != null)
             {
                 this.client.SnapshotReceived += this.OnSnapshot;
@@ -664,6 +708,11 @@ namespace TestLab
 
         private void OnSnapshot(ResolvedSnapshot snapshot)
         {
+            if (this.trace != null && this.tracedSteering == null && !this.finished)
+            {
+                this.AttachTraceSteering();
+            }
+
             long appliedUs = LabClock.NowUs();
             long recvUs = -1;
             int bytes = -1;
@@ -903,6 +952,13 @@ namespace TestLab
                 .Append(",\"casts_planned\":").Append(this.castsPlanned)
                 .Append(",\"jumps_planned\":").Append(this.jumpsPlanned)
                 .Append(",\"casts_read\":").Append(this.castsRead).Append('}')
+                .Append(",\"trace\":{\"enabled\":").Append(Bool(this.trace != null))
+                .Append(",\"file\":").Append(Quote(this.trace != null ? PredictorTraceRecorder.FileName : null))
+                .Append(",\"events\":").Append(this.trace?.Events ?? 0)
+                .Append(",\"frames\":").Append(this.trace?.Frames ?? 0)
+                .Append(",\"predictor_attached\":").Append(Bool(this.tracePredictorAttached))
+                .Append(",\"steering_attached\":").Append(Bool(this.tracedSteering != null))
+                .Append(",\"steering_attached_after_snapshots\":").Append(this.traceSteeringAttachedAfterSnapshots).Append('}')
                 .Append(",\"actions\":{\"stalls\":").Append(this.stalls)
                 .Append(",\"reconnects_requested\":").Append(this.reconnectsRequested)
                 .Append(",\"reconnect_events\":").Append(this.reconnectEvents)
@@ -1051,8 +1107,55 @@ namespace TestLab
             return ms;
         }
 
+        /// <summary>
+        /// The clock steering exists once DotsWorldBridge has installed prediction. Look for it every
+        /// frame and on every snapshot until found (the lookup builds an entity query; it stops once
+        /// attached): a snapshot arrives in the KCP pump before the Simulation group runs the
+        /// steering's OnSnapshot, so attaching there still catches that snapshot. An attach after a
+        /// snapshot is recorded as such; the replay then starts from that point.
+        /// </summary>
+        private void AttachTraceSteering()
+        {
+            if (this.tracedSteering != null)
+            {
+                return;
+            }
+
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !world.IsCreated || !DotsPredictionBootstrap.TryGetClockSteering(world, out var steering) || steering == null)
+            {
+                return;
+            }
+
+            steering.Trace = this.trace.Sink;
+            this.tracedSteering = steering;
+            this.traceSteeringAttachedAfterSnapshots = this.snapshotsReceived;
+            this.Event("trace_attached", "\"target\":\"steering\",\"snapshots_before\":" + this.snapshotsReceived);
+        }
+
+        /// <summary>Detaches the sink before its file closes, so no call writes into a closed writer.</summary>
+        private void DetachTrace()
+        {
+            if (this.trace == null)
+            {
+                return;
+            }
+
+            this.trace.Closed = true;
+            if (this.predictor != null && this.tracePredictorAttached)
+            {
+                this.predictor.Trace = null;
+            }
+
+            if (this.tracedSteering != null)
+            {
+                this.tracedSteering.Trace = null;
+            }
+        }
+
         private void FlushAll()
         {
+            this.traceFile?.Flush();
             this.events?.Flush();
             this.inputs?.Flush();
             this.snapshots?.Flush();
@@ -1063,6 +1166,9 @@ namespace TestLab
 
         private void CloseAll()
         {
+            this.DetachTrace();
+            this.traceFile?.Dispose();
+            this.traceFile = null;
             this.events?.Dispose();
             this.inputs?.Dispose();
             this.snapshots?.Dispose();
