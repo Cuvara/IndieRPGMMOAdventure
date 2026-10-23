@@ -51,6 +51,12 @@ namespace TestLab
         public int anomaly_screenshots = 3;
 
         public bool overlay = true;
+
+        /// <summary>
+        /// Write the netcode predictor's call trace to <c>trace.ndjson</c> (netcode &gt;= 8986908;
+        /// <c>docs/TESTLAB.md</c> "Predictor call trace"). Off by default: it costs formatting per call.
+        /// </summary>
+        public bool predictor_trace;
         public bool quit_on_done = true;
 
         public TestLabStep[] steps = Array.Empty<TestLabStep>();

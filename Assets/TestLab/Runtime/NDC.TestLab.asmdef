@@ -7,6 +7,7 @@
         "Cuvara.Netcode.Runtime",
         "Cuvara.DOTS.Runtime",
         "Cuvara.DOTS.Netcode",
+        "Cuvara.DOTS.Netcode.Prediction",
         "Shared.GameLogic",
         "Unity.Entities",
         "Unity.Collections",

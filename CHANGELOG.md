@@ -7,8 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Pin `com.cuvara.netcode` v0.47.0 → v0.48.0.** The released package improves prediction recovery after client frame stalls; the imported DOTS Sample was recopied from the v0.48.0 tag.
+- **Pin `com.cuvara.dots` v0.31.0 → v0.32.0.** The released package identifies the local prediction entity with `LocalNetworkEntity` and resets interpolation state on reconnect.
+
 ### Fixed
 
+- **TestLab `trace.ndjson` started with a frame marker, not the header.** The runner wrote the
+  first frame marker before it had resolved the predictor and written the header, so the replayer
+  found the header on line 2 (T59). The runner now resolves (and writes the header) before the first
+  marker, and the recorder refuses anything before the header. The header's `tick_rate` is the
+  predictor's construction rate (15); the server's 60 is the traced `UseServerTickRate` call.
+  Test-only (`CUVARA_TESTLAB`).
+- **TestLab players skipped netcode 0.48.0's leave flush and read 0 for its receive counters.**
+  The testlab's KCP wrapper (`FrameReadTap`) hid `IFlushableTransport`, so a scripted `quit` closed
+  the socket with the disconnect frame still queued, and `GameSessionClient.Transport*` counters
+  (`as KcpTransport`) read 0. The wrapper now forwards `FlushAsync`, and `summary.json`
+  `kcp` reports the receive counters from the wrapped transport. Needs netcode >= 0.48.0.
+  `actions.kcp` reports the receive counters from the wrapped transport. Needs netcode >= 0.48.0.
 - **A TestLab output that failed to write was only a warning (review R6-1).** `BackgroundFileWriter`
   kept the first write/flush exception and silently discarded later buffers, and the run could finish
   as successful with truncated files. The writer now exposes `Failure` and `DroppedChars`, closing the
@@ -53,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows the frozen clock without the reset on netcode 0.47.0 (newer netcode restarts the binder's
   tick line itself, `TickLineRestarts`; the test asserts whichever is compiled in, and that the
   explicit reset leaves that fallback unused). Found by the T05 DOTS audit (F2).
+- **The local player corrected in whole 15 Hz steps and occasionally jumped up to 1.6 units.**
+  The predictor was registered with `GameConstants.DefaultTickRate` (15, the world rate) while the
+  server simulates and stamps ticks at 60 Hz, and nothing replaced the rate after the join.
+  `DotsWorldBridge` now calls `LocalMovePredictor.UseServerTickRate(client.TickRate)` next to
+  `UseServerProtocol` on every join. Needs `com.cuvara.netcode` 0.48.0 (Cuvara/Netcode#183,
+  rpg-factory testlab run 20261022T042952Z-S09-h87z).
 - **TestLab overlay frame cost grew with run length.** The overlay recomputed the frame p95 by
   sorting every recorded frame on each `OnGUI` call; over a one-hour soak each frame went from 7 ms
   to 41 ms on every test client. It is now recomputed once a second. Test-only (`CUVARA_TESTLAB`).
@@ -66,9 +89,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a p95 of 0.00 (max 0.54). `DotsRegistration.PredictorBounds` is now `MapBounds.Default`.
   Regression test: `DotsRegistrationTests.Predictor_MovesIntoNegativeCoordinates_LikeTheServer`
   (symmetric walk, plus a control proving the old bounds clamp).
+- **A respawned or teleported remote entity was drawn past its destination.** The remote
+  interpolation binder sets `InterpolationConfig.MaxExtrapolationSpeed` = 15 u/s (three times the
+  fastest legitimate ground speed). **Needs com.cuvara.netcode >= 0.48.0** (Netcode branch
+  `fix/interpolation/autonomous-playtest`), which also settles stopped enemies onto their target
+  instead of drawing them 0.125 units past it. Merge only together with that pin bump.
 
 ### Added
 
+- **TestLab session close diagnostics.** An `events.ndjson` `session_closed` event per gameplay session
+  end (cause, reason, exception, and the KCP transport's failure reason, RTO, silence counters and
+  pending segments) and `summary.json` `session_closes` / `last_session_close`, so a dead link no
+  longer has to be inferred (T57). Read-only; test-only (`CUVARA_TESTLAB`).
+- **TestLab predictor call trace (`trace.ndjson`, plan `predictor_trace: true`).** Wires netcode's
+  opt-in `PredictorTraceSink` (netcode >= 8986908) into `LocalMovePredictor` and
+  `PredictionClockSteering`, with a header of the predictor's `PredictionSettings` and the map id, a
+  session line per join (protocol, 3D motor) and a marker per frame (`frame`, `t`, `udt`, `dt`), so a
+  live session can be replayed headlessly. Written off the main thread. Off by default; branch
+  `fix/interpolation/autonomous-playtest` only (needs netcode >= 8986908). Test-only (`CUVARA_TESTLAB`).
 - **TestLab coverage hooks (T14).** `tick_hz` in `samples.ndjson` `pred` and `summary.json`
   `prediction` (C1); plan action `stall` with a `stall` event (C2); `entity_added` /
   `entity_removed` events with the first rendered position (C3); `render_tick` / `render_clock` per

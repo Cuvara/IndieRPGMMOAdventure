@@ -12,6 +12,7 @@ namespace Scripts.DI.Dots
     using Cuvara.DOTS.Simulation;
     using Cuvara.DOTS.Views;
     using Cuvara.Netcode.Client;
+    using Cuvara.Netcode.Interpolation;
     using Cuvara.Netcode.Prediction;
     using Cuvara.Netcode.Protocol;
     using Cuvara.Netcode.Protocol.Messages;
@@ -88,6 +89,9 @@ namespace Scripts.DI.Dots
     /// </remarks>
     public sealed class DotsWorldBridge : MonoBehaviour
     {
+        /// <summary>World units per second above which a remote entity's last move is a teleport.</summary>
+        private const double RemoteTeleportSpeed = 15.0;
+
         [Tooltip("Sample input axes, send them, and record them on the predictor. Turn OFF if " +
                  "something else owns input — and never leave NetworkBootstrap's synthetic input " +
                  "on at the same time.")]
@@ -334,7 +338,14 @@ namespace Scripts.DI.Dots
                 minimap: this.enableMinimap ? MinimapCategories.Instance : null);
             DotsNetcodeBootstrap.Install(this.world, this.view);
 
-            this.binder = new WorldViewBinder(this.view);
+            // Teleport guard for remote interpolation (com.cuvara.netcode >= 0.48.0): a last
+            // segment faster than this is a respawn/teleport and is not extrapolated past the
+            // destination. Three times the fastest legitimate ground speed (players move at
+            // 5 u/s, enemies at 2.5 u/s); the testlab saw a respawned player drawn 5 units past
+            // its spawn without it (rpg-factory testlab S05).
+            var interpolation = InterpolationConfig.Default;
+            interpolation.MaxExtrapolationSpeed = RemoteTeleportSpeed;
+            this.binder = new WorldViewBinder(this.view, null, null, interpolation);
 
             if (this.predictor != null)
             {
@@ -625,6 +636,11 @@ namespace Scripts.DI.Dots
                 // against. Null geometry restores the flat world of the predictor's own bounds,
                 // which is what the server runs for a map with no file.
                 this.predictor.UseServerProtocol(version);
+                // The predictor is registered before any join with a guessed rate; the server's
+                // advertised tick_rate (60 Hz base ticks) replaces it. Left at the 15 Hz guess,
+                // every reconcile missed the history and corrected in whole 15 Hz steps
+                // (Cuvara/Netcode#183, netcode 0.48.0).
+                this.predictor.UseServerTickRate(this.client.TickRate);
                 this.predictor.SetMapGeometry(geometry);
             }
 
