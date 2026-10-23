@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TestLab file output stalled the measured frames.** Every `samples.ndjson` line (~16 KB, four
+  times `StreamWriter`'s buffer) was a synchronous disk write on the main thread, 20 times a
+  second. In soak 20261023T015749Z-S09-4zym, 11 of 18 frames over 100 ms followed a sample frame
+  (about 1 expected by chance), including the two single-process stalls (271 ms, 274 ms) that the
+  snapshot check classed CLIENT. All streamed outputs now go through `BackgroundFileWriter`: the
+  main thread copies into a fixed buffer pool and a per-file thread writes, with contents
+  unchanged. `summary.json` `writers.backpressure_ms` reports any wait for a free buffer.
+  Test-only (`CUVARA_TESTLAB`).
 - **TestLab summary of a client that left had `user_id: ""`.** `TestLabRunner` writes
   `summary.json` / `status.json` after the `quit` action's `Disconnect()`, and
   `NetworkClient.UserId` is empty once the session is released. The runner now latches the id the

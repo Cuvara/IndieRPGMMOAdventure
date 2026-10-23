@@ -90,11 +90,15 @@ namespace TestLab
         private EntityQuery timelineQuery;
         private bool timelineQueryCreated;
 
-        private StreamWriter events;
-        private StreamWriter inputs;
-        private StreamWriter snapshots;
-        private StreamWriter samples;
-        private StreamWriter frameCsv;
+        // Every stream writes on its own background thread (BackgroundFileWriter): the main thread
+        // only copies characters, so a slow disk can no longer stall the frame being measured.
+        private BackgroundFileWriter events;
+        private BackgroundFileWriter inputs;
+        private BackgroundFileWriter snapshots;
+        private BackgroundFileWriter samples;
+        private BackgroundFileWriter frameCsv;
+        private BackgroundFileWriter deliveryCsv;
+        private BackgroundFileWriter renderCsv;
         private DeliveryRecorder delivery;
         private string tapStatus = "not_installed";
         private long tapReadsConsumed;
@@ -157,10 +161,13 @@ namespace TestLab
             this.events = Open("events.ndjson");
             this.inputs = Open("inputs.ndjson");
             this.snapshots = Open("snapshots.ndjson");
-            this.samples = Open("samples.ndjson");
+            // ~16 KB a line at 20 Hz: a deep pool (64 x 64K chars, about 25 s) rides out a slow disk.
+            this.samples = Open("samples.ndjson", 64 * 1024, 64);
             this.frameCsv = Open("frames.csv");
             this.frameCsv.WriteLine("frame,t,dt_ms,scenario_t");
-            this.delivery = new DeliveryRecorder(Open(DeliveryRecorder.DeliveryFile), Open(DeliveryRecorder.RenderFile));
+            this.deliveryCsv = Open(DeliveryRecorder.DeliveryFile);
+            this.renderCsv = Open(DeliveryRecorder.RenderFile);
+            this.delivery = new DeliveryRecorder(this.deliveryCsv, this.renderCsv);
             RenderPipelineManager.beginContextRendering += this.OnBeginContextRendering;
 
             this.source.MoveRead = this.OnMoveRead;
@@ -181,8 +188,8 @@ namespace TestLab
                                       ",\"delivery_schema\":" + Quote(DeliveryRecorder.Schema));
             this.WriteStatus();
 
-            StreamWriter Open(string name) =>
-                new StreamWriter(Path.Combine(outDir, name), false, new UTF8Encoding(false)) { AutoFlush = false };
+            BackgroundFileWriter Open(string name, int chars = BackgroundFileWriter.DefaultBufferChars, int count = BackgroundFileWriter.DefaultBufferCount) =>
+                new BackgroundFileWriter(Path.Combine(outDir, name), chars, count);
         }
 
         /// <summary>
@@ -846,6 +853,7 @@ namespace TestLab
                 .Append(",\"long_frames\":").Append(this.frames.LongFrames)
                 .Append(",\"long_frame_ms\":").Append(Num(this.frames.LongFrameMs))
                 .Append(",\"percentile_bucket_ms\":").Append(Num(FrameStats.BucketMs)).Append('}')
+                .Append(",\"writers\":{\"mode\":\"background\",\"backpressure_ms\":").Append(Num(this.WriterBackpressureMs())).Append('}')
                 .Append(",\"gc\":{\"valid\":").Append(Bool(this.gcAllocRecorder.Valid))
                 .Append(",\"alloc_bytes_total\":").Append(this.gcAllocTotal)
                 .Append(",\"alloc_bytes_per_frame\":").Append(Num(this.gcAllocFrames > 0 ? (double)this.gcAllocTotal / this.gcAllocFrames : double.NaN))
@@ -954,6 +962,12 @@ namespace TestLab
                                    ",\"event\":" + Quote(kind) + (string.IsNullOrEmpty(fields) ? string.Empty : "," + fields) + "}");
         }
 
+        /// <summary>Sum over every output stream of the time the main thread waited for a free buffer.</summary>
+        private double WriterBackpressureMs() =>
+            (this.events?.BackpressureMs ?? 0) + (this.inputs?.BackpressureMs ?? 0) + (this.snapshots?.BackpressureMs ?? 0) +
+            (this.samples?.BackpressureMs ?? 0) + (this.frameCsv?.BackpressureMs ?? 0) +
+            (this.deliveryCsv?.BackpressureMs ?? 0) + (this.renderCsv?.BackpressureMs ?? 0);
+
         private void FlushAll()
         {
             this.events?.Flush();
@@ -973,6 +987,7 @@ namespace TestLab
             this.frameCsv?.Dispose();
             this.delivery?.Dispose();
             this.delivery = null;
+            this.deliveryCsv = this.renderCsv = null;
             RenderPipelineManager.beginContextRendering -= this.OnBeginContextRendering;
             this.events = this.inputs = this.snapshots = this.samples = this.frameCsv = null;
         }

@@ -177,6 +177,22 @@ Compare two clients at the same server tick with `render_tick`, not `world_tick`
   - **Summary:** `summary.json` `actions`: `reconnects_requested`, `reconnect_events`, `tapped_sessions`.
 - **Not done: a manual disconnect-then-`ConnectAsync`.** `DotsWorldBridge` resets its view, binder and predictor only on `NetworkClient.Reconnected`, which an explicit `ConnectAsync` does not raise. A manual rejoin would exercise a path the game never takes, and making it safe would need a production change.
 
+## Output files are written off the main thread
+
+Every streamed output goes through `BackgroundFileWriter`: `events.ndjson`, `inputs.ndjson`, `snapshots.ndjson`, `samples.ndjson`, `frames.csv`, `delivery.csv` and `render.csv`. The main thread only copies characters into a pooled buffer. A dedicated thread per file encodes the bytes and writes them to disk. File contents and line endings are unchanged (UTF-8 without BOM, `Environment.NewLine`).
+
+- **Why it changed:** in soak `20261023T015749Z-S09-4zym`, 11 of the 18 frames over 100 ms came right after a sample frame. About 1 was expected by chance. Two of them were the single-process stalls that the snapshot check blamed on the client.
+  - **The mechanism:** a `samples.ndjson` line is about 16 KB, four times `StreamWriter`'s buffer. So every sample (20 Hz) was a synchronous `WriteFile` on the main thread, and any disk hiccup became a frame stall.
+  - **Normal cost:** a sample frame also cost about 1.1 ms more than other frames (4.2 vs 3.0 ms mean).
+- **Bounded memory:** the buffer pool is fixed. `samples.ndjson` gets 64 buffers of 64K chars (about 25 s of samples). Every other file gets 8 buffers of 32K chars. Writing allocates nothing.
+- **Disk slower than the pool:** the main thread waits rather than dropping data. The wait is reported in `summary.json` `writers.backpressure_ms`, so a run that its own instrumentation slowed says so. `0` means the instrumentation never blocked a frame on the disk.
+- **Flushing:** `Flush()` (once a second) hands the buffer to the writer thread and does not wait. The end of the run waits until every file is written and closed.
+- **Tests:** `BackgroundFileWriterTests` covers four cases:
+  - output byte-identical to the old `StreamWriter`;
+  - a 100 ms-per-write disk does not block 40 sample-sized lines (under 150 ms total, 0 backpressure, with the slow drain as the control);
+  - backpressure is counted and nothing is dropped;
+  - writing allocates nothing (with a positive control).
+
 ## Frame statistics: fixed cost
 
 `FrameStats` (overlay and `summary.json` `frames`) holds a fixed amount of memory and does a fixed amount of work per frame and per second, whatever the run length:
