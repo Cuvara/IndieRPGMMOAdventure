@@ -93,6 +93,11 @@ namespace Scripts.Nakama
 
         readonly NakamaSettings _settings;
 
+        /// <remarks>
+        /// <c>[Inject]</c> is load-bearing: with two public constructors VContainer takes the one
+        /// with the most parameters, and <see cref="IHttpAdapter"/> is not registered.
+        /// </remarks>
+        [VContainer.Inject]
         public NakamaSessionService(NakamaSettings settings)
             : this(settings, null)
         {

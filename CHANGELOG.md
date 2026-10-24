@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The player failed before joining the world: VContainer could not resolve `Nakama.IHttpAdapter`.** PR #157 added a public `NakamaSessionService(NakamaSettings, IHttpAdapter)` constructor for tests; with no `[Inject]`, VContainer picks the constructor with the most parameters, and no `IHttpAdapter` is registered. The production constructor is now marked `[VContainer.Inject]`. `ContainerResolutionTests` builds the registrations `GameLifetimeScope` and `MainSceneScope` make and resolves every service, so a constructor like this can no longer pass unit tests and break the player.
+
 - **A transient Nakama failure aborted the reconnect after one attempt (audit CN-01).**
   `NakamaAuthProvider` wrapped every `gateway_token` RPC failure in `InvalidOperationException`,
   which netcode's `ReconnectPolicy.IsPermanentFailure` treats as "Nakama refused", so a network
