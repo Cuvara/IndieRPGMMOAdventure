@@ -11,6 +11,7 @@
         "NDC.Scripts.Benchmark",
         "NDC.Scripts.UI.Hud.Ecs",
         "NDC.Scripts.Nakama",
+        "NakamaRuntime",
         "Cuvara.UIToolkit",
         "Cuvara.UIToolkit.Ecs",
         "VContainer",
@@ -39,7 +40,8 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "nunit.framework.dll"
+        "nunit.framework.dll",
+        "Nakama.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [

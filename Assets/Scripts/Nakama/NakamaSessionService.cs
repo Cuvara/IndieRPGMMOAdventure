@@ -94,8 +94,26 @@ namespace Scripts.Nakama
         readonly NakamaSettings _settings;
 
         public NakamaSessionService(NakamaSettings settings)
+            : this(settings, null)
+        {
+        }
+
+        /// <param name="adapter">
+        /// The HTTP transport to use instead of the one <paramref name="settings"/> selects.
+        /// Null (the production path) selects it. A host that supplies its own transport owns
+        /// its lifetime too: <see cref="Dispose"/> disposes it all the same, so pass one this
+        /// service may dispose. Tests script Nakama's answers through it.
+        /// </param>
+        public NakamaSessionService(NakamaSettings settings, IHttpAdapter adapter)
         {
             _settings = settings;
+            if (adapter != null)
+            {
+                _adapter = adapter;
+                _client = new Client(settings.Scheme, settings.Host, settings.Port, settings.ServerKey, adapter);
+                return;
+            }
+
             // The Unity adapter, explicitly: without it the .NET SDK uses HttpClient, which in a
             // Mono player reports fast connection failures as TaskCanceledException — a session
             // that logs "Cancelled" straight after "Authenticating" while Nakama never saw a
@@ -105,7 +123,7 @@ namespace Scripts.Nakama
             // CertificateHandler is per-REQUEST and the stock adapter never sets one. With no
             // pin the stock adapter stays, and Unity's own validation decides -- the stronger
             // default, and the one that correctly refuses a self-signed Nakama. See ADR-24.
-            var adapter = settings.PinnedCertificate != null && settings.PinnedCertificate.Length > 0
+            adapter = settings.PinnedCertificate != null && settings.PinnedCertificate.Length > 0
                 ? (IHttpAdapter)new Tls.PinnedHttpAdapter(settings.PinnedCertificate)
                 : UnityWebRequestAdapter.Instance;
             _adapter = adapter;

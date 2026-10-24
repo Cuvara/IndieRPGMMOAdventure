@@ -101,3 +101,6 @@ bridge's install/uninstall sequence and asserts the group tree, the singletons, 
 and that uninstall + `catalog.Dispose()` leaves no singleton and no live blob.
 
 Run in the Editor via Test Runner, or batch mode EditMode as CI does for the packages.
+
+Session lifecycle tests (reconnect classification, the status overlay, driver dispose order) and
+their design are in `docs/SESSION-RECOVERY.md`.

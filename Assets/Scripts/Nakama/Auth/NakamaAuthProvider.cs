@@ -65,19 +65,7 @@ namespace Scripts.Nakama.Auth
 
         public async UniTask<string> GetJwtAsync(CancellationToken ct)
         {
-            // Try restoring a persisted session first — unless this process was given its own
-            // device id: PlayerPrefs is shared by every instance on the machine, and restoring
-            // would hand this client the account of whichever instance logged in last.
-            if (!_nakama.IsSessionValid && !_nakama.HasExplicitDeviceId)
-            {
-                await _nakama.RestoreSessionAsync(ct);
-            }
-
-            // Still invalid — authenticate fresh with device ID.
-            if (!_nakama.IsSessionValid)
-            {
-                await _nakama.AuthenticateDeviceAsync(ct: ct);
-            }
+            await EnsureSessionAsync(ct);
 
             var session = _nakama.Session;
             if (session == null)
@@ -103,6 +91,74 @@ namespace Scripts.Nakama.Auth
         }
 
         /// <summary>
+        /// Makes sure there is a valid Nakama session: restores the persisted one, refreshing it
+        /// if it expired, else signs in with the device id. Failures are classified exactly as the
+        /// RPC's are (<see cref="IsRefusal"/>): a refused sign-in is permanent, a network or server
+        /// failure is retried by the reconnect loop.
+        /// </summary>
+        async UniTask EnsureSessionAsync(CancellationToken ct)
+        {
+            try
+            {
+                // Try restoring a persisted session first — unless this process was given its own
+                // device id: PlayerPrefs is shared by every instance on the machine, and restoring
+                // would hand this client the account of whichever instance logged in last.
+                if (!_nakama.IsSessionValid && !_nakama.HasExplicitDeviceId)
+                {
+                    await _nakama.RestoreSessionAsync(ct);
+                }
+
+                // Still invalid — authenticate fresh with device ID.
+                if (!_nakama.IsSessionValid)
+                {
+                    await _nakama.AuthenticateDeviceAsync(ct: ct);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Already the permanent kind.
+                throw;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // Only the caller's own cancel is a cancel. The SDK reports a timeout as an
+                // OperationCanceledException too (sometimes the plain type), and a login that a
+                // newer one superseded is retried against the newer session.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw Classify("Nakama sign-in", ex);
+            }
+        }
+
+        /// <summary>The exception the reconnect loop should see for a failed Nakama call.</summary>
+        static Exception Classify(string what, Exception ex)
+        {
+            if (IsRefusal(ex))
+            {
+                // Loud on purpose: the failure mode this replaces was silent.
+                return new InvalidOperationException(
+                    $"{what} was refused, so no gateway token could be obtained. The gateway cannot " +
+                    $"authenticate this player without it. Verify the session is valid. Cause: {ex.Message}", ex);
+            }
+
+            // Includes an OperationCanceledException the caller did not ask for: an HTTP timeout
+            // surfaces as TaskCanceledException, and netcode's reconnect loop would read it as
+            // "the user left" and exit without a state change.
+            return new GatewayTokenUnavailableException(
+                $"{what} failed ({ex.GetType().Name}), so no gateway token could be obtained this " +
+                $"time; the caller may retry. Cause: {ex.Message}", ex);
+        }
+
+        /// <summary>
+        /// True for Nakama saying no to this player (401 / 403), which no retry changes. Every
+        /// other failure of the RPC is the network or the server having a bad moment.
+        /// </summary>
+        public static bool IsRefusal(Exception failure) =>
+            failure is ApiResponseException api && (api.StatusCode == 401 || api.StatusCode == 403);
+
+        /// <summary>
         /// Exchanges the Nakama session for a gateway-signed JWT.
         /// </summary>
         /// <remarks>
@@ -122,18 +178,14 @@ namespace Scripts.Nakama.Auth
                     session, GatewayTokenRpc, GatewayTokenPayload(_character?.CharacterId), canceller: ct);
                 payload = rpc?.Payload;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 // A cancel is a cancel, not a "Nakama RPC failed".
                 throw;
             }
             catch (Exception ex)
             {
-                // Loud on purpose: the failure mode this replaces was silent.
-                throw new InvalidOperationException(
-                    $"Nakama RPC '{GatewayTokenRpc}' failed, so no gateway token could be " +
-                    "obtained. The gateway cannot authenticate this player without it. " +
-                    $"Verify the RPC is registered on the Nakama server. Cause: {ex.Message}", ex);
+                throw Classify($"Nakama RPC '{GatewayTokenRpc}'", ex);
             }
 
             if (string.IsNullOrEmpty(payload))
