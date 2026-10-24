@@ -8,5 +8,5 @@
 # To update: copy Samples~/DOTSSample from the pinned tag over this folder, byte for byte
 # (including .meta files), and change both lines below.
 package=com.cuvara.netcode
-version=v0.48.0
-commit=51b083e3d8a8287e190ca8f13932fbf40655ab2f
+version=v0.49.0
+commit=2ea640130e3e7e74a173396f0457561589e7950d

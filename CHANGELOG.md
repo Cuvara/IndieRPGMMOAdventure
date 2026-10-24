@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Pin `com.cuvara.netcode` v0.48.0 → v0.49.0** (`2ea6401`) and **`com.cuvara.dots` v0.32.0 → v0.33.0** (`1ac175d`). Netcode 0.49.0 gives snapshot speed explicit presence: an absent speed decodes to `NaN` and a present `0` means immobile, and `LocalMovePredictor.SetServerSpeed` adopts any finite value `>= 0`. It also isolates throwing event subscribers, hardens KCP close and reconnect paths, and retries a missing keyframe. The client has no code that reads snapshot `Speed`, so no client change is needed. The imported DOTS Sample was re-copied from the tag (no file differs from 0.48.0; `.sample-source` updated). The `sgl-v0.7.0` pin stays: server `Shared.GameLogic` changed only a doc comment since that tag. Manifest and lock both move.
 - **Pin `com.cuvara.netcode` v0.47.0 → v0.48.0.** The released package improves prediction recovery after client frame stalls; the imported DOTS Sample was recopied from the v0.48.0 tag.
 - **Pin `com.cuvara.dots` v0.31.0 → v0.32.0.** The released package identifies the local prediction entity with `LocalNetworkEntity` and resets interpolation state on reconnect.
 
