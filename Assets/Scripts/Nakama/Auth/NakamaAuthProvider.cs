@@ -103,6 +103,13 @@ namespace Scripts.Nakama.Auth
         }
 
         /// <summary>
+        /// True for Nakama saying no to this player (401 / 403), which no retry changes. Every
+        /// other failure of the RPC is the network or the server having a bad moment.
+        /// </summary>
+        public static bool IsRefusal(Exception failure) =>
+            failure is ApiResponseException api && (api.StatusCode == 401 || api.StatusCode == 403);
+
+        /// <summary>
         /// Exchanges the Nakama session for a gateway-signed JWT.
         /// </summary>
         /// <remarks>
@@ -122,18 +129,27 @@ namespace Scripts.Nakama.Auth
                     session, GatewayTokenRpc, GatewayTokenPayload(_character?.CharacterId), canceller: ct);
                 payload = rpc?.Payload;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 // A cancel is a cancel, not a "Nakama RPC failed".
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (IsRefusal(ex))
             {
                 // Loud on purpose: the failure mode this replaces was silent.
                 throw new InvalidOperationException(
-                    $"Nakama RPC '{GatewayTokenRpc}' failed, so no gateway token could be " +
+                    $"Nakama RPC '{GatewayTokenRpc}' was refused, so no gateway token could be " +
                     "obtained. The gateway cannot authenticate this player without it. " +
-                    $"Verify the RPC is registered on the Nakama server. Cause: {ex.Message}", ex);
+                    $"Verify the session is valid and the RPC is registered. Cause: {ex.Message}", ex);
+            }
+            catch (Exception ex)
+            {
+                // Includes an OperationCanceledException the caller did not ask for: an HTTP
+                // timeout surfaces as TaskCanceledException, and netcode's reconnect loop would
+                // read it as "the user left" and exit without a state change.
+                throw new GatewayTokenUnavailableException(
+                    $"Nakama RPC '{GatewayTokenRpc}' failed ({ex.GetType().Name}), so no gateway " +
+                    $"token could be obtained this time; the caller may retry. Cause: {ex.Message}", ex);
             }
 
             if (string.IsNullOrEmpty(payload))

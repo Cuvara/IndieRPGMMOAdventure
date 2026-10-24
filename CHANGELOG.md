@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The player is told when the session ends, and can retry (audit CN-02).** `MainSessionDriver`
+  now publishes a session status (`SessionRecovery`) from `ConnectionStateChanged`, `Reconnected`,
+  `ReconnectFailed` and a failed `MainSessionFlow`, and `SessionStatusOverlay` shows the cause
+  (a disconnect reason or the exception message) with a **Retry** button that runs a fresh
+  `MainSessionFlow`. Before this a kick, an exhausted reconnect or a failed login left an empty
+  world and a log line. There is no Back-to-login: the client has no login screen. See
+  `docs/SESSION-RECOVERY.md`.
+- **Tests for the session lifecycle (audit CN-10).** `NakamaAuthProviderTests`,
+  `SessionRecoveryTests` and `MainSessionDriverTests` (dispose cancels the flow, disconnects the
+  client, detaches handlers first). `NakamaSessionService` gained a constructor taking an
+  `IHttpAdapter` so Nakama can be scripted.
+
 ### Changed
 
 - **Pin `com.cuvara.netcode` v0.47.0 → v0.48.0.** The released package improves prediction recovery after client frame stalls; the imported DOTS Sample was recopied from the v0.48.0 tag.
@@ -14,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A transient Nakama failure aborted the reconnect after one attempt (audit CN-01).**
+  `NakamaAuthProvider` wrapped every `gateway_token` RPC failure in `InvalidOperationException`,
+  which netcode's `ReconnectPolicy.IsPermanentFailure` treats as "Nakama refused", so a network
+  that had not come back yet (timeout, socket error, HTTP 5xx / 429) ended the session with the
+  entity hold still open. Only a 401 / 403 and an invalid or empty payload stay
+  `InvalidOperationException`; everything else is a `GatewayTokenUnavailableException` the loop
+  retries, and a timeout's `TaskCanceledException` is no longer passed on as a cancel.
 - **TestLab `trace.ndjson` started with a frame marker, not the header.** The runner wrote the
   first frame marker before it had resolved the predictor and written the header, so the replayer
   found the header on line 2 (T59). The runner now resolves (and writes the header) before the first

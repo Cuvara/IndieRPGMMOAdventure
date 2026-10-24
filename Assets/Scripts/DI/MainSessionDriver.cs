@@ -58,11 +58,16 @@ namespace Scripts.DI
         private readonly PartyService party;
         private readonly CharacterService characters;
         private readonly CharacterSelectionState characterSelection;
+        private readonly Func<MainSessionFlow.IEndpoint> endpointFactory;
+        private readonly ISessionStatusView statusView;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         private readonly int instanceId = Interlocked.Increment(ref instances);
         private static int instances;
+        private SessionStatusPresenter presenter;
+        private IDisposable overlay;
         private bool disposed;
 
+        [VContainer.Inject]
         public MainSessionDriver(
             NetworkClient client,
             NakamaSessionService nakama,
@@ -77,7 +82,34 @@ namespace Scripts.DI
             this.party = party ?? throw new ArgumentNullException(nameof(party));
             this.characters = characters ?? throw new ArgumentNullException(nameof(characters));
             this.characterSelection = characterSelection ?? throw new ArgumentNullException(nameof(characterSelection));
+            this.endpointFactory = () => new Endpoint(
+                this.client, this.nakama, this.party, this.characters, this.characterSelection,
+                this.backend.Value.Character);
         }
+
+        /// <summary>
+        /// Test seam: a driver over a caller-supplied endpoint and status view, with the real
+        /// <see cref="NetworkClient"/>. Everything the driver does with the client (its events,
+        /// its disconnect on dispose) is the production code. A null <paramref name="statusView"/>
+        /// falls back to the real overlay, which is absent in a headless run.
+        /// </summary>
+        internal MainSessionDriver(
+            NetworkClient client,
+            BackendSettings backend,
+            Func<MainSessionFlow.IEndpoint> endpointFactory,
+            ISessionStatusView statusView)
+        {
+            this.client = client ?? throw new ArgumentNullException(nameof(client));
+            this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
+            this.endpointFactory = endpointFactory ?? throw new ArgumentNullException(nameof(endpointFactory));
+            this.statusView = statusView;
+        }
+
+        /// <summary>
+        /// What the player is told about the connection; null until <see cref="Start"/>. Retry
+        /// runs a fresh <see cref="MainSessionFlow"/> (replacing <see cref="Flow"/>).
+        /// </summary>
+        public SessionRecovery Recovery { get; private set; }
 
         /// <summary>The sequence this driver ran; null until <see cref="Start"/>.</summary>
         public MainSessionFlow Flow { get; private set; }
@@ -96,20 +128,35 @@ namespace Scripts.DI
                 $"{MainSessionFlow.Tag} session driver #{this.instanceId} start: disposed={this.disposed} " +
                 $"tokenCancelled={this.lifetime.IsCancellationRequested} clientState={this.client.State}");
 
+            this.Recovery = new SessionRecovery(this.RunFlowAsync);
+            var view = this.statusView ?? SessionStatusOverlay.TryCreate();
+            if (view != null)
+            {
+                this.presenter = new SessionStatusPresenter(this.Recovery, view, this.lifetime.Token);
+                this.overlay = view as IDisposable;
+            }
+
             this.client.Reconnected += this.OnReconnected;
             this.client.ReconnectFailed += this.OnReconnectFailed;
             this.client.StateChanged += this.OnStateChanged;
+            this.client.ConnectionStateChanged += this.OnConnectionStateChanged;
 
             this.RunAsync(this.lifetime.Token).Forget();
         }
 
         private async UniTaskVoid RunAsync(CancellationToken cancellationToken)
         {
-            this.Flow = new MainSessionFlow();
-            await this.Flow.RunAsync(
-                new Endpoint(
-                    this.client, this.nakama, this.party, this.characters, this.characterSelection,
-                    this.backend.Value.Character),
+            var flow = await this.RunFlowAsync(cancellationToken);
+            this.Recovery.FlowFinished(flow);
+        }
+
+        /// <summary>One attempt of the session sequence, on a flow of its own (a flow is single-shot).</summary>
+        private async Task<MainSessionFlow> RunFlowAsync(CancellationToken cancellationToken)
+        {
+            var flow = new MainSessionFlow();
+            this.Flow = flow;
+            await flow.RunAsync(
+                this.endpointFactory(),
                 this.backend.DeviceId,
                 this.backend.Value.MapId,
                 this.backend.Value.CreatesParty,
@@ -118,14 +165,47 @@ namespace Scripts.DI
                 Debug.Log,
                 Debug.LogError,
                 cancellationToken);
+            return flow;
         }
 
         private void OnStateChanged(NetworkClientState state) => Debug.Log($"{MainSessionFlow.Tag} State -> {state}");
 
-        private void OnReconnected() => Debug.Log($"{MainSessionFlow.Tag} Reconnected as {this.client.UserId}");
+        /// <summary>
+        /// The player-facing mapping of the client's states. Ended with reason "user" is our own
+        /// Disconnect() and says nothing to the player; any other Ended is a close nothing will
+        /// undo (a kick, a protocol mismatch, an exhausted reconnect). A close the client does
+        /// reconnect from passes through Ended and into Reconnecting within one call chain, so
+        /// no frame renders it.
+        /// </summary>
+        private void OnConnectionStateChanged(ConnectionStateChangedEvent change)
+        {
+            switch (change.Current)
+            {
+                case NetworkClientState.Ended when change.Reason != "user":
+                    this.Recovery.Ended(change.Reason);
+                    break;
+                case NetworkClientState.Reconnecting:
+                    this.Recovery.Reconnecting();
+                    break;
+                case NetworkClientState.InWorld:
+                    this.Recovery.InWorld();
+                    break;
+            }
+        }
 
-        private void OnReconnectFailed(Exception exception) =>
+        private void OnReconnected()
+        {
+            Debug.Log($"{MainSessionFlow.Tag} Reconnected as {this.client.UserId}");
+            this.Recovery.InWorld();
+        }
+
+        private void OnReconnectFailed(Exception exception)
+        {
             Debug.LogWarning($"{MainSessionFlow.Tag} Reconnect gave up: {exception?.Message}");
+
+            // After the Ended transition, so the cause shown is the exception's, not "reconnect exhausted".
+            this.Recovery.Ended(exception?.Message);
+        }
 
         public void Dispose()
         {
@@ -139,6 +219,8 @@ namespace Scripts.DI
             this.client.Reconnected -= this.OnReconnected;
             this.client.ReconnectFailed -= this.OnReconnectFailed;
             this.client.StateChanged -= this.OnStateChanged;
+            this.client.ConnectionStateChanged -= this.OnConnectionStateChanged;
+            this.presenter?.Dispose();
 
             this.lifetime.Cancel();
             this.lifetime.Dispose();
@@ -146,6 +228,9 @@ namespace Scripts.DI
             // The scope owned the session; the root-scoped client outlives it and must not keep a
             // dead scene's connection open into the next one.
             this.client.Disconnect();
+
+            // Last: nothing listens any more, and Disconnect() above cannot reach a destroyed view.
+            this.overlay?.Dispose();
         }
 
         /// <summary>Adapts the Nakama service and the netcode client to the flow's seam.</summary>
