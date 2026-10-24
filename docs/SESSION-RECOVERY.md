@@ -19,9 +19,16 @@ exception type is retried within the budget (30 s entity hold, 60 s budget).
 | Timeout, `HttpRequestException`, socket / IO error, HTTP 5xx / 429 / any other status, no status (connection failed) | `GatewayTokenUnavailableException` | tries the next round |
 | A cancel from the caller's own token | `OperationCanceledException` (unchanged) | exits quietly, the new operation owns the state |
 
+The same table applies to the sign-in that precedes the RPC (persisted-session restore, the
+refresh of an expired token, and the device-id fall back): `RestoreSessionAsync` swallows a failed
+refresh and falls back to device sign-in, so a 401 / 403 from *that* is the refusal, and a
+timeout or 5xx anywhere in it is retried. An expired session is the usual state at the first
+reconnect round after a long drop.
+
 A timeout reaches the provider as `TaskCanceledException`, which *is* an
 `OperationCanceledException`. Only a cancel of the caller's token passes through as one;
-any other is wrapped, because the loop reads a stray `OperationCanceledException` as "the user
+any other (the SDK also reports a timeout, or a login a newer one superseded, as a plain
+`OperationCanceledException`) is wrapped, because the loop reads a stray `OperationCanceledException` as "the user
 left" and returns without changing state.
 
 Before this, every RPC failure was wrapped in `InvalidOperationException`. A Wi-Fi hand-off

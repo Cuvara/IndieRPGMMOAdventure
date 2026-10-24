@@ -18,10 +18,14 @@ namespace Tests.Editor
     internal sealed class FakeNakamaHttp : IHttpAdapter
     {
         private readonly Queue<Func<Task<string>>> rpcOutcomes = new Queue<Func<Task<string>>>();
+        private readonly Queue<Func<Task<string>>> authOutcomes = new Queue<Func<Task<string>>>();
+        private readonly Queue<Func<Task<string>>> refreshOutcomes = new Queue<Func<Task<string>>>();
 
         public int RpcCalls { get; private set; }
 
         public int AuthCalls { get; private set; }
+
+        public int RefreshCalls { get; private set; }
 
         public ILogger Logger { get; set; }
 
@@ -46,6 +50,20 @@ namespace Tests.Editor
             return this;
         }
 
+        /// <summary>The next device authentication fails with <paramref name="failure"/> (later ones succeed).</summary>
+        public FakeNakamaHttp ThenAuthFail(Exception failure)
+        {
+            this.authOutcomes.Enqueue(() => Task.FromException<string>(failure));
+            return this;
+        }
+
+        /// <summary>The next session refresh fails with <paramref name="failure"/>.</summary>
+        public FakeNakamaHttp ThenRefreshFail(Exception failure)
+        {
+            this.refreshOutcomes.Enqueue(() => Task.FromException<string>(failure));
+            return this;
+        }
+
         public Task<string> SendAsync(string method, Uri uri, IDictionary<string, string> headers, byte[] body,
             int timeout, CancellationToken? cancellationToken)
         {
@@ -53,8 +71,20 @@ namespace Tests.Editor
             if (path.Contains("/authenticate/device"))
             {
                 this.AuthCalls++;
-                var jwt = Jwt("user-1");
+                if (this.authOutcomes.Count > 0) return this.authOutcomes.Dequeue()();
+                var jwt = Jwt("user-1", TimeSpan.FromHours(1));
                 return Task.FromResult("{\"token\":\"" + jwt + "\",\"refresh_token\":\"" + jwt + "\"}");
+            }
+
+            if (path.Contains("/session/refresh"))
+            {
+                this.RefreshCalls++;
+                if (this.refreshOutcomes.Count == 0)
+                {
+                    throw new InvalidOperationException("the test scripted no session refresh outcome");
+                }
+
+                return this.refreshOutcomes.Dequeue()();
             }
 
             if (path.Contains("/rpc/gateway_token"))
@@ -71,13 +101,18 @@ namespace Tests.Editor
             throw new InvalidOperationException("unscripted Nakama request: " + method + " " + uri);
         }
 
+        /// <summary>A service over this transport with no pinned device id, so it restores a persisted session.</summary>
+        public NakamaSessionService NewRestoringService() =>
+            new NakamaSessionService(new NakamaSettings(), this);
+
         /// <summary>A service over this transport that plays as device <c>dev-1</c> (no restored session).</summary>
         public NakamaSessionService NewService() =>
             new NakamaSessionService(new NakamaSettings { DeviceId = "dev-1" }, this);
 
-        private static string Jwt(string userId)
+        /// <summary>A session token for <paramref name="userId"/> that expires in <paramref name="lifetime"/> (negative: already expired).</summary>
+        public static string Jwt(string userId, TimeSpan lifetime)
         {
-            var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+            var exp = DateTimeOffset.UtcNow.Add(lifetime).ToUnixTimeSeconds();
             var payload = "{\"uid\":\"" + userId + "\",\"usn\":\"tester\",\"exp\":" + exp + "}";
             return Segment("{\"alg\":\"HS256\",\"typ\":\"JWT\"}") + "." + Segment(payload) + ".sig";
         }

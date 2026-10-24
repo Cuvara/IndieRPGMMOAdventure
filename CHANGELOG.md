@@ -32,7 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NakamaAuthProvider` wrapped every `gateway_token` RPC failure in `InvalidOperationException`,
   which netcode's `ReconnectPolicy.IsPermanentFailure` treats as "Nakama refused", so a network
   that had not come back yet (timeout, socket error, HTTP 5xx / 429) ended the session with the
-  entity hold still open. Only a 401 / 403 and an invalid or empty payload stay
+  entity hold still open. The same classification covers the sign-in before the RPC (session
+  restore, refresh, device auth): a refused sign-in is permanent, a timeout or 5xx is retried.
+  Only a 401 / 403 and an invalid or empty payload stay
   `InvalidOperationException`; everything else is a `GatewayTokenUnavailableException` the loop
   retries, and a timeout's `TaskCanceledException` is no longer passed on as a cancel.
 - **TestLab `trace.ndjson` started with a frame marker, not the header.** The runner wrote the

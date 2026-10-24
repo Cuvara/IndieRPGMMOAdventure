@@ -15,6 +15,7 @@ namespace Tests.Editor
     using NUnit.Framework;
     using Scripts.Nakama.Auth;
     using static Tests.Editor.ScriptedNetcode;
+    using UnityEngine;
     using UnityEngine.TestTools;
 
     /// <summary>
@@ -121,6 +122,147 @@ namespace Tests.Editor
 
             Assert.That(token, Is.EqualTo("jwt-2"));
             Assert.That(http.RpcCalls, Is.EqualTo(2));
+        }
+
+        // ── the sign-in that precedes the RPC (restore, refresh, device auth) ──
+
+        private const string AuthTokenKey = "nakama.auth_token";
+        private const string RefreshTokenKey = "nakama.refresh_token";
+        private string savedAuthToken;
+        private string savedRefreshToken;
+
+        [SetUp]
+        public void SaveSessionPrefs()
+        {
+            // The restore path reads PlayerPrefs; leave the developer's own persisted session alone.
+            this.savedAuthToken = PlayerPrefs.GetString(AuthTokenKey, null);
+            this.savedRefreshToken = PlayerPrefs.GetString(RefreshTokenKey, null);
+            PlayerPrefs.DeleteKey(AuthTokenKey);
+            PlayerPrefs.DeleteKey(RefreshTokenKey);
+        }
+
+        [TearDown]
+        public void RestoreSessionPrefs()
+        {
+            PlayerPrefs.DeleteKey(AuthTokenKey);
+            PlayerPrefs.DeleteKey(RefreshTokenKey);
+            if (!string.IsNullOrEmpty(this.savedAuthToken)) PlayerPrefs.SetString(AuthTokenKey, this.savedAuthToken);
+            if (!string.IsNullOrEmpty(this.savedRefreshToken)) PlayerPrefs.SetString(RefreshTokenKey, this.savedRefreshToken);
+        }
+
+        /// <summary>A persisted session whose auth token expired an hour ago and whose refresh token is still good.</summary>
+        private static void PersistExpiredSession()
+        {
+            PlayerPrefs.SetString(AuthTokenKey, FakeNakamaHttp.Jwt("user-1", TimeSpan.FromHours(-1)));
+            PlayerPrefs.SetString(RefreshTokenKey, FakeNakamaHttp.Jwt("user-1", TimeSpan.FromHours(24)));
+        }
+
+        [TestCase(401)]
+        [TestCase(403)]
+        public void ARefusedDeviceSignIn_IsPermanent(int status)
+        {
+            var http = new FakeNakamaHttp().ThenAuthFail(new ApiResponseException(status, "no", 16));
+
+            var thrown = Fails(ProviderOver(http));
+
+            Assert.That(ReconnectPolicy.IsPermanentFailure(thrown), Is.True, thrown.ToString());
+            Assert.That(http.RpcCalls, Is.EqualTo(0), "no RPC after a refused sign-in");
+        }
+
+        [TestCaseSource(nameof(TransientFailures))]
+        public void ATransientDeviceSignInFailure_IsNotPermanent_AndTheNextCallSucceeds(Exception failure)
+        {
+            var http = new FakeNakamaHttp().ThenAuthFail(failure).ThenToken("jwt-2");
+            var provider = ProviderOver(http);
+
+            var thrown = Fails(provider);
+
+            Assert.That(ReconnectPolicy.IsPermanentFailure(thrown), Is.False, thrown.ToString());
+            Assert.That(thrown, Is.Not.InstanceOf<OperationCanceledException>());
+            Assert.That(provider.GetJwtAsync(CancellationToken.None).GetAwaiter().GetResult(), Is.EqualTo("jwt-2"));
+        }
+
+        [TestCase(401)]
+        [TestCase(403)]
+        public void AnExpiredSession_WhoseRefreshAndDeviceSignInAreRefused_IsPermanent(int status)
+        {
+            PersistExpiredSession();
+            var http = new FakeNakamaHttp()
+                .ThenRefreshFail(new ApiResponseException(401, "refresh token invalid", 16))
+                .ThenAuthFail(new ApiResponseException(status, "no", 16));
+            var provider = new NakamaAuthProvider(http.NewRestoringService());
+
+            var thrown = Fails(provider);
+
+            Assert.That(http.RefreshCalls, Is.EqualTo(1), "the refresh was tried first");
+            Assert.That(http.AuthCalls, Is.EqualTo(1), "then the fall back to device sign-in");
+            Assert.That(ReconnectPolicy.IsPermanentFailure(thrown), Is.True, thrown.ToString());
+        }
+
+        [Test]
+        public void AnExpiredSession_WhoseRefreshAndDeviceSignInFailInTransit_IsNotPermanent()
+        {
+            PersistExpiredSession();
+            var http = new FakeNakamaHttp()
+                .ThenRefreshFail(new ApiResponseException(503, "unavailable", -1))
+                .ThenAuthFail(new ApiResponseException(503, "unavailable", -1));
+            var provider = new NakamaAuthProvider(http.NewRestoringService());
+
+            var thrown = Fails(provider);
+
+            Assert.That(ReconnectPolicy.IsPermanentFailure(thrown), Is.False, thrown.ToString());
+        }
+
+        [Test]
+        public void AnExpiredSession_WhoseRefreshHitsADeadNetwork_IsNotPermanent()
+        {
+            PersistExpiredSession();
+            var http = new FakeNakamaHttp().ThenRefreshFail(new HttpRequestException("network down"));
+            var provider = new NakamaAuthProvider(http.NewRestoringService());
+
+            var thrown = Fails(provider);
+
+            Assert.That(ReconnectPolicy.IsPermanentFailure(thrown), Is.False, thrown.ToString());
+            Assert.That(thrown, Is.Not.InstanceOf<OperationCanceledException>());
+        }
+
+        [Test]
+        public void AnExpiredSession_RefusedOnRefreshButAcceptedOnDeviceSignIn_StillGetsAToken()
+        {
+            PersistExpiredSession();
+            var http = new FakeNakamaHttp()
+                .ThenRefreshFail(new ApiResponseException(401, "refresh token invalid", 16))
+                .ThenToken("jwt-3");
+            var provider = new NakamaAuthProvider(http.NewRestoringService());
+
+            Assert.That(provider.GetJwtAsync(CancellationToken.None).GetAwaiter().GetResult(), Is.EqualTo("jwt-3"));
+        }
+
+        [Test]
+        public void ACallerCancelDuringSignIn_StaysACancel()
+        {
+            using (var cts = new CancellationTokenSource())
+            {
+                var http = new FakeNakamaHttp();
+                http.ThenAuthFail(new TaskCanceledException());
+                cts.Cancel();
+
+                Assert.That(Fails(ProviderOver(http), cts.Token), Is.InstanceOf<OperationCanceledException>());
+            }
+        }
+
+        [Test]
+        public void ACancelNobodyAskedFor_DuringSignIn_IsRetriedNotTakenForTheUserLeaving()
+        {
+            // The SDK reports a timeout, and a login superseded by a newer one, as a plain
+            // OperationCanceledException. The reconnect loop treats that type as "the user left" and
+            // returns with no state change, so the provider must not pass it on.
+            var http = new FakeNakamaHttp().ThenAuthFail(new OperationCanceledException("superseded or timed out"));
+
+            var thrown = Fails(ProviderOver(http));
+
+            Assert.That(thrown, Is.Not.InstanceOf<OperationCanceledException>());
+            Assert.That(ReconnectPolicy.IsPermanentFailure(thrown), Is.False);
         }
 
         // ── the reconnect loop itself ────────────────────────────────────
