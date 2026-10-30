@@ -23,6 +23,7 @@ namespace Scripts.Session
     {
         private readonly Func<CancellationToken, Task<MainSessionFlow>> startFlow;
         private bool retrying;
+        private bool wasInWorld;
 
         /// <param name="startFlow">Runs a new <see cref="MainSessionFlow"/> to completion and returns it.</param>
         public SessionRecovery(Func<CancellationToken, Task<MainSessionFlow>> startFlow)
@@ -36,7 +37,31 @@ namespace Scripts.Session
         public event Action<SessionStatus> StatusChanged;
 
         /// <summary>The client is playing (or the first login just succeeded).</summary>
-        public void InWorld() => this.Set(SessionStatus.Active);
+        public void InWorld()
+        {
+            this.wasInWorld = true;
+            this.Set(SessionStatus.Active);
+        }
+
+        /// <summary>
+        /// The client retries a transient failure of the <b>first</b> connect (netcode reports it
+        /// through <c>ReconnectProgress</c> while the state stays Authenticating). Ignored once
+        /// the session has been in the world, where the same event belongs to a reconnect that
+        /// <see cref="Reconnecting"/> already covers, and while Ended. A manual Retry re-opens the
+        /// gate: its fresh flow is a first connect again, so progress updates the status while it
+        /// runs (Retry stays unavailable).
+        /// </summary>
+        public void ConnectRetrying(int attempt, int maxAttempts)
+        {
+            if (this.wasInWorld) return;
+            var kind = this.Status.Kind;
+            var allowed = kind == SessionStatusKind.Active
+                || kind == SessionStatusKind.Connecting
+                || (this.retrying && kind == SessionStatusKind.Reconnecting);
+            if (!allowed) return;
+
+            this.Set(new SessionStatus(attempt, maxAttempts));
+        }
 
         /// <summary>The link dropped and the client is reconnecting on its own.</summary>
         public void Reconnecting() => this.Set(new SessionStatus(SessionStatusKind.Reconnecting, string.Empty, false));
@@ -77,6 +102,7 @@ namespace Scripts.Session
             if (this.retrying || this.Status.Kind != SessionStatusKind.Ended) return;
 
             this.retrying = true;
+            this.wasInWorld = false;
             try
             {
                 this.Set(new SessionStatus(SessionStatusKind.Reconnecting, string.Empty, false));

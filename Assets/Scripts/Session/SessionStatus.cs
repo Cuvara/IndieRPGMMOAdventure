@@ -11,6 +11,9 @@ namespace Scripts.Session
 
         /// <summary>The client has stopped trying. Only the player can act: Retry.</summary>
         Ended,
+
+        /// <summary>The first connect hit a transient failure and the client is retrying it.</summary>
+        Connecting,
     }
 
     /// <summary>An immutable snapshot of <see cref="SessionRecovery.Status"/>.</summary>
@@ -24,6 +27,20 @@ namespace Scripts.Session
             this.Cause = cause ?? string.Empty;
             this.CanRetry = canRetry;
         }
+
+        /// <summary>A first-connect retry: connect attempt number <paramref name="attempt"/>; <paramref name="maxAttempts"/> is kept but not shown, the time budget usually ends the loop first.</summary>
+        public SessionStatus(int attempt, int maxAttempts)
+            : this(SessionStatusKind.Connecting, string.Empty, false)
+        {
+            this.Attempt = attempt;
+            this.MaxAttempts = maxAttempts;
+        }
+
+        /// <summary>Connect attempt number of a <see cref="SessionStatusKind.Connecting"/> status; 0 otherwise.</summary>
+        public int Attempt { get; }
+
+        /// <summary>Retry budget of a <see cref="SessionStatusKind.Connecting"/> status; 0 otherwise.</summary>
+        public int MaxAttempts { get; }
 
         public SessionStatusKind Kind { get; }
 
@@ -45,6 +62,10 @@ namespace Scripts.Session
                 {
                     case SessionStatusKind.Reconnecting:
                         return "Connection lost. Reconnecting...";
+                    case SessionStatusKind.Connecting:
+                        return this.Attempt > 0
+                            ? $"Connecting... (attempt {this.Attempt})"
+                            : "Connecting...";
                     case SessionStatusKind.Ended:
                         return string.IsNullOrEmpty(this.Cause)
                             ? "Disconnected."
@@ -55,6 +76,6 @@ namespace Scripts.Session
             }
         }
 
-        public override string ToString() => $"{this.Kind} canRetry={this.CanRetry} cause='{this.Cause}'";
+        public override string ToString() => $"{this.Kind} canRetry={this.CanRetry} cause='{this.Cause}' attempt={this.Attempt}/{this.MaxAttempts}";
     }
 }
