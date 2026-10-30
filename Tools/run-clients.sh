@@ -25,6 +25,8 @@
 # Run from WSL or Git Bash; the .exe is launched through the Windows loader.
 
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/path-conversion.sh"
 
 EXE=""
 COUNT=3
@@ -156,14 +158,6 @@ fi
 
 LOG_DIR="${LOG_DIR:-/tmp/cuvara-clients}"
 mkdir -p "$LOG_DIR"
-
-towin() {
-    if command -v wslpath >/dev/null 2>&1; then
-        wslpath -w "$1"
-    else
-        printf '%s\n' "$1"
-    fi
-}
 
 # One stamp for the whole launch, so every instance of one run shares a prefix
 # and the per-instance index is what tells them apart in the server logs.
