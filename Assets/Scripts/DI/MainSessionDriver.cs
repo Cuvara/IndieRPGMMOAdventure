@@ -138,6 +138,7 @@ namespace Scripts.DI
 
             this.client.Reconnected += this.OnReconnected;
             this.client.ReconnectFailed += this.OnReconnectFailed;
+            this.client.ReconnectProgress += this.OnReconnectProgress;
             this.client.StateChanged += this.OnStateChanged;
             this.client.ConnectionStateChanged += this.OnConnectionStateChanged;
 
@@ -199,6 +200,15 @@ namespace Scripts.DI
             this.Recovery.InWorld();
         }
 
+        /// <summary>
+        /// Netcode retries a transient first-connect failure (up to the reconnect budget) while the
+        /// state stays Authenticating, and reports each round here. <see cref="SessionRecovery"/>
+        /// shows it only before the session first reached the world; a later round is a reconnect
+        /// and <c>ConnectionStateChanged</c> already said so.
+        /// </summary>
+        private void OnReconnectProgress(ReconnectionProgress progress) =>
+            this.Recovery.ConnectRetrying(progress.Attempt, progress.MaxAttempts);
+
         private void OnReconnectFailed(Exception exception)
         {
             Debug.LogWarning($"{MainSessionFlow.Tag} Reconnect gave up: {exception?.Message}");
@@ -218,6 +228,7 @@ namespace Scripts.DI
 
             this.client.Reconnected -= this.OnReconnected;
             this.client.ReconnectFailed -= this.OnReconnectFailed;
+            this.client.ReconnectProgress -= this.OnReconnectProgress;
             this.client.StateChanged -= this.OnStateChanged;
             this.client.ConnectionStateChanged -= this.OnConnectionStateChanged;
             this.presenter?.Dispose();

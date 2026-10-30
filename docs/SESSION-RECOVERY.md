@@ -42,9 +42,15 @@ whose first round hit a still-dead network aborted the reconnect after one attem
 |---|---|
 | `ConnectionStateChanged` to `InWorld`, `Reconnected`, a finished `MainSessionFlow` in `InWorld` | `Active` (overlay hidden) |
 | `ConnectionStateChanged` to `Reconnecting` | `Reconnecting` ("Connection lost. Reconnecting...") |
+| `ReconnectProgress` before the session was ever `InWorld` (a first-connect retry) | `Connecting` ("Connecting... (retry n/max)", no Retry button) |
 | `ConnectionStateChanged` to `Ended` with a reason other than `user` | `Ended` with the disconnect reason, e.g. `Kicked (duplicate_login)` |
 | `ReconnectFailed` | `Ended` with the exception message (replaces the generic "reconnect exhausted") |
 | `MainSessionFlow` in `Failed` | `Ended` with the exception message |
+
+`Connecting` needs a Netcode that retries the first connect (develop after PR #211; v0.49.0
+fails it at once, so there the status never appears and nothing else changes). It is ignored once
+the session has been `InWorld` (the same event then belongs to a reconnect, already `Reconnecting`),
+while `Ended`, and while a Retry runs. `InWorld` clears it; a final failure still ends in `Ended` with Retry.
 
 `Ended` with reason `user` is the client's own `Disconnect()` (scope teardown) and shows
 nothing. A close the client reconnects from passes through `Ended` into `Reconnecting` in one
@@ -67,7 +73,7 @@ logs in on its own). Add one beside Retry when a screen exists to go back to.
 | Fixture | Covers |
 |---|---|
 | `NakamaAuthProviderTests` | the table above; a real `NetworkClient` reconnecting through the provider: first round transient, second lands (`ReconnectFailed` silent, attempts 1 and 2); a 401 gives up after attempt 1 |
-| `SessionRecoveryTests` | statuses, Retry reaching `InWorld`, failed retry, no double login, presenter wiring |
+| `SessionRecoveryTests` | statuses, first-connect retry status (progress, InWorld, Ended; ignored after InWorld or when Ended), Retry reaching `InWorld`, failed retry, no double login, presenter wiring |
 | `MainSessionDriverTests` | a scripted kick shows the cause and Retry reaches `InWorld`; an exhausted reconnect; a failed login; dispose cancels the flow, disconnects the client and detaches the handlers first |
 
 The Nakama side is the production SDK client over `FakeNakamaHttp`, a scripted
