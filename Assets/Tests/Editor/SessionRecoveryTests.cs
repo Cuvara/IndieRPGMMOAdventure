@@ -225,10 +225,10 @@ namespace Tests.Editor
                 Assert.That(view.Last.Kind, Is.EqualTo(SessionStatusKind.Connecting));
                 Assert.That(view.Last.IsVisible, Is.True);
                 Assert.That(view.Last.CanRetry, Is.False);
-                Assert.That(view.Last.Caption, Is.EqualTo("Connecting... (retry 2/5)"));
+                Assert.That(view.Last.Caption, Is.EqualTo("Connecting... (attempt 2)"));
 
                 recovery.ConnectRetrying(3, 5);
-                Assert.That(view.Last.Caption, Is.EqualTo("Connecting... (retry 3/5)"));
+                Assert.That(view.Last.Caption, Is.EqualTo("Connecting... (attempt 3)"));
 
                 recovery.InWorld();
                 Assert.That(view.Last.Kind, Is.EqualTo(SessionStatusKind.Active));
@@ -250,6 +250,45 @@ namespace Tests.Editor
             recovery.ConnectRetrying(1, 5);
 
             Assert.That(recovery.Status.Kind, Is.EqualTo(SessionStatusKind.Reconnecting));
+        }
+
+        [Test]
+        public void ConnectRetry_AfterInWorldWhileStillActive_StaysActive()
+        {
+            // The only state where wasInWorld decides: without it the Active kind would pass the
+            // kind check and show Connecting over a session that is already playing.
+            var (recovery, _) = Recovery();
+            recovery.InWorld();
+
+            recovery.ConnectRetrying(1, 5);
+
+            Assert.That(recovery.Status.Kind, Is.EqualTo(SessionStatusKind.Active));
+            Assert.That(recovery.Status.IsVisible, Is.False);
+        }
+
+        [Test]
+        public async Task ConnectRetry_DuringManualRetry_ShowsConnecting_ThenInWorldClears()
+        {
+            var (recovery, endpoint) = Recovery();
+            recovery.InWorld();
+            recovery.Ended("gateway unreachable");
+            var gate = new TaskCompletionSource<bool>();
+            endpoint.HoldConnect = gate.Task;
+
+            var retry = recovery.RetryAsync(CancellationToken.None);
+            Assert.That(recovery.Status.Kind, Is.EqualTo(SessionStatusKind.Reconnecting));
+
+            recovery.ConnectRetrying(2, 5);
+            Assert.That(recovery.Status.Kind, Is.EqualTo(SessionStatusKind.Connecting));
+            Assert.That(recovery.Status.Caption, Is.EqualTo("Connecting... (attempt 2)"));
+            Assert.That(recovery.Status.CanRetry, Is.False);
+
+            recovery.ConnectRetrying(3, 5);
+            Assert.That(recovery.Status.Caption, Is.EqualTo("Connecting... (attempt 3)"));
+
+            gate.SetResult(true);
+            await retry;
+            Assert.That(recovery.Status.Kind, Is.EqualTo(SessionStatusKind.Active));
         }
 
         [Test]

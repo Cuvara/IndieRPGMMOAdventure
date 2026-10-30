@@ -47,13 +47,18 @@ namespace Scripts.Session
         /// The client retries a transient failure of the <b>first</b> connect (netcode reports it
         /// through <c>ReconnectProgress</c> while the state stays Authenticating). Ignored once
         /// the session has been in the world, where the same event belongs to a reconnect that
-        /// <see cref="Reconnecting"/> already covers, and while Ended or a Retry is running.
+        /// <see cref="Reconnecting"/> already covers, and while Ended. A manual Retry re-opens the
+        /// gate: its fresh flow is a first connect again, so progress updates the status while it
+        /// runs (Retry stays unavailable).
         /// </summary>
         public void ConnectRetrying(int attempt, int maxAttempts)
         {
-            if (this.wasInWorld || this.retrying) return;
+            if (this.wasInWorld) return;
             var kind = this.Status.Kind;
-            if (kind != SessionStatusKind.Active && kind != SessionStatusKind.Connecting) return;
+            var allowed = kind == SessionStatusKind.Active
+                || kind == SessionStatusKind.Connecting
+                || (this.retrying && kind == SessionStatusKind.Reconnecting);
+            if (!allowed) return;
 
             this.Set(new SessionStatus(attempt, maxAttempts));
         }
@@ -97,6 +102,7 @@ namespace Scripts.Session
             if (this.retrying || this.Status.Kind != SessionStatusKind.Ended) return;
 
             this.retrying = true;
+            this.wasInWorld = false;
             try
             {
                 this.Set(new SessionStatus(SessionStatusKind.Reconnecting, string.Empty, false));

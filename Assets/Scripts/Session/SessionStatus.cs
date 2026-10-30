@@ -9,11 +9,11 @@ namespace Scripts.Session
         /// <summary>The link dropped and the client is trying to come back by itself.</summary>
         Reconnecting,
 
-        /// <summary>The first connect hit a transient failure and the client is retrying it.</summary>
-        Connecting,
-
         /// <summary>The client has stopped trying. Only the player can act: Retry.</summary>
         Ended,
+
+        /// <summary>The first connect hit a transient failure and the client is retrying it.</summary>
+        Connecting,
     }
 
     /// <summary>An immutable snapshot of <see cref="SessionRecovery.Status"/>.</summary>
@@ -28,7 +28,7 @@ namespace Scripts.Session
             this.CanRetry = canRetry;
         }
 
-        /// <summary>A first-connect retry: <paramref name="attempt"/> of <paramref name="maxAttempts"/>.</summary>
+        /// <summary>A first-connect retry: connect attempt number <paramref name="attempt"/>; <paramref name="maxAttempts"/> is kept but not shown, the time budget usually ends the loop first.</summary>
         public SessionStatus(int attempt, int maxAttempts)
             : this(SessionStatusKind.Connecting, string.Empty, false)
         {
@@ -36,7 +36,7 @@ namespace Scripts.Session
             this.MaxAttempts = maxAttempts;
         }
 
-        /// <summary>Retry number of a <see cref="SessionStatusKind.Connecting"/> status; 0 otherwise.</summary>
+        /// <summary>Connect attempt number of a <see cref="SessionStatusKind.Connecting"/> status; 0 otherwise.</summary>
         public int Attempt { get; }
 
         /// <summary>Retry budget of a <see cref="SessionStatusKind.Connecting"/> status; 0 otherwise.</summary>
@@ -63,8 +63,8 @@ namespace Scripts.Session
                     case SessionStatusKind.Reconnecting:
                         return "Connection lost. Reconnecting...";
                     case SessionStatusKind.Connecting:
-                        return this.MaxAttempts > 0
-                            ? $"Connecting... (retry {this.Attempt}/{this.MaxAttempts})"
+                        return this.Attempt > 0
+                            ? $"Connecting... (attempt {this.Attempt})"
                             : "Connecting...";
                     case SessionStatusKind.Ended:
                         return string.IsNullOrEmpty(this.Cause)

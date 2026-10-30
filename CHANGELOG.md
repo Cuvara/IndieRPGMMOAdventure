@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **First-connect retry progress is shown (Part of #151).** `MainSessionDriver` subscribes to
   `NetworkClient.ReconnectProgress`; before the session was ever in the world it sets a new
-  `Connecting` status ("Connecting... (retry n/max)") instead of a silent wait. Takes effect with a
+  `Connecting` status ("Connecting... (attempt n)") instead of a silent wait. A manual Retry after
+  `Ended` re-opens this gate, so its first connect shows the counter too (Retry stays unavailable meanwhile). Takes effect with a
   Netcode release that retries the first connect (PR #211); the pin is unchanged. See
   `docs/SESSION-RECOVERY.md`.
 - **The player is told when the session ends, and can retry (audit CN-02).** `MainSessionDriver`
