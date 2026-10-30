@@ -48,6 +48,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$HERE/path-conversion.sh"
 
 EXE=""
 COUNT=3
@@ -62,6 +63,7 @@ TRANSPORT_KEY_ARG=""
 EXTRA_ARGS=()
 KUBE_CONTEXT=""
 REDIS_CONTAINER=""
+REDIS_WSL_DISTRO=""
 REDIS_NS="rpg-k8s-data"
 REDIS_STS="redis"
 SHOT_DIR=""
@@ -93,6 +95,8 @@ Usage: verify-multiclient.sh --exe <player.exe> --gateway-port P --nakama-port P
   --redis-container NAME Enables the Redis rows against the docker compose stack
                          (rpg-redis for ./stack.sh up). Mutually exclusive with
                          --kube-context. Neither given = those rows report SKIP.
+  --redis-wsl DISTRO     Run Redis through WSL Docker in DISTRO. If omitted,
+                         select WSL Docker when Windows Docker is unavailable.
   --redis-ns NS          Default rpg-k8s-data (kubectl only)
   --redis-sts NAME       Default redis (kubectl only)
   --shots DIR            Where to write window captures (default: a temp dir).
@@ -118,6 +122,7 @@ while [ $# -gt 0 ]; do
         --transport-key) TRANSPORT_KEY_ARG="$2"; shift 2 ;;
         --kube-context) KUBE_CONTEXT="$2"; shift 2 ;;
         --redis-container) REDIS_CONTAINER="$2"; shift 2 ;;
+        --redis-wsl) REDIS_WSL_DISTRO="$2"; shift 2 ;;
         --redis-ns) REDIS_NS="$2"; shift 2 ;;
         --redis-sts) REDIS_STS="$2"; shift 2 ;;
         --shots) SHOT_DIR="$2"; shift 2 ;;
@@ -272,7 +277,21 @@ fi
 if [ -n "$KUBE_CONTEXT" ]; then
     redis() { kubectl --context "$KUBE_CONTEXT" exec -n "$REDIS_NS" "statefulset/$REDIS_STS" -- redis-cli "$@" 2>/dev/null; }
 elif [ -n "$REDIS_CONTAINER" ]; then
-    redis() { docker exec "$REDIS_CONTAINER" redis-cli "$@" 2>/dev/null; }
+    REDIS_TRANSPORT="windows"
+    if [ -n "$REDIS_WSL_DISTRO" ]; then
+        REDIS_TRANSPORT="wsl"
+    elif ! docker info >/dev/null 2>&1 && command -v wsl.exe >/dev/null 2>&1 && wsl.exe -e docker info >/dev/null 2>&1; then
+        REDIS_TRANSPORT="wsl"
+    fi
+    if [ "$REDIS_TRANSPORT" = "wsl" ]; then
+        if [ -n "$REDIS_WSL_DISTRO" ]; then
+            redis() { wsl.exe -d "$REDIS_WSL_DISTRO" --exec docker exec "$REDIS_CONTAINER" redis-cli "$@" 2>/dev/null; }
+        else
+            redis() { wsl.exe -e docker exec "$REDIS_CONTAINER" redis-cli "$@" 2>/dev/null; }
+        fi
+    else
+        redis() { docker exec "$REDIS_CONTAINER" redis-cli "$@" 2>/dev/null; }
+    fi
 fi
 if [ -n "$KUBE_CONTEXT" ] || [ -n "$REDIS_CONTAINER" ]; then
 
@@ -303,7 +322,7 @@ PIDS=$(powershell.exe -NoProfile -Command \
     "(Get-Process IndieRPGMMOAdventure -EA SilentlyContinue).Id -join ','" 2>/dev/null | tr -d '\r')
 
 if [ -n "$PIDS" ]; then
-    SHOT_WIN=$(wslpath -w "$SHOT_DIR" 2>/dev/null || echo "$SHOT_DIR")
+    SHOT_WIN="$(towin "$SHOT_DIR")"
     PS1_FILE="$LOG_DIR/capture.ps1"
     cat > "$PS1_FILE" <<'PSCRIPT'
 param([int[]]$Pids, [string]$OutDir)
@@ -336,7 +355,7 @@ foreach ($p in $Pids) {
   Write-Output "$p captured"
 }
 PSCRIPT
-    PS1_WIN=$(wslpath -w "$PS1_FILE" 2>/dev/null || echo "$PS1_FILE")
+    PS1_WIN="$(towin "$PS1_FILE")"
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
         "& '$PS1_WIN' -Pids @($PIDS) -OutDir '$SHOT_WIN'" >/dev/null 2>&1
     shots=$(find "$SHOT_DIR" -name 'client-*.png' 2>/dev/null | wc -l)
