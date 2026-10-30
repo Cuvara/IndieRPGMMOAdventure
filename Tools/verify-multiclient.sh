@@ -321,8 +321,9 @@ fi
 PIDS=$(powershell.exe -NoProfile -Command \
     "(Get-Process IndieRPGMMOAdventure -EA SilentlyContinue).Id -join ','" 2>/dev/null | tr -d '\r')
 
-if [ -n "$PIDS" ]; then
-    SHOT_WIN="$(towin "$SHOT_DIR")"
+if [ -n "$PIDS" ] && ! SHOT_WIN="$(towin "$SHOT_DIR")"; then
+    fail "window capture" "screenshot directory converted to a Windows path" "towin failed for $SHOT_DIR (see the error above)"
+elif [ -n "$PIDS" ]; then
     PS1_FILE="$LOG_DIR/capture.ps1"
     cat > "$PS1_FILE" <<'PSCRIPT'
 param([int[]]$Pids, [string]$OutDir)
@@ -355,9 +356,12 @@ foreach ($p in $Pids) {
   Write-Output "$p captured"
 }
 PSCRIPT
-    PS1_WIN="$(towin "$PS1_FILE")"
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
-        "& '$PS1_WIN' -Pids @($PIDS) -OutDir '$SHOT_WIN'" >/dev/null 2>&1
+    # A failed conversion prints its own error; no capture runs and the row
+    # below reports 0 screenshots.
+    if PS1_WIN="$(towin "$PS1_FILE")"; then
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+            "& '$PS1_WIN' -Pids @($PIDS) -OutDir '$SHOT_WIN'" >/dev/null 2>&1
+    fi
     shots=$(find "$SHOT_DIR" -name 'client-*.png' 2>/dev/null | wc -l)
     skip "each window holds every player (MUTUAL VISIBILITY)" \
         "$shots screenshot(s) in $SHOT_DIR. This is the only row that proves clients can see EACH OTHER, and it needs a human -- $COUNT clients that each see only themselves pass every other row above.

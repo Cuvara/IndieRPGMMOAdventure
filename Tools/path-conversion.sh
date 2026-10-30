@@ -19,7 +19,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     fi
     converted="$(towin "$PWD")" || exit 1
     case "$converted" in
-        *:*) printf 'PASS path conversion: %s -> %s\n' "$PWD" "$converted" ;;
-        *) echo "error: path conversion did not produce a Windows drive path: $converted" >&2; exit 1 ;;
+        *:*|'\'*) printf 'PASS path conversion: %s -> %s\n' "$PWD" "$converted" ;;
+        *) echo "error: path conversion did not produce a Windows drive or UNC path: $converted" >&2; exit 1 ;;
     esac
 fi
