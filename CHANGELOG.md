@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is swallowed, any other fault is logged once, and a key that a token-ignoring provider warms
   after `Dispose` is released again when it settles. An internal `TeardownRecorder` seam lets
   tests assert the complete teardown sequence. No production behaviour change.
+- **A late prewarm cleanup no longer releases a newer installation's key (PR #169 review round 2).**
+  `LeasedViewAssetProvider` gains a per-key `ClaimEpoch` (new `IViewClaimEpochs`, client-side; the
+  package interface is unchanged) and `EcsSessionInstallation` releases a late-settling key only
+  while the epoch it recorded is current. A release requested while a shared load is in flight is
+  withdrawn when the key is claimed again. The teardown recorder's calls are
+  `[Conditional("UNITY_EDITOR")]`, so player builds contain none.
 - **Gameplay input source is injected, not a static (UCF F-06, part 1).** New `GameplayInputRouter`
   (root scope, `IGameplayInputSource`) forwards to the devices and lets the testlab override it.
   `DotsWorldBridge.Construct` and the `GameplayPanelDriver` constructor receive it; `TestLabRunner`
