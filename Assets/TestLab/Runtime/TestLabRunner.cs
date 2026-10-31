@@ -154,6 +154,7 @@ namespace TestLab
 
         private ProfilerRecorder gcAllocRecorder;
         private ProfilerRecorder usedMemoryRecorder;
+        private ProfilerRecorder mainThreadRecorder;
         private long gcAllocTotal;
         private long gcAllocFrames;
         private long maxUsedMemory;
@@ -180,7 +181,7 @@ namespace TestLab
             // ~16 KB a line at 20 Hz: a deep pool (64 x 64K chars, about 25 s) rides out a slow disk.
             this.samples = Open("samples.ndjson", 64 * 1024, 64);
             this.frameCsv = Open("frames.csv");
-            this.frameCsv.WriteLine("frame,t,dt_ms,scenario_t");
+            this.frameCsv.WriteLine(FrameCsv.Header);
             this.deliveryCsv = Open(DeliveryRecorder.DeliveryFile);
             this.renderCsv = Open(DeliveryRecorder.RenderFile);
             this.delivery = new DeliveryRecorder(this.deliveryCsv, this.renderCsv);
@@ -198,6 +199,8 @@ namespace TestLab
 
             this.gcAllocRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
             this.usedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Total Used Memory");
+            // Null-safe: where the counter does not exist the recorder is not Valid and the column stays empty.
+            this.mainThreadRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread", 1);
 
             Application.runInBackground = true;
             this.ShowArenaBoxesFor(plan.map);
@@ -390,7 +393,11 @@ namespace TestLab
                 }
             }
 
-            this.frameCsv.WriteLine(this.frameIndex.ToString(Inv) + "," + Num(now) + "," + Num(dt * 1000.0) + "," + Num(t));
+            this.frameCsv.WriteLine(FrameCsv.Row(this.frameIndex, Num(now), Num(dt * 1000.0), Num(t),
+                this.gcAllocRecorder.Valid ? this.gcAllocRecorder.LastValue : -1,
+                GC.CollectionCount(0),
+                this.mainThreadRecorder.Valid ? this.mainThreadRecorder.LastValue : 0,
+                this.usedMemoryRecorder.Valid ? this.usedMemoryRecorder.LastValue : -1));
 
             if (this.predictor != null)
             {
@@ -1307,6 +1314,7 @@ namespace TestLab
 
             this.gcAllocRecorder.Dispose();
             this.usedMemoryRecorder.Dispose();
+            this.mainThreadRecorder.Dispose();
         }
 
         private void OnApplicationQuit()
