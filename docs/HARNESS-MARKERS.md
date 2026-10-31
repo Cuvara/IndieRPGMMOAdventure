@@ -11,7 +11,7 @@ read by machines, not only people. The exact text is pinned by
 | `Tag` | `[DOTSNet]` | prefix of every line below |
 | `AuthenticatingPrefix` | `[DOTSNet] Authenticating device=` | logs read by hand and by the 401 diagnosis in CLAUDE.md |
 | `AuthOkPrefix` | `[DOTSNet] Auth OK, user_id=` | `Tools/verify-multiclient.sh` counts distinct `user_id=` tokens on `Auth OK` lines |
-| `InWorldPrefix` | `[DOTSNet] IN WORLD as ` | `Tools/verify-multiclient.sh` counts logs containing `IN WORLD`; TestLab `clients_in_world` |
+| `InWorldPrefix` | `[DOTSNet] IN WORLD as ` | `Tools/verify-multiclient.sh` counts logs containing `IN WORLD` (TestLab `clients_in_world` uses its event stream, not this line) |
 | `PartyPrefix` | `[DOTSNet] party ready: ` | party / dungeon runs |
 | `CharacterPrefix` | `[DOTSNet] character: ` | roster selection logs |
 | `FatalPrefix` | `[DOTSNet] FATAL: ` | `Tools/verify-multiclient.sh` and TestLab `analyze.py` fail on `FATAL` |

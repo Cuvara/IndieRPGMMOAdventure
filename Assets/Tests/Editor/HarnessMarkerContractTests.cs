@@ -10,7 +10,8 @@ namespace Tests.Editor
     /// <c>user_id=</c> token, and fails on <c>FATAL</c>.</item>
     /// <item><c>Tools/run-clients.sh</c> and the rpg-mmo-server <c>checks_client.sh</c> read the same lines.</item>
     /// <item>The rpg-factory TestLab analyzer (<c>testlab/lab/analyze.py</c>) matches <c>FATAL</c> in client
-    /// logs and expects the netcode DOTS sample's identical <c>Auth OK</c> / <c>IN WORLD</c> text.</item>
+    /// logs. Its <c>clients_in_world</c> check reads the TestLab event stream (<c>events.ndjson</c>), not
+    /// these log lines.</item>
     /// <item>CLAUDE.md and the DOTS sample (<c>DOTSNetworkBridge</c>) print the same text.</item>
     /// </list>
     /// Editing a constant here without editing every consumer in the same change breaks the harness
