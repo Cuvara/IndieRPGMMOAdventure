@@ -9,6 +9,7 @@ namespace Scripts.DI
     using Scripts.Nakama.DI;
     using UnityEngine;
     using VContainer;
+    using VContainer.Unity;
 #if CUVARA_DOTS && CUVARA_DOTS_VCONTAINER
     using Scripts.DI.Dots;
 #endif
@@ -23,6 +24,9 @@ namespace Scripts.DI
         public static void Install(IContainerBuilder builder, RootInstallerArgs args)
         {
             var backend = args.Backend.Value;
+
+            // Logs exceptions nobody observed, once, with an [Unobserved] prefix.
+            builder.RegisterEntryPoint<UnobservedExceptionReporter>(Lifetime.Singleton);
             builder.RegisterInstance(args.Backend);
 
             // The encoding is an argument, not a property on NetworkSettings: RegisterNetworking
