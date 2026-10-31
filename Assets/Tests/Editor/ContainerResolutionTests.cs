@@ -150,6 +150,8 @@ namespace Tests.Editor
             Assert.That(this.root.Resolve<EntityViewRegistry>(), Is.Not.Null);
             Assert.That(this.root.Resolve<ChunkViewProvisioner>(), Is.Not.Null);
             Assert.That(this.root.Resolve<ISimulationModel>(), Is.Not.Null);
+            Assert.That(this.root.Resolve<IEcsWorldProvider>().World, Is.SameAs(this.world),
+                "the provider must hand out the world the root installer was given");
 #if CUVARA_NETCODE && CUVARA_SHARED_GAMELOGIC
             Assert.That(this.root.Resolve<LocalMovePredictor>(), Is.Not.Null);
 #endif
@@ -186,6 +188,7 @@ namespace Tests.Editor
                 typeof(EntityViewRegistry),
                 typeof(ChunkViewProvisioner),
                 typeof(ISimulationModel),
+                typeof(IEcsWorldProvider),
 #if CUVARA_NETCODE && CUVARA_SHARED_GAMELOGIC
                 typeof(LocalMovePredictor),
 #endif

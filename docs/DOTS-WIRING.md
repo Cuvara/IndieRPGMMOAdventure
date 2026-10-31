@@ -13,6 +13,20 @@ Two halves, split by lifetime, mirroring how networking is already wired:
 | Root | `GameLifetimeScope` → `ClientRootInstaller.Install` → `builder.RegisterDots(viewRoot: transform, ...)` | MessagePipe brokers for the 5 package messages, `IViewAssetProvider`, `EntityViewRegistry` + `ChunkViewProvisioner` + `DotsViewBootstrap` install (via `RegisterDotsViews`), `ISimulationModel`, the session's single `LocalMovePredictor` |
 | Scene | `MainSceneScope` → `MainSceneInstaller.Install`, whose build callback injects a `DotsWorldBridge` found in the scene | `DotsSimulationBootstrap`, the code-built `ViewConfigCatalog`, `TypeArchetypeResolver`, `DotsEntityView`, `DotsNetcodeBootstrap` + `DotsPredictionBootstrap`, the per-frame `WorldViewBinder.Tick`, input send + `RecordInput` |
 
+The scene half is split again: `DotsWorldBridge` (a `MonoBehaviour`) keeps the serialized fields,
+method injection, and input sampling/send/aim/cast, and drives an `EcsSessionInstallation` (plain
+C#, `IDisposable`) that owns everything installed into the world, the `SessionResetGate`, the
+per-frame ingress tick (binder tick, projectile advance, elevation feed, predicted views) and the
+exact-reverse teardown on `Dispose`. The world comes from the root-scoped `IEcsWorldProvider`
+(`DefaultEcsWorldProvider`: `World.DefaultGameObjectInjectionWorld`, throwing a named
+`InvalidOperationException` when it is null; `RootInstallerArgs.World` pins a throwaway world in
+tests). It is a seam for one world, not multi-World support. `HudWorldBridge`, the benchmark and
+the TestLab still read the default world directly.
+
+Per-frame order in `DotsWorldBridge.Update` is unchanged: install (once), prewarm poll, then
+`installation.Tick(SendInput)`, which runs the session-reset gate, then `SendInput`, then the
+ingress tick.
+
 All of it lives in `Assets/Scripts/DI/Dots/` (assembly `NDC.Scripts.DI`). The bridge hangs off
 the **same** `NetworkClient` that `RegisterNetworking()` registers and `NetworkBootstrap`
 prefers — there is one connection, one merged `WorldState`, one predictor.
@@ -103,6 +117,24 @@ degrades to absent code, not compile errors — the same contract the package ho
   `NetworkEntity` entities (the default world outlives the scene) → `catalog.Dispose()` (blob) →
   destroy the code-built ScriptableObjects. The view bootstrap is root-scoped and is *not*
   uninstalled by the bridge.
+- **Prewarm shutdown**: `Dispose` cancels the prewarm token first, then runs the teardown above;
+  it never blocks on async work. Each key's prewarm task is observed: the cancellation `Dispose`
+  causes is silent, any other fault is logged once with `Debug.LogException`. The pooled
+  provider creates instances synchronously and checks the token before each, and the leased
+  provider completes a release that arrives while a prefab loads, so a cancelled key leaves no
+  warm lease or pooled instance. A provider that ignores the token and settles successfully after
+  `Dispose` has its key released again on settle — but only while no newer claimant took the key:
+  `LeasedViewAssetProvider` (one lease per key, shared by every scene installation) raises
+  `ClaimEpoch(key)` each time a prewarm or async acquire starts, the installation records it
+  (`IViewClaimEpochs`), and the late release is skipped when the epoch moved. Providers without
+  `IViewClaimEpochs` keep the plain late release. A release requested while the shared load is
+  in flight is withdrawn when the key is claimed again. The shared prefab load is started with no
+  caller token; each caller honours its own token only at its await (`AwaitOrCancel`), so cancelling
+  one installation never cancels the load another waits on. Pooled-instance prewarm keeps per-caller
+  cancellation: it is synchronous, tracks what it created, and a later prewarm only tops up.
+  `EcsSessionInstallation.TeardownRecorder`
+  (internal, tests only; the `Step` calls are `[Conditional("UNITY_EDITOR")]`, absent from player
+  builds) records every teardown step; `EcsSessionInstallationTests` assert the whole sequence.
 - **Input backend**: this project runs Input System (new) only (`activeInputHandler: 1`), under
   which legacy `UnityEngine.Input` throws; the bridge reads `Keyboard.current` under
   `ENABLE_INPUT_SYSTEM` and falls back per define, same as the netcode DOTS sample.

@@ -2,27 +2,17 @@
 namespace Scripts.DI.Dots
 {
     using System;
-    using System.Collections.Generic;
-    using System.Threading.Tasks;
-    using Cuvara.DOTS.Configuration;
-    using Cuvara.DOTS.Modules;
-    using Cuvara.DOTS.Netcode;
     using Cuvara.DOTS.Netcode.Prediction;
     using Cuvara.DOTS.Provisioning;
-    using Cuvara.DOTS.Simulation;
     using Cuvara.DOTS.Views;
     using Cuvara.Netcode.Client;
-    using Cuvara.Netcode.Interpolation;
     using Cuvara.Netcode.Prediction;
-    using Cuvara.Netcode.Protocol;
     using Cuvara.Netcode.Protocol.Messages;
     using Cuvara.Netcode.View;
     using Scripts.Gameplay.Content;
     using Scripts.Gameplay.Maps;
     using Scripts.Gameplay.Presentation;
     using Shared.GameLogic.Components;
-    using Unity.Entities;
-    using Unity.Mathematics;
     using UnityEngine;
     using VContainer;
 
@@ -34,6 +24,13 @@ namespace Scripts.DI.Dots
     /// <c>NetworkBootstrap</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <b>This component is the thin half.</b> It keeps the serialized fields, method injection,
+    /// and input sampling, sending, aim and cast; everything installed into the ECS world, the
+    /// session reset and the per-frame feed live in <see cref="EcsSessionInstallation"/>, which
+    /// <c>Update</c> drives and <c>OnDestroy</c> disposes. The rest of these remarks describe the
+    /// behaviour of the pair.
+    /// </para>
     /// <para>
     /// The root scope (<c>RegisterDots</c>) owns what outlives a scene: registry, the asset
     /// provider and its pools, provisioner, predictor, the view bootstrap. This component owns
@@ -91,9 +88,6 @@ namespace Scripts.DI.Dots
     /// </remarks>
     public sealed class DotsWorldBridge : MonoBehaviour
     {
-        /// <summary>World units per second above which a remote entity's last move is a teleport.</summary>
-        private const double RemoteTeleportSpeed = 15.0;
-
         [Tooltip("Sample input axes, send them, and record them on the predictor. Turn OFF if " +
                  "something else owns input — and never leave NetworkBootstrap's synthetic input " +
                  "on at the same time.")]
@@ -120,19 +114,18 @@ namespace Scripts.DI.Dots
         private GameContentService content;
         private IViewAssetProvider viewAssetProvider;
         private DotsViewLibraryReference libraryReference;
+        private IEcsWorldProvider worldProvider;
 
-        private World world;
-        private ViewConfigCatalog catalog;
-        private ViewArchetypeLibrary library;
-        private ViewConfig[] configs;
-        private DotsEntityView view;
+        private EcsSessionInstallation installation;
+
+        /// <summary>
+        /// The installation's binder, mirrored here so the testlab's <c>BinderProbe</c>, which finds
+        /// it by reflection on this type, keeps reading the live binder.
+        /// </summary>
         private WorldViewBinder binder;
-        private IDisposable spawnSubscription;
-        private Task prewarm;
-        private bool installed;
-        private bool ready;
-        private bool prewarmFailureLogged;
+
         private long inputTick;
+        private Action beforeIngress;
 
         /// <summary>
         /// When the next input is due. A pinned schedule at
@@ -166,26 +159,16 @@ namespace Scripts.DI.Dots
 
         private bool pendingCast;
 
-        // ---- protocol 3 ----
-        private readonly EntityElevationTable elevationTable = new EntityElevationTable();
-        private EntityElevationFeeder elevationFeeder;
-        private bool elevationInstalled;
-        private ProjectilePredictor projectilePredictor;
-        private PredictedProjectileViews predictedViews;
-        private readonly SessionResetGate<GameSessionClient> sessionGate = new SessionResetGate<GameSessionClient>();
-        private Action<GameSessionClient> beginSession;
-        private Action runFrame;
-        private int lastGeneration;
         private bool castWarningLogged;
 
         /// <summary>True once the catalog is installed and every key is warm; the binder ticks only then.</summary>
-        public bool IsReady => this.ready;
+        public bool IsReady => this.installation != null && this.installation.IsReady;
 
         /// <summary>Reconnects this bridge has turned into view generations. Diagnostics.</summary>
-        public int ReconnectsHandled { get; private set; }
+        public int ReconnectsHandled => this.installation?.ReconnectsHandled ?? 0;
 
         /// <summary>The local projectile predictor of the current session; null before a protocol 3 join.</summary>
-        public ProjectilePredictor ProjectilePredictor => this.projectilePredictor;
+        public ProjectilePredictor ProjectilePredictor => this.installation?.ProjectilePredictor;
 
         /// <summary>Called by the scene scope's build callback; absent a container this component stays inert.</summary>
         [Inject]
@@ -195,7 +178,8 @@ namespace Scripts.DI.Dots
             IViewAssetProvider assetProvider,
             DotsViewLibraryReference viewLibraryReference,
             GameContentService gameContent,
-            IGameplayInputSource gameplayInput)
+            IGameplayInputSource gameplayInput,
+            IEcsWorldProvider ecsWorldProvider)
         {
             this.client = networkClient;
             this.predictor = movePredictor;
@@ -203,6 +187,7 @@ namespace Scripts.DI.Dots
             this.libraryReference = viewLibraryReference;
             this.content = gameContent;
             this.input = gameplayInput;
+            this.worldProvider = ecsWorldProvider;
         }
 
         private void Update()
@@ -212,28 +197,59 @@ namespace Scripts.DI.Dots
                 return;
             }
 
-            if (!this.installed && !this.TryInstall())
+            if (this.installation == null)
             {
-                return;
+                this.installation = new EcsSessionInstallation(
+                    this.worldProvider,
+                    this.client,
+                    this.predictor,
+                    this.viewAssetProvider,
+                    this.libraryReference,
+                    new EcsSessionInstallation.Settings
+                    {
+                        ViewLibrary = this.viewLibrary,
+                        EnableCameraFollow = this.enableCameraFollow,
+                        FollowCamera = this.followCamera,
+                        CameraOffset = this.cameraOffset,
+                        EnableMinimap = this.enableMinimap,
+                        ViewRoot = this.transform,
+                    });
+                this.beforeIngress = this.SendInput;
             }
 
-            if (!this.ready && !this.TryFinishPrewarm())
+            if (!this.installation.IsInstalled)
             {
-                return;
+                if (!this.installation.TryInstall())
+                {
+                    this.enabled = false;
+                    return;
+                }
+
+                this.binder = this.installation.Binder;
             }
 
-            // The gate runs the session reset before RunFrame (input send and the binder feed), so
-            // the first frame of a new session never meets the old session's binder, predictor or
-            // view generation.
-            this.sessionGate.Tick(
-                this.client.State == NetworkClientState.InWorld,
-                this.client.Session,
-                this.beginSession,
-                this.runFrame);
+            if (!this.installation.IsReady)
+            {
+                var ready = this.installation.TryFinishPrewarm(out var disable);
+                if (disable)
+                {
+                    this.enabled = false;
+                }
+
+                if (!ready)
+                {
+                    return;
+                }
+            }
+
+            // The gate runs the session reset before the frame's work (input send, then the binder
+            // feed), so the first frame of a new session never meets the old session's binder,
+            // predictor or view generation.
+            this.installation.Tick(this.beforeIngress);
         }
 
-        /// <summary>Input send, then the binder feed: everything in a frame that follows the session reset.</summary>
-        private void RunFrame()
+        /// <summary>Input sampling and send: the part of a frame the bridge keeps, run after the session reset.</summary>
+        private void SendInput()
         {
             if (this.driveInput && this.client.State == NetworkClientState.InWorld)
             {
@@ -269,7 +285,7 @@ namespace Scripts.DI.Dots
 
                     // Every input says which instant the player was looking at, so the server can
                     // rewind hit targets to it (ADR-29 decision 4). Zero before the first snapshot.
-                    input.SetRenderTime(this.binder.RenderTick);
+                    input.SetRenderTime(this.installation.Binder.RenderTick);
                     this.client.Session?.SendInput(input);
                     this.predictor?.RecordInput(this.inputTick, moveX, moveY, jump);
 
@@ -277,8 +293,8 @@ namespace Scripts.DI.Dots
                     // it needs to know when each input left to measure the acknowledgement lead.
                     // The round trip sizes the lead the steering aims for; refreshed per send rather
                     // than per frame because the lookup builds an entity query.
-                    DotsPredictionBootstrap.NoteInputSent(this.world, this.inputTick);
-                    if (DotsPredictionBootstrap.TryGetClockSteering(this.world, out var steering))
+                    DotsPredictionBootstrap.NoteInputSent(this.installation.World, this.inputTick);
+                    if (DotsPredictionBootstrap.TryGetClockSteering(this.installation.World, out var steering))
                     {
                         steering.RoundTripMs = this.client.Session?.RoundTripMs ?? 0L;
                     }
@@ -290,420 +306,13 @@ namespace Scripts.DI.Dots
             {
                 this.sendScheduleStarted = false;
             }
-
-            // Polls the merged world every frame — despawn falls out of absence. This is the ONE
-            // feed into the adapter; see the class remarks on SetStateAtTick.
-            this.binder.Tick(this.client.World, this.client.UserId);
-
-            // Height and projectile positions for this frame's mirrors, read by
-            // EntityElevationSystem later in the same frame (Presentation).
-            this.projectilePredictor?.Advance(Time.deltaTime);
-            this.elevationFeeder?.Feed(
-                this.client.World,
-                this.client.UserId,
-                this.binder.RenderTick,
-                Time.realtimeSinceStartupAsDouble,
-                this.predictor,
-                this.projectilePredictor);
-            this.predictedViews?.Sync(this.projectilePredictor);
-        }
-
-        private bool TryInstall()
-        {
-            this.world = World.DefaultGameObjectInjectionWorld;
-            if (this.world == null)
-            {
-                Debug.LogWarning("[DotsWorldBridge] no default ECS world — DOTS presentation disabled.");
-                this.enabled = false;
-                return false;
-            }
-
-            if (!this.TryBuildCatalog())
-            {
-                this.enabled = false;
-                return false;
-            }
-
-            // Simulation systems are idempotent to install and usable without views; the view
-            // bootstrap itself was installed by RegisterDots at root-container build.
-            DotsSimulationBootstrap.InstallSimulationSystems(this.world);
-            this.catalog.Install(this.world);
-
-            // Kind comes from the wire, never from the id. No catch-all: an unmapped server kind
-            // is refused and logged once, so a server that grows a new type says so instead of
-            // rendering it as a player. The rule list is DotsViewArchetypes.ServerKindMappings,
-            // the same table the library was validated against.
-            var rules = new TypeArchetypeResolver.Rule[DotsViewArchetypes.ServerKindMappings.Length];
-            for (var i = 0; i < rules.Length; i++)
-            {
-                var pair = DotsViewArchetypes.ServerKindMappings[i];
-                rules[i] = new TypeArchetypeResolver.Rule(pair.Key, pair.Value);
-            }
-
-            var resolver = new TypeArchetypeResolver(
-                localArchetype: DotsViewArchetypes.PlayerLocal,
-                unknownArchetype: null,
-                rules);
-
-            // XZPlane: the server's 2D plane is Unity's ground plane. Per-art lift belongs in
-            // ViewConfig.PositionOffset, not in the mapping. Wire hp lands on NetworkEntityState
-            // (writeHealth defaults to false) so no client-side system destroys an entity the
-            // server still lists. The minimap resolver is handed over only when the module is on.
-            this.view = new DotsEntityView(
-                this.catalog,
-                resolver,
-                SnapshotSpaceMapping.XZPlane,
-                minimap: this.enableMinimap ? MinimapCategories.Instance : null);
-            DotsNetcodeBootstrap.Install(this.world, this.view);
-
-            // Teleport guard for remote interpolation (com.cuvara.netcode >= 0.48.0): a last
-            // segment faster than this is a respawn/teleport and is not extrapolated past the
-            // destination. Three times the fastest legitimate ground speed (players move at
-            // 5 u/s, enemies at 2.5 u/s); the testlab saw a respawned player drawn 5 units past
-            // its spawn without it (rpg-factory testlab S05).
-            var interpolation = InterpolationConfig.Default;
-            interpolation.MaxExtrapolationSpeed = RemoteTeleportSpeed;
-            this.binder = new WorldViewBinder(this.view, null, null, interpolation);
-
-            if (this.predictor != null)
-            {
-                DotsPredictionBootstrap.Install(this.world, this.predictor, this.client.World);
-            }
-
-            this.InstallSessionModules();
-
-            // Height for every mirror (protocol 3). Absent a view group nothing is presented, so
-            // there is nothing to lift; say so rather than half-install.
-            if (EntityElevationBootstrap.Install(this.world, this.elevationTable) != null)
-            {
-                this.elevationInstalled = true;
-                this.elevationFeeder = new EntityElevationFeeder(this.elevationTable);
-            }
-            else
-            {
-                Debug.LogWarning("[DotsWorldBridge] no ViewSystemGroup in the world; entity height (wire z) is not presented.");
-            }
-
-            this.predictedViews = new PredictedProjectileViews(this.transform);
-
-            this.beginSession = this.OnSessionBegan;
-            this.runFrame = this.RunFrame;
-            this.client.Reconnected += this.OnReconnected;
-
-            // Prewarm from the catalog's own pool sizes rather than numbers typed here. In
-            // production this is the Addressables load per key; the binder waits for it.
-            this.prewarm = this.PrewarmAsync();
-
-            this.installed = true;
-            return true;
-        }
-
-        private bool TryBuildCatalog()
-        {
-            var asset = this.viewLibrary != null ? this.viewLibrary : this.libraryReference?.Asset;
-            var mode = this.libraryReference?.Mode ?? DotsViewProviderMode.Production;
-
-            if (asset != null)
-            {
-                this.library = asset.BuildLibrary(out this.configs);
-            }
-            else if (mode == DotsViewProviderMode.Primitive || this.viewAssetProvider is PrimitiveViewAssetProvider)
-            {
-                this.BuildPlaceholderLibrary();
-            }
-            else
-            {
-                Debug.LogError(
-                    $"[DotsWorldBridge] Production view provider but no DotsViewLibrary asset — assign one on this " +
-                    $"component or create '{DotsViewLibraryAsset.DefaultAssetPath}'. DOTS presentation disabled.");
-                return false;
-            }
-
-            // prefabExists is the provider's own answer: the leased provider asks its loader, the
-            // primitive one its shape table. A key neither can serve fails here, before any entity
-            // could resolve to it.
-            Func<string, bool> prefabExists = null;
-            switch (this.viewAssetProvider)
-            {
-                case LeasedViewAssetProvider leased:
-                    prefabExists = leased.CanProvide;
-                    break;
-                case PrimitiveViewAssetProvider primitive:
-                    prefabExists = primitive.IsWarm;
-                    break;
-            }
-
-            this.catalog = new ViewConfigCatalog();
-            var built = this.catalog.TryBuild(this.library, out var report, prefabExists);
-
-            var mappings = ViewConfigValidator.ValidateMappings(this.library, DotsViewArchetypes.ServerKindMappings);
-            foreach (var issue in mappings.Issues) report.Add(issue);
-
-            if (!built || report.HasErrors)
-            {
-                report.Log();
-                Debug.LogError(
-                    $"[DotsWorldBridge] View library '{this.library.name}' is invalid ({report.ErrorCount} error(s), " +
-                    "listed above). Fix the DotsViewLibrary asset; the build-time check in PlayerBuilder catches the " +
-                    "same errors. DOTS presentation disabled.");
-                this.DisposeCatalogAndLibrary();
-                return false;
-            }
-
-            if (report.WarningCount > 0) report.Log();
-            return true;
-        }
-
-        private async Task PrewarmAsync()
-        {
-            var tasks = new List<Task>();
-            foreach (var pair in this.catalog.PoolSizesByKey())
-            {
-                tasks.Add(this.viewAssetProvider.PrewarmAsync(pair.Key, pair.Value));
-            }
-
-            await Task.WhenAll(tasks);
-        }
-
-        private bool TryFinishPrewarm()
-        {
-            if (this.prewarm == null) return true;
-            if (!this.prewarm.IsCompleted) return false;
-
-            if (this.prewarm.IsFaulted || this.prewarm.IsCanceled)
-            {
-                if (!this.prewarmFailureLogged)
-                {
-                    this.prewarmFailureLogged = true;
-                    Debug.LogError(
-                        "[DotsWorldBridge] Prewarming the view catalog failed; DOTS presentation disabled. " +
-                        $"{this.prewarm.Exception?.GetBaseException().Message}");
-                    this.enabled = false;
-                }
-
-                return false;
-            }
-
-            this.prewarm = null;
-            this.ready = true;
-            return true;
-        }
-
-        private void InstallSessionModules()
-        {
-            if (this.enableCameraFollow)
-            {
-                var camera = this.followCamera != null ? this.followCamera : Camera.main;
-                if (camera == null)
-                {
-                    Debug.LogWarning("[DotsWorldBridge] CameraFollow enabled but no camera found; module not installed.");
-                }
-                else
-                {
-                    CameraFollowBootstrap.Install(this.world, new CameraFollowConfig
-                    {
-                        Camera = camera,
-                        Offset = new float3(this.cameraOffset.x, this.cameraOffset.y, this.cameraOffset.z),
-                    }, DotsModuleScope.Session);
-
-                    // The local player's mirror is the follow target, tagged as its life begins.
-                    // The event is published on the drain's thread after the entity is complete,
-                    // and an EntityManager structural change from a handler is allowed there.
-                    this.spawnSubscription = this.view.Lifecycle.Subscribe((NetworkEntitySpawned spawned) =>
-                    {
-                        if (!spawned.IsLocal || this.world == null || !this.world.IsCreated) return;
-                        var entityManager = this.world.EntityManager;
-                        if (entityManager.Exists(spawned.Entity) && !entityManager.HasComponent<CameraFollowTarget>(spawned.Entity))
-                        {
-                            entityManager.AddComponent<CameraFollowTarget>(spawned.Entity);
-                        }
-                    });
-                }
-            }
-
-            if (this.enableMinimap)
-            {
-                MinimapBootstrap.Install(this.world, scope: DotsModuleScope.Session);
-            }
-        }
-
-        /// <summary>
-        /// Routes the netcode <c>Reconnected</c> event through the same once-per-session reset as
-        /// the per-frame check.
-        /// </summary>
-        /// <remarks>
-        /// Contract relied on (com.cuvara.netcode v0.50.0, <c>Runtime/Client/NetworkClient.cs</c>):
-        /// <c>Reconnected</c> is raised only after <c>_session</c> is set to the new
-        /// <see cref="GameSessionClient"/> in the join commit, so <c>client.Session</c> is already
-        /// the new object here. If it is null anyway, nothing is reset now and the per-frame check
-        /// begins the session when a non-null object is seen in the world.
-        /// </remarks>
-        private void OnReconnected()
-        {
-            if (!this.installed || this.view == null) return;
-
-            var outcome = this.sessionGate.OnReconnected(this.client.Session, this.beginSession);
-            switch (outcome)
-            {
-                case ReconnectOutcome.Began:
-                    this.ReconnectsHandled++;
-                    Debug.Log($"[DotsWorldBridge] Reconnected: view generation {this.lastGeneration}, predictor reset, camera smoothing reset.");
-                    break;
-                case ReconnectOutcome.AlreadyBegun:
-                    this.ReconnectsHandled++;
-                    Debug.Log($"[DotsWorldBridge] Reconnected: reset already ran for this session (view generation {this.lastGeneration}); no second reset.");
-                    break;
-                default:
-                    Debug.LogWarning("[DotsWorldBridge] Reconnected: no session object at callback time; no reset ran, the per-frame check will begin the session.");
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// The one session-start reset: a connect, reconnect, manual retry, dungeon join or map
-        /// transfer all arrive here with a new <see cref="GameSessionClient"/>.
-        /// </summary>
-        private void OnSessionBegan(GameSessionClient session)
-        {
-            // Order: generation first, so the old session's queued commands are already stale by
-            // the time the binder's next Tick feeds the new world in; then the binder and the
-            // predictor's backlog, which the new server never acknowledged; then the camera,
-            // which would otherwise sweep from the last known position to the re-placed avatar.
-            this.lastGeneration = this.view.BeginGeneration();
-
-            // The binder's interpolation clock, last world tick and live set belong to the old
-            // session too. NetworkClient resets the world on a new session, and a new server (a
-            // drain to another pod, a restart, a dungeon) counts ticks from far below or above the
-            // old ones: without this, `world.Tick > lastWorldTick` can stay false until the new
-            // ticks pass the old, so no sample is buffered, and RenderTick - sent as the
-            // lag-compensation render time - stays in the old tick space. After BeginGeneration,
-            // so its despawns are stale no-ops for the drain.
-            this.binder.Reset();
-            this.predictor?.Reset();
-            this.projectilePredictor?.Reset();
-            this.elevationFeeder?.Reset();
-
-            // The new session may be a different server: select the movement model and geometry
-            // for it before its first reconcile.
-            this.ApplyServerProtocol();
-            CameraFollowBootstrap.ResetSmoothing(this.world);
-
-            Debug.Log($"[DotsWorldBridge] Session began: view generation {this.lastGeneration}, binder and predictor reset.");
         }
 
         private void OnDestroy()
         {
-            if (this.client != null)
-            {
-                this.client.Reconnected -= this.OnReconnected;
-            }
-
-            this.spawnSubscription?.Dispose();
-            this.spawnSubscription = null;
-
-            this.predictedViews?.Dispose();
-            this.predictedViews = null;
-
-            if (this.installed && this.world is { IsCreated: true })
-            {
-                // Reverse of install. Prediction first (hands claimed transforms back), then the
-                // adapter with its mirrors (one NetworkEntityDespawned per id, reason Teardown),
-                // then every session-scoped module in reverse install order, then the catalog
-                // singleton — the blob is freed below, after nothing reads it.
-                DotsPredictionBootstrap.Uninstall(this.world);
-                if (this.elevationInstalled)
-                {
-                    EntityElevationBootstrap.Uninstall(this.world);
-                    this.elevationInstalled = false;
-                }
-
-                DotsNetcodeBootstrap.Uninstall(this.world, destroyMirrors: true);
-                DotsModules.UninstallScope(this.world, DotsModuleScope.Session);
-                this.catalog?.Uninstall(this.world);
-
-                // Assets after instances: the provider drops each key's pooled instances now and
-                // its prefab handle once the view layer has recycled the last live instance —
-                // which happens on the next presentation tick, after the mirrors above were
-                // destroyed. A key the next scene's catalog lists is simply re-leased.
-                if (this.catalog != null && this.viewAssetProvider != null)
-                {
-                    foreach (var key in this.catalog.ViewKeys())
-                    {
-                        this.viewAssetProvider.Release(key);
-                    }
-                }
-            }
-
-            this.DisposeCatalogAndLibrary();
-        }
-
-        private void DisposeCatalogAndLibrary()
-        {
-            // After the systems that read the blob are gone, never before — a disposed catalog
-            // under a live spawn system is a dangling blob pointer.
-            this.catalog?.Dispose();
-            this.catalog = null;
-
-            if (this.library != null)
-            {
-                Destroy(this.library);
-                this.library = null;
-            }
-
-            if (this.configs != null)
-            {
-                foreach (var config in this.configs)
-                {
-                    if (config != null)
-                    {
-                        Destroy(config);
-                    }
-                }
-
-                this.configs = null;
-            }
-        }
-
-        /// <summary>
-        /// Called from <see cref="OnSessionBegan"/>: selects the server's movement model, supplies
-        /// the map's geometry, and creates the projectile predictor for a protocol 3 server.
-        /// </summary>
-        private void ApplyServerProtocol()
-        {
-            var version = this.client.ServerProtocolVersion;
-            var mapId = this.client.CurrentMapId;
-            var geometry = MapGeometrySource.LoadOrNull(mapId, out var origin);
-
-            if (this.predictor != null)
-            {
-                // Order matters: a model change resets the predictor, then the geometry it steps
-                // against. Null geometry restores the flat world of the predictor's own bounds,
-                // which is what the server runs for a map with no file.
-                this.predictor.UseServerProtocol(version);
-                // The predictor is registered before any join with a guessed rate; the server's
-                // advertised tick_rate (60 Hz base ticks) replaces it. Left at the 15 Hz guess,
-                // every reconcile missed the history and corrected in whole 15 Hz steps
-                // (Cuvara/Netcode#183, netcode 0.48.0).
-                this.predictor.UseServerTickRate(this.client.TickRate);
-                this.predictor.SetMapGeometry(geometry);
-            }
-
-            if (WireProtocolVersion.Supports(version, WireProtocolVersion.Motor3D))
-            {
-                var tickRate = this.client.TickRate > 0
-                    ? (int)this.client.TickRate
-                    : this.predictor?.TickRateHz ?? GameConstants.DefaultTickRate;
-                this.projectilePredictor = new ProjectilePredictor(tickRate, geometry ?? this.predictor?.Geometry);
-            }
-            else
-            {
-                this.projectilePredictor = null;
-            }
-
-            Debug.Log(
-                $"[DotsWorldBridge] server protocol {version}: " +
-                $"{(this.predictor != null && this.predictor.UsesCharacterMotor ? "3D CharacterMotor" : "planar")} prediction, " +
-                $"map '{mapId}' geometry {origin}, projectile prediction {(this.projectilePredictor != null ? "on" : "off")}");
+            this.installation?.Dispose();
+            this.installation = null;
+            this.binder = null;
         }
 
         /// <summary>
@@ -715,14 +324,14 @@ namespace Scripts.DI.Dots
         private void TryAddProjectileCast(InputMessage input)
         {
             var ability = this.content != null ? this.content.Catalog.FirstProjectileAbility() : null;
-            if (ability == null || this.projectilePredictor == null)
+            if (ability == null || this.ProjectilePredictor == null)
             {
                 if (!this.castWarningLogged)
                 {
                     this.castWarningLogged = true;
                     Debug.LogWarning(
                         "[DotsWorldBridge] cast key ignored: " +
-                        (this.projectilePredictor == null
+                        (this.ProjectilePredictor == null
                             ? $"the server speaks protocol {this.client.ServerProtocolVersion} (projectiles need 3)."
                             : "the content has no projectile ability (content not loaded yet?)."));
                 }
@@ -736,7 +345,7 @@ namespace Scripts.DI.Dots
             }
 
             var aim = this.AimFrom(feet);
-            var spawnSeq = this.projectilePredictor.Fire(
+            var spawnSeq = this.ProjectilePredictor.Fire(
                 AimPoint.LaunchOrigin(feet),
                 AimPoint.LaunchTarget(aim),
                 ability.ProjectileSpeed,
@@ -794,70 +403,6 @@ namespace Scripts.DI.Dots
             }
 
             return new Vec3(feet.X, feet.Y + 10f, feet.Z);
-        }
-
-        /// <summary>
-        /// The placeholder library for scenes with no authored art (primitive provider): the
-        /// three archetypes as capsules and a sphere, the way the package's NetworkedPrediction
-        /// sample does it. Never used on the production path — that path requires the asset.
-        /// </summary>
-        private void BuildPlaceholderLibrary()
-        {
-            ViewConfig Config(string key, float scale, float lift)
-            {
-                var config = ScriptableObject.CreateInstance<ViewConfig>();
-                config.name = key;
-                // The lift is the art's half-height, authored as a config offset — the entity
-                // stays on the plane the server simulates on; only the visual is raised.
-                config.Configure(key, pool: 8, uniformScale: scale, position: new Vector3(0f, lift, 0f));
-                return config;
-            }
-
-            this.configs = new[]
-            {
-                Config(DotsViewArchetypes.PlayerLocal, 1.2f, 1f),
-                Config(DotsViewArchetypes.PlayerRemote, 1f, 1f),
-                Config(DotsViewArchetypes.Mob, 0.8f, 0.5f),
-                Config(DotsViewArchetypes.Projectile, 0.4f, 0f),
-                Config(DotsViewArchetypes.Item, 0.5f, 0.25f),
-            };
-
-            this.library = ScriptableObject.CreateInstance<ViewArchetypeLibrary>();
-            this.library.name = "PlaceholderViewLibrary";
-            this.library.Configure(
-                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.PlayerLocal, Config = this.configs[0] },
-                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.PlayerRemote, Config = this.configs[1] },
-                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.Mob, Config = this.configs[2] },
-                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.Projectile, Config = this.configs[3] },
-                new ViewArchetypeLibrary.Entry { Name = DotsViewArchetypes.Item, Config = this.configs[4] });
-        }
-
-        /// <summary>Minimap categories by archetype: 0 local player, 1 remote player, 2 mob.</summary>
-        private sealed class MinimapCategories : IMinimapCategoryResolver
-        {
-            public static readonly MinimapCategories Instance = new MinimapCategories();
-
-            public bool TryResolve(in NetworkEntityDescriptor entity, out int category)
-            {
-                if (entity.IsLocal)
-                {
-                    category = 0;
-                    return true;
-                }
-
-                switch (entity.Type)
-                {
-                    case DotsViewArchetypes.ServerKindPlayer:
-                        category = 1;
-                        return true;
-                    case DotsViewArchetypes.ServerKindMob:
-                        category = 2;
-                        return true;
-                    default:
-                        category = -1;
-                        return false;
-                }
-            }
         }
     }
 }

@@ -22,6 +22,14 @@ namespace Tests.Editor
         private readonly Dictionary<string, TaskCompletionSource<GameObject>> pending = new Dictionary<string, TaskCompletionSource<GameObject>>();
         private readonly HashSet<string> known;
 
+        private readonly Dictionary<string, CancellationToken> tokens = new Dictionary<string, CancellationToken>();
+
+        /// <summary>
+        /// Behave like <c>AddressableViewPrefabLoader</c>: a load whose token was cancelled by the
+        /// time it completes releases its handle and ends cancelled instead of returning the prefab.
+        /// </summary>
+        public bool HonourCancellation;
+
         public readonly List<string> Loads = new List<string>();
         public readonly List<string> Releases = new List<string>();
         public readonly List<GameObject> Prefabs = new List<GameObject>();
@@ -33,6 +41,8 @@ namespace Tests.Editor
 
         public int PendingCount => this.pending.Count;
 
+        public IEnumerable<string> PendingKeys => this.pending.Keys;
+
         public bool CanLoad(string key) => key != null && (this.known.Count == 0 || this.known.Contains(key));
 
         public Task<GameObject> LoadAsync(string key, CancellationToken cancellationToken = default)
@@ -42,6 +52,7 @@ namespace Tests.Editor
 
             var source = new TaskCompletionSource<GameObject>();
             this.pending[key] = source;
+            this.tokens[key] = cancellationToken;
             return source.Task;
         }
 
@@ -56,6 +67,13 @@ namespace Tests.Editor
 
             var source = this.pending[key];
             this.pending.Remove(key);
+            if (this.HonourCancellation && this.tokens[key].IsCancellationRequested)
+            {
+                this.Releases.Add(key);
+                source.SetCanceled();
+                return prefab;
+            }
+
             source.SetResult(prefab);
             return prefab;
         }

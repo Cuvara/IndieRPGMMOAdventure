@@ -94,6 +94,12 @@ namespace Scripts.DI
                 mode: args.Mode,
                 library: args.Library,
                 loader: args.Loader);
+
+            // The one answer to "which ECS world?". DotsWorldBridge's session installation asks
+            // it instead of reading World.DefaultGameObjectInjectionWorld; a test passes a
+            // throwaway world through RootInstallerArgs.World. One world, not a multi-World seam.
+            builder.RegisterInstance<IEcsWorldProvider>(
+                args.World != null ? new DefaultEcsWorldProvider(args.World) : new DefaultEcsWorldProvider());
 #endif
 
             // Registering the services is not enough to inject them. VContainer only

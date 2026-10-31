@@ -10,8 +10,8 @@ using Shared.GameLogic.Components;
 namespace Tests.Editor
 {
     /// <summary>
-    /// The routing of the session-start reset. <c>DotsWorldBridge.Update</c> and
-    /// <c>OnReconnected</c> call only <see cref="SessionResetGate{TSession}"/> for these paths, so
+    /// The routing of the session-start reset. <c>EcsSessionInstallation.Tick</c> and
+    /// <c>OnReconnected</c> (moved out of <c>DotsWorldBridge</c>) call only <see cref="SessionResetGate{TSession}"/> for these paths, so
     /// these tests drive the production gate. A bridge-level test was not feasible in EditMode: the
     /// bridge needs an installed view library, a prewarmed asset provider and a live
     /// <c>NetworkClient</c>. What the reset itself touches (binder, predictor) is checked one level
