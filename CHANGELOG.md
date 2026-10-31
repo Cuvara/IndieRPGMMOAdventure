@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change: same install, teardown and reset order, same log lines, same constants. New
   `EcsSessionInstallationTests` run the real install/teardown over a throwaway world. See
   `docs/DOTS-WIRING.md`.
+- **Deterministic prewarm shutdown and regression-protected teardown order (PR #169 review).**
+  `EcsSessionInstallation` observes every per-key prewarm task: the cancellation `Dispose` causes
+  is swallowed, any other fault is logged once, and a key that a token-ignoring provider warms
+  after `Dispose` is released again when it settles. An internal `TeardownRecorder` seam lets
+  tests assert the complete teardown sequence. No production behaviour change.
 - **Gameplay input source is injected, not a static (UCF F-06, part 1).** New `GameplayInputRouter`
   (root scope, `IGameplayInputSource`) forwards to the devices and lets the testlab override it.
   `DotsWorldBridge.Construct` and the `GameplayPanelDriver` constructor receive it; `TestLabRunner`

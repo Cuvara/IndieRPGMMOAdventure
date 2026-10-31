@@ -79,6 +79,8 @@ namespace Scripts.DI.Dots
         private PredictedProjectileViews predictedViews;
         private Action beforeIngress;
         private int lastGeneration;
+        private readonly Dictionary<string, Task> keyPrewarms = new Dictionary<string, Task>();
+        private readonly HashSet<string> pendingAtDispose = new HashSet<string>();
 
         /// <summary>Everything the installation needs from the bridge, resolved.</summary>
         public sealed class Settings
@@ -116,6 +118,12 @@ namespace Scripts.DI.Dots
             this.beginSession = this.OnSessionBegan;
             this.ingress = this.TickIngress;
         }
+
+        /// <summary>
+        /// Receives the name of every teardown step as <see cref="Dispose"/> performs it, in order.
+        /// Tests only; null in production, so teardown behaviour is unchanged.
+        /// </summary>
+        internal Action<string> TeardownRecorder { get; set; }
 
         /// <summary>True once the catalog is installed and every key is warm; the binder ticks only then.</summary>
         public bool IsReady { get; private set; }
@@ -232,6 +240,7 @@ namespace Scripts.DI.Dots
             // Prewarm from the catalog's own pool sizes rather than numbers typed here. In
             // production this is the Addressables load per key; the binder waits for it.
             this.prewarm = this.PrewarmAsync(this.lifetime.Token);
+            _ = ObserveAggregate(this.prewarm);
 
             this.installed = true;
             return true;
@@ -287,16 +296,26 @@ namespace Scripts.DI.Dots
             if (this.disposed) return;
             this.disposed = true;
 
+            // Keys still prewarming now: if one settles successfully later the provider ignored
+            // the token, and the key it warmed after its release is released again.
+            foreach (var pair in this.keyPrewarms)
+            {
+                if (!pair.Value.IsCompleted) this.pendingAtDispose.Add(pair.Key);
+            }
+
             this.lifetime.Cancel();
 
+            this.Step("unsubscribe-reconnect");
             if (this.client != null)
             {
                 this.client.Reconnected -= this.OnReconnected;
             }
 
+            this.Step("dispose-spawn-subscription");
             this.spawnSubscription?.Dispose();
             this.spawnSubscription = null;
 
+            this.Step("dispose-predicted-views");
             this.predictedViews?.Dispose();
             this.predictedViews = null;
 
@@ -306,15 +325,20 @@ namespace Scripts.DI.Dots
                 // adapter with its mirrors (one NetworkEntityDespawned per id, reason Teardown),
                 // then every session-scoped module in reverse install order, then the catalog
                 // singleton — the blob is freed below, after nothing reads it.
+                this.Step("uninstall-prediction");
                 DotsPredictionBootstrap.Uninstall(this.world);
                 if (this.elevationInstalled)
                 {
+                    this.Step("uninstall-elevation");
                     EntityElevationBootstrap.Uninstall(this.world);
                     this.elevationInstalled = false;
                 }
 
+                this.Step("uninstall-netcode");
                 DotsNetcodeBootstrap.Uninstall(this.world, destroyMirrors: true);
+                this.Step("uninstall-session-modules");
                 DotsModules.UninstallScope(this.world, DotsModuleScope.Session);
+                this.Step("uninstall-catalog");
                 this.catalog?.Uninstall(this.world);
 
                 // Assets after instances: the provider drops each key's pooled instances now and
@@ -325,6 +349,7 @@ namespace Scripts.DI.Dots
                 {
                     foreach (var key in this.catalog.ViewKeys())
                     {
+                        this.Step("release:" + key);
                         this.viewAssetProvider.Release(key);
                     }
                 }
@@ -420,11 +445,58 @@ namespace Scripts.DI.Dots
             var tasks = new List<Task>();
             foreach (var pair in this.catalog.PoolSizesByKey())
             {
-                tasks.Add(this.viewAssetProvider.PrewarmAsync(pair.Key, pair.Value, cancellationToken));
+                var task = this.viewAssetProvider.PrewarmAsync(pair.Key, pair.Value, cancellationToken);
+                tasks.Add(task);
+                this.keyPrewarms[pair.Key] = task;
+                _ = this.ObserveKeyAsync(pair.Key, task);
             }
 
             await Task.WhenAll(tasks);
         }
+
+        /// <summary>
+        /// Settles one key's prewarm on the main thread. The cancellation <see cref="Dispose"/>
+        /// causes is expected and silent; any other fault is logged once. A prewarm that ran to
+        /// completion after <see cref="Dispose"/> began (a provider that ignored the token) has warmed a
+        /// key whose release already ran, so the key is released again here.
+        /// </summary>
+        private async Task ObserveKeyAsync(string key, Task task)
+        {
+            try
+            {
+                await task;
+            }
+            catch (OperationCanceledException) when (this.lifetime.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                return;
+            }
+
+            if (this.pendingAtDispose.Contains(key))
+            {
+                this.viewAssetProvider.Release(key);
+            }
+        }
+
+        // The aggregate task is polled by TryFinishPrewarm; this only keeps it observed when
+        // Dispose comes first. The per-key observers do the logging.
+        private static async Task ObserveAggregate(Task task)
+        {
+            try
+            {
+                await task;
+            }
+            catch
+            {
+                // Reported by the per-key observers.
+            }
+        }
+
+        private void Step(string name) => this.TeardownRecorder?.Invoke(name);
 
         private void InstallSessionModules()
         {
@@ -575,11 +647,13 @@ namespace Scripts.DI.Dots
         {
             // After the systems that read the blob are gone, never before — a disposed catalog
             // under a live spawn system is a dangling blob pointer.
+            this.Step("dispose-catalog");
             this.catalog?.Dispose();
             this.catalog = null;
 
             if (this.library != null)
             {
+                this.Step("dispose-library");
                 DestroyUnityObject(this.library);
                 this.library = null;
             }

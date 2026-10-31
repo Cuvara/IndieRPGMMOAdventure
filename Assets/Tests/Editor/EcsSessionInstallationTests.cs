@@ -4,6 +4,8 @@ namespace Tests.Editor
     using System;
     using System.Collections.Generic;
     using System.Threading;
+    using System.Collections;
+    using System.Linq;
     using System.Threading.Tasks;
     using Cuvara.DOTS.Configuration;
     using Cuvara.DOTS.Netcode;
@@ -30,6 +32,10 @@ namespace Tests.Editor
     /// If the teardown order changes, <see cref="Dispose_ReleasesAssetKeys_OnlyAfterNetcodeAndCatalogAreUninstalled"/>
     /// fails: the recording provider reads the world at the moment of each <c>Release</c>. If
     /// dispose stops reversing install, <see cref="Dispose_RemovesEverySessionSingleton_AndKeepsTheRootOnes"/> fails.
+    /// Swapping any two adjacent teardown steps fails <see cref="Dispose_RunsTheTeardownSteps_InExactOrder"/>,
+    /// which compares the whole recorded sequence (it reports the first index that differs).
+    /// The prewarm shutdown tests (<c>Dispose_*Prewarm*</c>) fail if a cancelled key leaves a warm key behind,
+    /// a real fault goes unlogged or is logged twice, or an expected cancellation is logged.
     /// </remarks>
     public sealed class EcsSessionInstallationTests
     {
@@ -142,6 +148,93 @@ namespace Tests.Editor
         }
 
         [Test]
+        public void Dispose_RunsTheTeardownSteps_InExactOrder()
+        {
+            var steps = new List<string>();
+            this.installation = this.NewInstallation();
+            this.installation.TeardownRecorder = steps.Add;
+            this.installation.TryInstall();
+
+            this.installation.Dispose();
+
+            Assert.That(this.provider.ReleasedKeys, Is.Not.Empty);
+            var expected = new List<string>
+            {
+                "unsubscribe-reconnect",
+                "dispose-spawn-subscription",
+                "dispose-predicted-views",
+                "uninstall-prediction",
+                "uninstall-elevation",
+                "uninstall-netcode",
+                "uninstall-session-modules",
+                "uninstall-catalog",
+            };
+            expected.AddRange(this.provider.ReleasedKeys.Select(key => "release:" + key));
+            expected.Add("dispose-catalog");
+            expected.Add("dispose-library");
+
+            Assert.That(steps, Is.EqualTo(expected));
+        }
+
+        [UnityTest]
+        public IEnumerator Dispose_WithOneKeyCancelled_LeavesNoWarmKeyAndLogsNothing()
+        {
+            const string held = DotsViewArchetypes.Mob;
+            this.provider.HeldKeys.Add(held);
+            this.installation = this.NewInstallation();
+            this.installation.TryInstall();
+            Assert.That(this.provider.WarmKeys, Is.Not.Empty, "the other keys completed");
+            Assert.That(this.provider.WarmKeys, Does.Not.Contain(held), "the held key is still pending");
+
+            this.installation.Dispose();
+            yield return null;
+
+            Assert.That(this.provider.TaskFor(held).IsCanceled, Is.True);
+            Assert.That(this.provider.WarmKeys, Is.Empty, "every key is released, completed or cancelled");
+            Assert.That(this.provider.ReleasedKeys.Count(k => k == held), Is.EqualTo(1));
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [UnityTest]
+        public IEnumerator Dispose_WithARealPrewarmFault_LogsItOnce()
+        {
+            const string faulted = DotsViewArchetypes.Mob;
+            this.provider.HeldKeys.Add(faulted);
+            this.installation = this.NewInstallation();
+            this.installation.TryInstall();
+
+            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("scripted key fault"));
+            this.provider.Fault(faulted, new InvalidOperationException("scripted key fault"));
+            yield return null;
+
+            this.installation.Dispose();
+            yield return null;
+
+            LogAssert.NoUnexpectedReceived();
+            Assert.That(this.provider.WarmKeys, Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator Dispose_WhenAProviderIgnoresCancellation_ReleasesTheKeyAgainOnceItSettles()
+        {
+            const string late = DotsViewArchetypes.Mob;
+            this.provider.HeldKeys.Add(late);
+            this.provider.IgnoreCancellation = true;
+            this.installation = this.NewInstallation();
+            this.installation.TryInstall();
+
+            this.installation.Dispose();
+            Assert.That(this.provider.ReleasedKeys.Count(k => k == late), Is.EqualTo(1));
+
+            this.provider.Complete(late);
+            yield return null;
+
+            Assert.That(this.provider.ReleasedKeys.Count(k => k == late), Is.EqualTo(2), "released again when it settled");
+            Assert.That(this.provider.WarmKeys, Is.Empty);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
         public void Prewarm_CompletesIntoReady()
         {
             this.installation = this.NewInstallation();
@@ -153,12 +246,21 @@ namespace Tests.Editor
             Assert.That(this.installation.IsReady, Is.True);
         }
 
-        [Test]
-        public void Prewarm_Failure_AsksToDisableOnce()
+        [UnityTest]
+        public IEnumerator Prewarm_Failure_AsksToDisableOnce()
         {
             this.provider.FailPrewarm = true;
             this.installation = this.NewInstallation();
             this.installation.TryInstall();
+
+            // Each key's fault is logged once by its observer, on the main thread's next pump.
+            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("scripted prewarm failure"));
+            for (var i = 1; i < this.provider.PrewarmedKeys.Count; i++)
+            {
+                LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("scripted prewarm failure"));
+            }
+
+            yield return null;
 
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Prewarming the view catalog failed"));
             Assert.That(this.installation.TryFinishPrewarm(out var first), Is.False);
@@ -256,8 +358,19 @@ namespace Tests.Editor
                 this.world = world;
             }
 
+            private readonly Dictionary<string, TaskCompletionSource<bool>> held = new Dictionary<string, TaskCompletionSource<bool>>();
+            private readonly Dictionary<string, Task> tasksByKey = new Dictionary<string, Task>();
+
             public bool HoldPrewarm;
             public bool FailPrewarm;
+
+            /// <summary>Keys whose prewarm stays pending until completed, faulted or cancelled by the token.</summary>
+            public readonly HashSet<string> HeldKeys = new HashSet<string>();
+
+            /// <summary>A provider that does not honour the token; a held key then settles only when told to.</summary>
+            public bool IgnoreCancellation;
+
+            public IReadOnlyCollection<string> WarmKeys => this.warm;
             public readonly List<string> PrewarmedKeys = new List<string>();
             public readonly List<CancellationToken> PrewarmTokens = new List<CancellationToken>();
             public readonly List<Task> PrewarmTasks = new List<Task>();
@@ -285,8 +398,32 @@ namespace Tests.Editor
                     task = Task.CompletedTask;
                 }
 
+                if (this.HeldKeys.Contains(key))
+                {
+                    var source = new TaskCompletionSource<bool>();
+                    this.held[key] = source;
+                    if (!this.IgnoreCancellation)
+                    {
+                        cancellationToken.Register(() => source.TrySetCanceled(cancellationToken));
+                    }
+
+                    task = source.Task;
+                    this.warm.Remove(key);
+                }
+
+                this.tasksByKey[key] = task;
                 this.PrewarmTasks.Add(task);
                 return task;
+            }
+
+            public Task TaskFor(string key) => this.tasksByKey[key];
+
+            public void Fault(string key, Exception exception) => this.held[key].SetException(exception);
+
+            public void Complete(string key)
+            {
+                this.warm.Add(key);
+                this.held[key].SetResult(true);
             }
 
             public bool IsWarm(string key) => this.warm.Contains(key);
@@ -304,6 +441,7 @@ namespace Tests.Editor
             public void Release(string key)
             {
                 this.ReleasedKeys.Add(key);
+                this.warm.Remove(key);
                 var manager = this.world.EntityManager;
                 using var netcode = manager.CreateEntityQuery(ComponentType.ReadOnly<NetworkEntityViewReference>());
                 using var catalog = manager.CreateEntityQuery(ComponentType.ReadOnly<ViewConfigTableReference>());
