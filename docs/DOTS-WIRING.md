@@ -40,7 +40,8 @@ predictor), which is also the test seam. Moved from the bridge: `SendInput` body
 `TryAddProjectileCast`, `TryGetLocalFeet`, `AimFrom` -> `InputEgress` (same names); the 10-unit
 no-pointer aim distance is now `InputEgress.NoPointerAimDistance`.
 
-All of it lives in `Assets/Scripts/DI/Dots/` (assembly `NDC.Scripts.DI`). The bridge hangs off
+All of it lives in `Assets/Scripts/DI/Dots/` (assembly `NDC.Scripts.Integration.Dots`; the
+`DotsRegistration` installer is composition and stays in `Assets/Scripts/DI/`, assembly `NDC.Scripts.DI`). The bridge hangs off
 the **same** `NetworkClient` that `RegisterNetworking()` registers and `NetworkBootstrap`
 prefers — there is one connection, one merged `WorldState`, one predictor.
 
@@ -98,7 +99,7 @@ Unity `y`, extrapolated projectiles) fed by `EntityElevationFeeder`, and
 
 ## Defines: they do not flow from package asmdefs
 
-`versionDefines` are per-asmdef. `NDC.Scripts.DI` (and `NDC.Tests.Editor`) declare their own:
+`versionDefines` are per-asmdef. `NDC.Scripts.DI`, `NDC.Scripts.Integration.Dots` (and `NDC.Tests.Editor`) declare their own:
 
 | Define | Set by |
 |---|---|

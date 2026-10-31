@@ -26,7 +26,9 @@
         "UniTask",
         "NDC.Scripts.Gameplay",
         "NDC.Scripts.UI",
-        "Cuvara.UIToolkit"
+        "Cuvara.UIToolkit",
+        "NDC.Scripts.Integration.Dots",
+        "NDC.Scripts.Input"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

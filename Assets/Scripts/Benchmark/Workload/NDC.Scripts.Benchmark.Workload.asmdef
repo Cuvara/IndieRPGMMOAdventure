@@ -4,6 +4,8 @@
     "references": [
         "NDC.Scripts.Benchmark",
         "NDC.Scripts.DI",
+        "NDC.Scripts.Integration.Dots",
+        "NDC.Scripts.Input",
         "NDC.Scripts.UI",
         "Cuvara.UIToolkit",
         "Cuvara.DOTS.Runtime",

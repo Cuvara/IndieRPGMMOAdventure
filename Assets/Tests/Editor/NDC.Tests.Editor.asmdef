@@ -7,6 +7,8 @@
         "BuildScript.Editor",
         "NDC.TestLab",
         "NDC.Scripts.DI",
+        "NDC.Scripts.Integration.Dots",
+        "NDC.Scripts.Input",
         "NDC.Scripts.UI",
         "NDC.Scripts.Benchmark",
         "NDC.Scripts.UI.Hud.Ecs",

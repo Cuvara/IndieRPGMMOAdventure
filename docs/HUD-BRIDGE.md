@@ -110,7 +110,7 @@ convention) rather than the asmdef root `Scripts.UI`.
 Game assemblies reference both packages; neither package references the other — the one-way
 arrows `docs/UI-ARCHITECTURE.md` and the vendor split require. `HudStateSystem` spells the
 server kind `"player"` itself rather than referencing `DotsViewArchetypes.ServerKindPlayer`:
-that constant lives in `NDC.Scripts.DI`, and the HUD bridge must not depend on the DI wiring
+that constant lives in `NDC.Scripts.Integration.Dots`, and the HUD bridge must not depend on the DI wiring
 layer (the constant's own doc names the wire as the source of truth for the string).
 
 ## UXML codegen

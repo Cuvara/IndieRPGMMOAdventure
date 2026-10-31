@@ -6,6 +6,8 @@
         "Unity.Addressables",
         "Unity.ResourceManager",
         "NDC.Scripts.DI",
+        "NDC.Scripts.Integration.Dots",
+        "NDC.Scripts.Input",
         "Cuvara.DOTS.Runtime",
         "VContainer",
         "NDC.Scripts.Gameplay",
