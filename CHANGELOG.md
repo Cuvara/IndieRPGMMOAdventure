@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests
+
+- Cover production clock-steering RTT refreshes and assert per-send egress order across the port,
+  predictor and send schedule seams.
+
 ### Changed
 
 - **Input egress extracted from `DotsWorldBridge` (UCF F-07, part 2).** New plain-C# `InputEgress`

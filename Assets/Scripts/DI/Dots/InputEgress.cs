@@ -47,6 +47,7 @@ namespace Scripts.DI.Dots
         private readonly IGameplayInputSource input;
         private readonly Camera followCamera;
         private readonly Func<double> clock;
+        private readonly Action<string, long> trace;
 
         private InputSendSchedule sendSchedule;
         private bool sendScheduleStarted;
@@ -64,13 +65,15 @@ namespace Scripts.DI.Dots
             LocalMovePredictor predictor,
             IGameplayInputSource input,
             Camera followCamera,
-            Func<double> clock = null)
+            Func<double> clock = null,
+            Action<string, long> trace = null)
         {
             this.port = port;
             this.predictor = predictor;
             this.input = input;
             this.followCamera = followCamera;
             this.clock = clock ?? (() => Time.realtimeSinceStartupAsDouble);
+            this.trace = trace;
         }
 
         /// <summary>
@@ -126,6 +129,7 @@ namespace Scripts.DI.Dots
                     this.port.NoteInputSent(this.inputTick);
 
                     this.sendSchedule.NoteSent(now);
+                    this.trace?.Invoke("NoteSent", this.inputTick);
                 }
             }
             else

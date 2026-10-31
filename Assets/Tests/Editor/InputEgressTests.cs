@@ -67,6 +67,28 @@ namespace Tests.Editor
             Assert.That(h.Port.NotedTicks, Is.EqualTo(h.Sent.ConvertAll(m => m.Tick)));
         }
 
+        /// <summary>Fails if SendInput, RecordInput, NoteInputSent or NoteSent moves out of production order.</summary>
+        [Test]
+        public void EachSend_RecordsPortPredictorAndScheduleEventsInOrder()
+        {
+            var h = new Harness();
+            h.Port.Log = h.Log;
+
+            h.Run(Period * 2.5, onFrame: null);
+
+            Assert.That(h.Sent.Count, Is.GreaterThan(0));
+            var expected = new List<string>();
+            foreach (var message in h.Sent)
+            {
+                expected.Add($"SendInput:{message.Tick}");
+                expected.Add($"RecordInput:{message.Tick}");
+                expected.Add($"NoteInputSent:{message.Tick}");
+                expected.Add($"NoteSent:{message.Tick}");
+            }
+
+            Assert.That(h.Log, Is.EqualTo(expected));
+        }
+
         /// <summary>Fails if <c>SetRenderTime</c> is removed or reads another source than the port's render tick.</summary>
         [Test]
         public void EveryInputCarriesTheBindersRenderTick()
@@ -229,7 +251,10 @@ namespace Tests.Editor
 
             gate.Tick(true, session, s => h.Log.Add("reset"), h.Egress.Step);
 
-            Assert.That(h.Log, Is.EqualTo(new[] { "reset", "send" }));
+            Assert.That(h.Log, Is.EqualTo(new[]
+            {
+                "reset", "SendInput:1", "RecordInput:1", "NoteInputSent:1", "NoteSent:1",
+            }));
         }
 
         // ---- harness ---------------------------------------------------------------------------
@@ -248,10 +273,12 @@ namespace Tests.Editor
                     if (e.Call == PredictorCall.RecordInput)
                     {
                         this.Recorded.Add(new RecordedInput { Tick = e.A, MoveX = e.X, MoveY = e.Y, Jump = e.Flag });
+                        this.Log.Add($"RecordInput:{e.A}");
                     }
                 };
                 this.Port = new ScriptedPort(this);
-                this.Egress = new InputEgress(this.Port, this.Predictor, this.Source, null, () => this.now);
+                this.Egress = new InputEgress(this.Port, this.Predictor, this.Source, null, () => this.now,
+                    (name, tick) => this.Log.Add($"{name}:{tick}"));
             }
 
             public ScriptedSource Source { get; } = new ScriptedSource();
@@ -386,11 +413,15 @@ namespace Tests.Editor
 
             public void SendInput(InputMessage input)
             {
-                this.Log?.Add("send");
+                this.Log?.Add($"SendInput:{input.Tick}");
                 this.harness.NoteSent(input);
             }
 
-            public void NoteInputSent(long tick) => this.NotedTicks.Add(tick);
+            public void NoteInputSent(long tick)
+            {
+                this.NotedTicks.Add(tick);
+                this.Log?.Add($"NoteInputSent:{tick}");
+            }
         }
     }
 }
