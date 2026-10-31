@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Harness-marker contract test and unobserved-exception hook (UCF F-09).**
+  `HarnessMarkerContractTests` pins every `[DOTSNet]` `MainSessionFlow` marker byte for byte
+  (consumers: `verify-multiclient.sh`, `run-clients.sh`, TestLab `analyze.py`; see
+  `docs/HARNESS-MARKERS.md`). New root-scoped `UnobservedExceptionReporter` logs unobserved
+  UniTask and Task exceptions once as `[Unobserved] ...`. `MainSessionDriver.Dispose` now appends
+  the stack trace to its `disposed` line only when `Debug.isDebugBuild`; the development text is
+  unchanged and release players log no stack trace. New `.meta` files were created by hand.
 - **First-connect retry progress is shown (Part of #151).** `MainSessionDriver` subscribes to
   `NetworkClient.ReconnectProgress`; before the session was ever in the world it sets a new
   `Connecting` status ("Connecting... (attempt n)") instead of a silent wait. A manual Retry after

@@ -222,9 +222,12 @@ namespace Scripts.DI
             if (this.disposed) return;
             this.disposed = true;
 
-            Debug.Log(
-                $"{MainSessionFlow.Tag} session driver #{this.instanceId} disposed (phase {this.Flow?.CurrentPhase.ToString() ?? "not started"}) at:\n" +
-                Environment.StackTrace);
+            // The stack trace is a development diagnostic (who disposed the scope); release players
+            // log the same line without it.
+            var phase = this.Flow?.CurrentPhase.ToString() ?? "not started";
+            Debug.Log(Debug.isDebugBuild
+                ? $"{MainSessionFlow.Tag} session driver #{this.instanceId} disposed (phase {phase}) at:\n" + Environment.StackTrace
+                : $"{MainSessionFlow.Tag} session driver #{this.instanceId} disposed (phase {phase})");
 
             this.client.Reconnected -= this.OnReconnected;
             this.client.ReconnectFailed -= this.OnReconnectFailed;
