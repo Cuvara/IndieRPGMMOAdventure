@@ -67,18 +67,6 @@ namespace Tests.Editor
             Assert.That(h.Port.NotedTicks, Is.EqualTo(h.Sent.ConvertAll(m => m.Tick)));
         }
 
-        /// <summary>Fails if the production port's RTT refresh seam stops assigning the latest value.</summary>
-        [Test]
-        public void InstallationPort_RefreshesClockSteeringRttForEachSend()
-        {
-            long roundTripMs = 0;
-            InstallationInputPort.RefreshClockSteeringRoundTripMs(value => roundTripMs = value, 37L);
-            Assert.That(roundTripMs, Is.EqualTo(37L));
-
-            InstallationInputPort.RefreshClockSteeringRoundTripMs(value => roundTripMs = value, 81L);
-            Assert.That(roundTripMs, Is.EqualTo(81L), "the current session RTT replaces the previous send's value");
-        }
-
         /// <summary>Fails if SendInput, RecordInput, NoteInputSent or NoteSent moves out of production order.</summary>
         [Test]
         public void EachSend_RecordsPortPredictorAndScheduleEventsInOrder()

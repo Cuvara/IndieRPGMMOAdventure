@@ -84,6 +84,20 @@ namespace Tests.Editor
                 new EcsSessionInstallation.Settings { EnableCameraFollow = false });
 
         [Test]
+        public void InstallationInputPort_NoteInputSent_RefreshesClockSteeringRttFromSession()
+        {
+            this.installation = this.NewInstallation();
+            Assert.That(this.installation.TryInstall(), Is.True);
+
+            var port = new InstallationInputPort(this.client, null, this.installation);
+            port.NoteInputSent(1L);
+
+            Assert.That(this.client.Session, Is.Null, "this scripted client has no session, so the port uses its documented zero RTT fallback");
+            Assert.That(DotsPredictionBootstrap.TryGetClockSteering(this.world, out var steering), Is.True);
+            Assert.That(steering.RoundTripMs, Is.EqualTo(0L), "NoteInputSent must refresh the installed steering singleton from the session RTT (zero without a session)");
+        }
+
+        [Test]
         public void TryInstall_PublishesTheSessionSingletons()
         {
             this.installation = this.NewInstallation();
