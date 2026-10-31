@@ -124,7 +124,7 @@ Each snapshot writes one row and each frame writes one row. Nothing is retained 
 | `main_ms` | Profiler "Main Thread" frame time, ms. Empty if the counter is unavailable in the player. |
 | `used_mb` | Profiler "Total Used Memory", MiB. Empty if the recorder is not valid. |
 
-The last four columns are appended; older runs have only the first four and stay valid. The row is built by `FrameCsv` and written through `BackgroundFileWriter`.
+The last four columns are appended; older runs have only the first four and stay valid. The row is built by a runner-owned `FrameCsv` formatter and written through `BackgroundFileWriter`. The formatter reuses one `StringBuilder` and one numeric buffer; each row creates only the final string passed to the writer (at most `row length * 2 + 64` bytes, including string overhead), with no temporary numeric strings.
 
 ## Coverage hooks (T14)
 

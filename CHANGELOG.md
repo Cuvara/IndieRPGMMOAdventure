@@ -13,9 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   columns are appended after `scenario_t`: `gc_alloc_b` (Profiler "GC Allocated In Frame"),
   `gc_count` (cumulative `GC.CollectionCount(0)`; the analyzer takes deltas), `main_ms` (Profiler
   "Main Thread" frame time, empty where the counter is unavailable) and `used_mb` ("Total Used
-  Memory"). The row is built by `FrameCsv` and still goes through `BackgroundFileWriter`. Lets a
-  hitch such as the 262 ms stall in #161 be tied to a GC collection. `delivery.csv` is unchanged:
-  per-snapshot receive timestamps wait for the netcode diagnostics hook.
+  Memory"). The runner-owned `FrameCsv` reuses its `StringBuilder` and numeric buffer, so only the
+  final row string allocates (bounded by row length * 2 + 64 bytes) before going through the existing
+  `BackgroundFileWriter`. `delivery.csv` is unchanged: per-snapshot receive timestamps wait for the
+  netcode diagnostics hook.
 
 ### Tests
 

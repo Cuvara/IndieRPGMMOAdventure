@@ -57,6 +57,7 @@ namespace TestLab
         private readonly List<PlannerEntity> plannerEntities = new List<PlannerEntity>(256);
         private readonly List<Vector2> clientPositions = new List<Vector2>(8);
         private readonly StringBuilder line = new StringBuilder(4096);
+        private readonly FrameCsv frameCsvBuilder = new FrameCsv();
         private readonly FrameReadTap tap = new FrameReadTap();
         private readonly UserIdLatch userId = new UserIdLatch();
         private readonly BinderProbe binderProbe = new BinderProbe();
@@ -393,7 +394,7 @@ namespace TestLab
                 }
             }
 
-            this.frameCsv.WriteLine(FrameCsv.Row(this.frameIndex, Num(now), Num(dt * 1000.0), Num(t),
+            this.frameCsv.WriteLine(this.frameCsvBuilder.Row(this.frameIndex, Num(now), Num(dt * 1000.0), Num(t),
                 this.gcAllocRecorder.Valid ? this.gcAllocRecorder.LastValue : -1,
                 GC.CollectionCount(0),
                 this.mainThreadRecorder.Valid ? this.mainThreadRecorder.LastValue : 0,
