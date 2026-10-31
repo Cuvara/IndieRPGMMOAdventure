@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and tells you to stop them by PID. `verify-multiclient.sh` cleans up through the pid-scoped kill with
   its own log dir, only warns about players it did not start, and captures windows from its own PID
   file. `run-clients.sh --self-test` covers the pid file, the image check and the no-pid-file path
-  with a harmless child it starts itself. Pass the launch's `--log-dir` to `--kill`.
+  with a harmless child it starts itself. Pass the launch's `--log-dir` to `--kill`. `CLAUDE.md` now says so
+  and finds a player's window by its recorded PID instead of by image name.
 
 ### Tests
 

@@ -190,7 +190,10 @@ the world because it never authenticated and one that authenticated and sees nob
 are different faults, and only the second one is about AOI.
 
 **Kill the players before rebuilding.** A running player holds
-`lib_burst_generated.dll` open and the build fails on it: `Tools/run-clients.sh --kill`.
+`lib_burst_generated.dll` open and the build fails on it: `Tools/run-clients.sh --log-dir <dir> --kill`,
+with the `--log-dir` of the run that started them (default `/tmp/cuvara-clients`;
+`verify-multiclient.sh` uses `/tmp/cuvara-verify-<run>`). It stops only the PIDs recorded in that
+dir's `clients.pids`; never stop players by image name, which also kills players you did not start.
 
 #### Telling a real pass from three isolated clients
 
@@ -263,8 +266,8 @@ terminal that *looks* like a captured window. `PrintWindow` with `PW_RENDERFULLC
 player's D3D12 surface:
 
 ```powershell
-# $hw = (Get-Process IndieRPGMMOAdventure).MainWindowHandle -- note the PIDs printed by
-# run-clients.sh are the launcher's, NOT the player's; they have no window handle.
+# $hw = (Get-Process -Id <pid>).MainWindowHandle -- <pid> is a player's Windows PID as
+# printed by run-clients.sh and recorded in <log-dir>/clients.pids.
 $bmp = New-Object System.Drawing.Bitmap $w, $h
 $g   = [System.Drawing.Graphics]::FromImage($bmp)
 $hdc = $g.GetHdc(); [P]::PrintWindow($hw, $hdc, 2); $g.ReleaseHdc($hdc)

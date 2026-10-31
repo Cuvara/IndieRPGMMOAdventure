@@ -185,7 +185,7 @@ self_test() {
     if kill_recorded "$dir" >/dev/null; then t ok "exited pid handled"; else t no "exited pid reported failure"; fi
 
     # Safety net: stop only the child this test started, if still alive.
-    if alive "$pid"; then MSYS2_ARG_CONV_EXCL='*' taskkill.exe /PID "$pid" /T /F >/dev/null 2>&1 || true; fi
+    if alive "$pid"; then stop_recorded "$pid" "$live" >/dev/null || true; fi
     rm -rf "$dir"
     if [ "$ok" = 1 ]; then echo "self-test: all passed"; else echo "self-test: FAILED"; return 1; fi
 }
