@@ -158,6 +158,9 @@ namespace Scripts.DI.Dots
 
         private bool sendScheduleStarted;
 
+        /// <summary>Where the controls come from; injected by <see cref="Construct"/>.</summary>
+        private IGameplayInputSource input;
+
         /// <summary>Edge-triggered presses latched until the next scheduled send, so none is lost between sends.</summary>
         private bool pendingJump;
 
@@ -191,13 +194,15 @@ namespace Scripts.DI.Dots
             LocalMovePredictor movePredictor,
             IViewAssetProvider assetProvider,
             DotsViewLibraryReference viewLibraryReference,
-            GameContentService gameContent)
+            GameContentService gameContent,
+            IGameplayInputSource gameplayInput)
         {
             this.client = networkClient;
             this.predictor = movePredictor;
             this.viewAssetProvider = assetProvider;
             this.libraryReference = viewLibraryReference;
             this.content = gameContent;
+            this.input = gameplayInput;
         }
 
         private void Update()
@@ -234,7 +239,7 @@ namespace Scripts.DI.Dots
             {
                 // Input is sampled and SENT here, not inside the prediction driver: the tick
                 // recorded must be the tick that went to the server.
-                var inputSource = GameplayInput.Source;
+                var inputSource = this.input;
                 this.pendingJump |= inputSource.JumpPressed();
                 this.pendingCast |= inputSource.CastPressed();
 
@@ -775,14 +780,14 @@ namespace Scripts.DI.Dots
         /// </summary>
         private Vec3 AimFrom(in Vec3 feet)
         {
-            if (GameplayInput.Source.TryAimPoint(new Vector3(feet.X, feet.Y, feet.Z), out var explicitAim))
+            if (this.input.TryAimPoint(new Vector3(feet.X, feet.Y, feet.Z), out var explicitAim))
             {
                 return new Vec3(explicitAim.x, explicitAim.y, explicitAim.z);
             }
 
             var camera = this.followCamera != null ? this.followCamera : Camera.main;
             if (camera != null &&
-                GameplayInput.Source.TryPointerPosition(out var screen) &&
+                this.input.TryPointerPosition(out var screen) &&
                 AimPoint.TryGroundAim(camera.ScreenPointToRay(screen), feet.Z, out var aim))
             {
                 return aim;

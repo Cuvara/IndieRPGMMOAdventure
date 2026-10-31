@@ -3,7 +3,6 @@
     "rootNamespace": "DI",
     "references": [
         "VContainer",
-        "Scripts",
         "NDC.Scripts",
         "Cuvara.Netcode.Runtime",
         "Cuvara.Netcode.Bootstrap",

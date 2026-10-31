@@ -170,6 +170,8 @@ namespace Tests.Editor
             var expectedRoot = new List<Type>
             {
                 typeof(BackendSettings),
+                typeof(IGameplayInputSource),
+                typeof(GameplayInputRouter),
                 typeof(NetworkClient),
                 typeof(IAuthProvider),
                 typeof(ITransportFactory),
