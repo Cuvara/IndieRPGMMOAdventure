@@ -50,7 +50,14 @@ that frame's `binder.Tick`: `view.BeginGeneration()`, `binder.Reset()`, `predict
 `projectilePredictor` and `elevationFeeder` reset, the protocol/geometry selection below, then the
 camera smoothing reset. Retry, dungeon joins, map transfers and a fresh connect after a failed one
 all build a new session object, so all take this path. Logged as
-`[DotsWorldBridge] Session began:`; a reconnect additionally logs `[DotsWorldBridge] Reconnected:`.
+`[DotsWorldBridge] Session began:`; a reconnect additionally logs `[DotsWorldBridge] Reconnected:`
+(saying so when the per-frame check had already begun that session).
+
+The routing is `SessionResetGate<GameSessionClient>`: `Update` calls `gate.Tick(inWorld, session,
+OnSessionBegan, RunFrame)`, which begins a new session before `RunFrame` (input send and the binder
+feed); `OnReconnected` calls `gate.OnReconnected(session, OnSessionBegan)`. The event relies on
+com.cuvara.netcode v0.50.0 setting `NetworkClient._session` to the new session before raising
+`Reconnected`; with no session at callback time it warns and the per-frame check begins it.
 
 ### Protocol 3 additions (Core v3)
 

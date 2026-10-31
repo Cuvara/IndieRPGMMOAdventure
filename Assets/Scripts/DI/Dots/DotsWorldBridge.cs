@@ -169,7 +169,9 @@ namespace Scripts.DI.Dots
         private bool elevationInstalled;
         private ProjectilePredictor projectilePredictor;
         private PredictedProjectileViews predictedViews;
-        private readonly SessionBoundary sessionBoundary = new SessionBoundary();
+        private readonly SessionResetGate<GameSessionClient> sessionGate = new SessionResetGate<GameSessionClient>();
+        private Action<GameSessionClient> beginSession;
+        private Action runFrame;
         private int lastGeneration;
         private bool castWarningLogged;
 
@@ -215,13 +217,19 @@ namespace Scripts.DI.Dots
                 return;
             }
 
-            if (this.client.State == NetworkClientState.InWorld)
-            {
-                // Before the binder feed at the end of this Update, so the first frame of a new
-                // session never meets the old session's binder, predictor or view generation.
-                this.BeginSessionIfNew(this.client.Session);
-            }
+            // The gate runs the session reset before RunFrame (input send and the binder feed), so
+            // the first frame of a new session never meets the old session's binder, predictor or
+            // view generation.
+            this.sessionGate.Tick(
+                this.client.State == NetworkClientState.InWorld,
+                this.client.Session,
+                this.beginSession,
+                this.runFrame);
+        }
 
+        /// <summary>Input send, then the binder feed: everything in a frame that follows the session reset.</summary>
+        private void RunFrame()
+        {
             if (this.driveInput && this.client.State == NetworkClientState.InWorld)
             {
                 // Input is sampled and SENT here, not inside the prediction driver: the tick
@@ -373,6 +381,8 @@ namespace Scripts.DI.Dots
 
             this.predictedViews = new PredictedProjectileViews(this.transform);
 
+            this.beginSession = this.OnSessionBegan;
+            this.runFrame = this.RunFrame;
             this.client.Reconnected += this.OnReconnected;
 
             // Prewarm from the catalog's own pool sizes rather than numbers typed here. In
@@ -512,24 +522,35 @@ namespace Scripts.DI.Dots
             }
         }
 
+        /// <summary>
+        /// Routes the netcode <c>Reconnected</c> event through the same once-per-session reset as
+        /// the per-frame check.
+        /// </summary>
+        /// <remarks>
+        /// Contract relied on (com.cuvara.netcode v0.50.0, <c>Runtime/Client/NetworkClient.cs</c>):
+        /// <c>Reconnected</c> is raised only after <c>_session</c> is set to the new
+        /// <see cref="GameSessionClient"/> in the join commit, so <c>client.Session</c> is already
+        /// the new object here. If it is null anyway, nothing is reset now and the per-frame check
+        /// begins the session when a non-null object is seen in the world.
+        /// </remarks>
         private void OnReconnected()
         {
             if (!this.installed || this.view == null) return;
 
-            // A reconnect always builds a new session object, so this normally begins it; when the
-            // per-frame check already did, the boundary refuses a second reset.
-            this.BeginSessionIfNew(this.client.Session);
-            this.ReconnectsHandled++;
-
-            Debug.Log($"[DotsWorldBridge] Reconnected: view generation {this.lastGeneration}, predictor reset, camera smoothing reset.");
-        }
-
-        /// <summary>Runs <see cref="OnSessionBegan"/> once per session object, however it is reached.</summary>
-        private void BeginSessionIfNew(GameSessionClient session)
-        {
-            if (this.view != null && this.sessionBoundary.TryBegin(session))
+            var outcome = this.sessionGate.OnReconnected(this.client.Session, this.beginSession);
+            switch (outcome)
             {
-                this.OnSessionBegan(session);
+                case ReconnectOutcome.Began:
+                    this.ReconnectsHandled++;
+                    Debug.Log($"[DotsWorldBridge] Reconnected: view generation {this.lastGeneration}, predictor reset, camera smoothing reset.");
+                    break;
+                case ReconnectOutcome.AlreadyBegun:
+                    this.ReconnectsHandled++;
+                    Debug.Log($"[DotsWorldBridge] Reconnected: reset already ran for this session (view generation {this.lastGeneration}); no second reset.");
+                    break;
+                default:
+                    Debug.LogWarning("[DotsWorldBridge] Reconnected: no session object at callback time; no reset ran, the per-frame check will begin the session.");
+                    break;
             }
         }
 

@@ -10,86 +10,127 @@ using Shared.GameLogic.Components;
 namespace Tests.Editor
 {
     /// <summary>
-    /// The session-start reset of <c>DotsWorldBridge.OnSessionBegan</c>. The bridge needs an
-    /// installed ECS world and a live <c>NetworkClient</c>, so these tests drive the decision
-    /// (<see cref="SessionBoundary"/>) and the pieces the reset calls (<see cref="WorldViewBinder"/>,
-    /// <see cref="LocalMovePredictor"/>) one level down, with a stand-in for the bridge that runs
-    /// the same sequence: generation, binder, predictor. The view generation itself
-    /// (<c>DotsEntityView.BeginGeneration</c>) is counted by the stand-in, not exercised.
+    /// The routing of the session-start reset. <c>DotsWorldBridge.Update</c> and
+    /// <c>OnReconnected</c> call only <see cref="SessionResetGate{TSession}"/> for these paths, so
+    /// these tests drive the production gate. A bridge-level test was not feasible in EditMode: the
+    /// bridge needs an installed view library, a prewarmed asset provider and a live
+    /// <c>NetworkClient</c>. What the reset itself touches (binder, predictor) is checked one level
+    /// down with the real <see cref="WorldViewBinder"/> and <see cref="LocalMovePredictor"/>; the
+    /// view generation is counted, not exercised. If the gate stops resetting before the feed,
+    /// <see cref="NewSessionWhileInWorld_ResetsBeforeTheSameFramesFeed"/> fails; if
+    /// <c>OnReconnected</c> stops sharing the once-per-session boundary, the Reconnect_* tests fail.
     /// </summary>
     public sealed class SessionBoundaryTests
     {
         private const string Local = "local-1";
         private const string Remote = "remote-1";
 
+        // ---- ordering: the reset precedes the feed of the frame a session appears in --------
+
+        [Test]
+        public void NewSessionWhileInWorld_ResetsBeforeTheSameFramesFeed()
+        {
+            var h = new Harness();
+
+            h.Frame(true, new FakeSession());
+
+            Assert.That(h.Log, Is.EqualTo(new[] { "begin", "feed" }));
+        }
+
+        [Test]
+        public void NotInWorld_NeverBegins_ButStillFeeds()
+        {
+            var h = new Harness();
+
+            h.Frame(false, new FakeSession());
+
+            Assert.That(h.Log, Is.EqualTo(new[] { "feed" }));
+            Assert.That(h.Generations, Is.EqualTo(0));
+        }
+
         // ---- (a) a non-reconnect new session -------------------------------------------------
 
         [Test]
         public void NewSessionObject_BeginsExactlyOnce_NoMatterHowOftenItIsObserved()
         {
-            var bridge = new BridgeStandIn();
-            var session = new object();
+            var h = new Harness();
+            var session = new FakeSession();
 
             for (int frame = 0; frame < 5; frame++)
             {
-                bridge.Observe(session);
+                h.Frame(true, session);
             }
 
-            Assert.That(bridge.Generations, Is.EqualTo(1));
-            Assert.That(bridge.BinderResets, Is.EqualTo(1));
+            Assert.That(h.Generations, Is.EqualTo(1));
+            Assert.That(h.BinderResets, Is.EqualTo(1));
         }
 
         [Test]
         public void RetryOrDungeonJoin_NewObject_ChangesGenerationAndResetsBinderAndPredictor()
         {
-            var bridge = new BridgeStandIn();
-            bridge.Observe(new object());
-            bridge.RecordInput(1);
-            Assert.That(bridge.Predictor.PendingCount, Is.EqualTo(1), "precondition");
+            var h = new Harness();
+            h.Frame(true, new FakeSession());
+            h.RecordInput(1);
+            Assert.That(h.Predictor.PendingCount, Is.EqualTo(1), "precondition");
 
-            bridge.Observe(new object());
+            h.Frame(true, new FakeSession());
 
-            Assert.That(bridge.Generations, Is.EqualTo(2));
-            Assert.That(bridge.BinderResets, Is.EqualTo(2));
-            Assert.That(bridge.Predictor.PendingCount, Is.EqualTo(0), "the old input backlog is gone");
+            Assert.That(h.Generations, Is.EqualTo(2));
+            Assert.That(h.BinderResets, Is.EqualTo(2));
+            Assert.That(h.Predictor.PendingCount, Is.EqualTo(0), "the old input backlog is gone");
         }
 
         [Test]
         public void NullSession_NeverBegins()
         {
-            var bridge = new BridgeStandIn();
+            var h = new Harness();
 
-            bridge.Observe(null);
+            h.Frame(true, null);
 
-            Assert.That(bridge.Generations, Is.EqualTo(0));
+            Assert.That(h.Generations, Is.EqualTo(0));
         }
 
         // ---- (b) reconnect: the event and the identity check both see the same session -------
 
         [Test]
-        public void Reconnect_SeenByEventThenByFrameCheck_IsOneGeneration()
+        public void Reconnect_EventThenFrame_IsOneGeneration()
         {
-            var bridge = new BridgeStandIn();
-            bridge.Observe(new object());
-            var reconnected = new object();
+            var h = new Harness();
+            h.Frame(true, new FakeSession());
+            var reconnected = new FakeSession();
 
-            bridge.Observe(reconnected); // the Reconnected event
-            bridge.Observe(reconnected); // the next frame's identity check
+            Assert.That(h.Reconnected(reconnected), Is.EqualTo(ReconnectOutcome.Began));
+            h.Frame(true, reconnected);
 
-            Assert.That(bridge.Generations, Is.EqualTo(2), "one for the first session, one for the reconnect");
+            Assert.That(h.Generations, Is.EqualTo(2), "one for the first session, one for the reconnect");
         }
 
         [Test]
-        public void Reconnect_SeenByFrameCheckThenByEvent_IsOneGeneration()
+        public void Reconnect_FrameThenEvent_IsOneGeneration_AndTheEventSaysSo()
         {
-            var bridge = new BridgeStandIn();
-            bridge.Observe(new object());
-            var reconnected = new object();
+            var h = new Harness();
+            h.Frame(true, new FakeSession());
+            var reconnected = new FakeSession();
 
-            bridge.Observe(reconnected); // the frame's identity check
-            bridge.Observe(reconnected); // the Reconnected event
+            h.Frame(true, reconnected);
+            var outcome = h.Reconnected(reconnected);
 
-            Assert.That(bridge.Generations, Is.EqualTo(2));
+            Assert.That(outcome, Is.EqualTo(ReconnectOutcome.AlreadyBegun));
+            Assert.That(h.Generations, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Reconnect_WithNoSessionAtCallbackTime_ResetsNothing_ThenTheFrameCheckBegins()
+        {
+            var h = new Harness();
+            h.Frame(true, new FakeSession());
+
+            Assert.That(h.Reconnected(null), Is.EqualTo(ReconnectOutcome.NoSession));
+            Assert.That(h.Generations, Is.EqualTo(1), "nothing reset by the event");
+
+            h.Frame(true, new FakeSession());
+
+            Assert.That(h.Generations, Is.EqualTo(2), "the per-frame check picked the new session up");
         }
 
         // ---- (c) B's scenario: the new session's ticks start ABOVE the old ones --------------
@@ -97,45 +138,47 @@ namespace Tests.Editor
         [Test]
         public void NewSessionStartingAboveTheOldTicks_CarriesNoBinderClockOrPredictorHistory()
         {
-            var bridge = new BridgeStandIn();
+            var h = new Harness();
             var world = new WorldState();
-            bridge.Observe(new object());
+            h.Frame(true, new FakeSession());
             for (int i = 0; i < 100; i++)
             {
-                bridge.Feed(world, 100 + i, i);
-                bridge.RecordInput(i + 1);
+                h.Feed(world, 100 + i, i);
+                h.RecordInput(i + 1);
             }
 
-            Assert.That(bridge.Binder.RenderTick, Is.GreaterThan(150.0), "precondition: session A interpolates");
-            Assert.That(bridge.Predictor.PendingCount, Is.GreaterThan(0), "precondition: A left queued inputs");
+            Assert.That(h.Binder.RenderTick, Is.GreaterThan(150.0), "precondition: session A interpolates");
+            Assert.That(h.Predictor.PendingCount, Is.GreaterThan(0), "precondition: A left queued inputs");
 
-            // Session B: NetworkClient resets the world; the bridge sees the new object before it feeds.
+            // Session B: NetworkClient resets the world; the gate sees the new object before the feed.
             world.Reset();
-            bridge.Observe(new object());
+            h.Frame(true, new FakeSession());
 
-            Assert.That(bridge.Predictor.PendingCount, Is.EqualTo(0), "stale queued commands dropped");
+            Assert.That(h.Predictor.PendingCount, Is.EqualTo(0), "stale queued commands dropped");
             for (int i = 0; i < 20; i++)
             {
-                bridge.Feed(world, 500 + i, i);
+                h.Feed(world, 500 + i, i);
             }
 
-            Assert.That(bridge.Binder.RenderTick, Is.GreaterThan(500.0).And.LessThan(520.0),
+            Assert.That(h.Binder.RenderTick, Is.GreaterThan(500.0).And.LessThan(520.0),
                 "the render clock is rebuilt in the new session's tick space, not A's");
         }
 
-        /// <summary>The decision and the reset sequence of <c>DotsWorldBridge</c>, minus the ECS world.</summary>
-        private sealed class BridgeStandIn
+        /// <summary>The production gate wired as the bridge wires it; Begin performs the reset pieces the bridge does.</summary>
+        private sealed class Harness
         {
-            private readonly SessionBoundary boundary = new SessionBoundary();
+            private readonly SessionResetGate<FakeSession> gate = new SessionResetGate<FakeSession>();
             private readonly FakeClock clock = new FakeClock();
             private bool seeded;
 
-            public BridgeStandIn()
+            public Harness()
             {
                 this.Binder = new WorldViewBinder(new NullView(), null, this.clock);
                 this.Predictor = new LocalMovePredictor(
                     new PredictionSettings(GameConstants.DefaultTickRate, 5f, MapBounds.Default));
             }
+
+            public List<string> Log { get; } = new List<string>();
 
             public WorldViewBinder Binder { get; }
 
@@ -145,13 +188,14 @@ namespace Tests.Editor
 
             public int BinderResets { get; private set; }
 
-            public void Observe(object session)
-            {
-                if (!this.boundary.TryBegin(session))
-                {
-                    return;
-                }
+            public void Frame(bool inWorld, FakeSession session) =>
+                this.gate.Tick(inWorld, session, this.Begin, () => this.Log.Add("feed"));
 
+            public ReconnectOutcome Reconnected(FakeSession session) => this.gate.OnReconnected(session, this.Begin);
+
+            private void Begin(FakeSession session)
+            {
+                this.Log.Add("begin");
                 this.Generations++;
                 this.Binder.Reset();
                 this.BinderResets++;
@@ -182,6 +226,10 @@ namespace Tests.Editor
                 this.clock.NowMs += 50.0;
                 this.Binder.Tick(world, Local);
             }
+        }
+
+        private sealed class FakeSession
+        {
         }
 
         private sealed class FakeClock : IViewClock

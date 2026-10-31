@@ -43,7 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   protected them, which miss a new session whose ticks start above the old ones. A new
   `SessionBoundary` tracks the session object; `OnSessionBegan` runs the reset once per object,
   before that frame's binder feed, and `OnReconnected` goes through the same path (idempotent, so
-  no double reset). The `[DotsWorldBridge] Reconnected:` log line is unchanged; a new
+  no double reset). The routing lives in the plain-C# `SessionResetGate`, which the bridge
+  delegates to and the tests drive. The `[DotsWorldBridge] Reconnected:` prefix is unchanged; the
+  line now says when the per-frame check had already begun the session, and a `Reconnected` with
+  no session object logs a warning and leaves the begin to the per-frame check. A new
   `[DotsWorldBridge] Session began:` line is logged for every session. See `docs/DOTS-WIRING.md`.
 - **Multi-client tools work from Git Bash and with WSL-native Docker.** Both scripts share a
   `wslpath`/`cygpath` Windows path converter, and `verify-multiclient.sh` automatically uses WSL
