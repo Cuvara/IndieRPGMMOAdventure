@@ -3,6 +3,8 @@
     "rootNamespace": "TestLab",
     "references": [
         "NDC.Scripts.DI",
+        "NDC.Scripts.Integration.Dots",
+        "NDC.Scripts.Input",
         "VContainer",
         "Cuvara.Netcode.Runtime",
         "Cuvara.DOTS.Runtime",

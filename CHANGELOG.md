@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`NDC.Scripts.DI` split by responsibility (UCF F-10, UCF-ADR-12).** Two new assemblies, no
+  behaviour change, namespaces unchanged (`Scripts.DI`, `Scripts.DI.Dots`) and every moved file
+  keeps its `.meta` GUID (scene references such as `DotsWorldBridge` in `MainScene` still resolve):
+  `NDC.Scripts.Integration.Dots` (`Assets/Scripts/DI/Dots/`, everything there except
+  `DotsRegistration`) and `NDC.Scripts.Input` (`Assets/Scripts/Input/`: `GameplayInput`,
+  `GameplayInputReader`, `GameplayInputRouter`). `DotsRegistration` moved up to `Assets/Scripts/DI/`
+  and stays in `NDC.Scripts.DI` with the scopes and installers. Neither new assembly references
+  `NDC.Scripts.DI`. `NDC.TestLab`, `NDC.Tests.Editor`, `NDC.Scripts.Benchmark.Workload` and
+  `BuildScript.Editor` reference the new assemblies; both carry the `InternalsVisibleTo` for tests
+  and the `versionDefines` of `NDC.Scripts.DI`. The new `.meta` files were written by hand with new
+  random GUIDs because no Editor was available.
+- **`CLAUDE.md` corrected.** Toolkit workflows are `@v7`; the `-bootScene` sample path is
+  `Assets/Samples/Netcode/DOTS Sample/...`; the sealed-transport row no longer claims every
+  environment pins `GAMESERVER_SEALED=off` (the k8s app fleets use `require`); the duplicated
+  "Package pins" section is gone; the assembly list names the new assemblies.
 - **Input egress extracted from `DotsWorldBridge` (UCF F-07, part 2).** New plain-C# `InputEgress`
   owns input sampling, edge latching of jump and cast, the `InputSendSchedule` cadence, building
   and sending the `InputMessage`, `predictor.RecordInput`, the clock-steering feed, the render

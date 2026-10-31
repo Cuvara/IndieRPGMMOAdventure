@@ -4,14 +4,14 @@ The rpg-factory testlab (`rpg-factory/testlab/README.md`) drives real, rendered 
 
 ## Input seam (production code)
 
-`Assets/Scripts/DI/GameplayInput.cs`:
+`Assets/Scripts/Input/GameplayInput.cs` (assembly `NDC.Scripts.Input`):
 
 - **`IGameplayInputSource`** has these members:
   - `ReadMove`
   - `JumpPressed` / `CastPressed` / `PickupPressed` / `InventoryTogglePressed`
   - `TryPointerPosition`
   - `TryAimPoint`, an explicit wire-space aim for a cast.
-- **`GameplayInputRouter`** (`Assets/Scripts/DI/GameplayInputRouter.cs`) is the single holder, registered in the root scope as `IGameplayInputSource`:
+- **`GameplayInputRouter`** (`Assets/Scripts/Input/GameplayInputRouter.cs`) is the single holder, registered in the root scope as `IGameplayInputSource`:
   - It forwards to `DeviceGameplayInputSource` (keyboard, mouse, pointer) by default.
   - `Override(source)` replaces the source, `ClearOverride()` restores the devices. `TestLabRunner` resolves the router from the root container and calls these; it writes no static.
   - A new container builds a new router, so every play starts on the devices.

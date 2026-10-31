@@ -1,0 +1,62 @@
+{
+    "name": "NDC.Scripts.Integration.Dots",
+    "rootNamespace": "Scripts.DI.Dots",
+    "references": [
+        "VContainer",
+        "NDC.Scripts",
+        "Cuvara.Netcode.Runtime",
+        "Cuvara.Netcode.Bootstrap",
+        "Cuvara.Netcode.DI",
+        "Cuvara.DOTS.Runtime",
+        "Cuvara.DOTS.DI",
+        "Cuvara.DOTS.Netcode",
+        "Cuvara.DOTS.Netcode.Prediction",
+        "MessagePipe",
+        "MessagePipe.VContainer",
+        "Shared.GameLogic",
+        "Unity.Entities",
+        "Unity.Collections",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "Unity.Mathematics",
+        "Unity.Transforms",
+        "UniTask",
+        "NDC.Scripts.Gameplay",
+        "NDC.Scripts.Input"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.cuvara.dots",
+            "expression": "",
+            "define": "CUVARA_DOTS"
+        },
+        {
+            "name": "jp.hadashikick.vcontainer",
+            "expression": "",
+            "define": "CUVARA_DOTS_VCONTAINER"
+        },
+        {
+            "name": "com.cysharp.messagepipe",
+            "expression": "",
+            "define": "CUVARA_DOTS_MESSAGEPIPE"
+        },
+        {
+            "name": "com.cuvara.netcode",
+            "expression": "0.19.0",
+            "define": "CUVARA_NETCODE"
+        },
+        {
+            "name": "com.rpgmmo.shared-gamelogic",
+            "expression": "",
+            "define": "CUVARA_SHARED_GAMELOGIC"
+        }
+    ],
+    "noEngineReferences": false
+}
