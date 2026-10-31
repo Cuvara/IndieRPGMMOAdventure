@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **TestLab `frames.csv` per-frame GC, main-thread and memory columns (UCF F-21, step 1).** Four
+  columns are appended after `scenario_t`: `gc_alloc_b` (Profiler "GC Allocated In Frame"),
+  `gc_count` (cumulative `GC.CollectionCount(0)`; the analyzer takes deltas), `main_ms` (Profiler
+  "Main Thread" frame time, empty where the counter is unavailable) and `used_mb` ("Total Used
+  Memory"). The runner-owned `FrameCsv` reuses its `StringBuilder` and numeric buffer, so only the
+  final row string allocates (bounded by row length * 2 + 64 bytes) before going through the existing
+  `BackgroundFileWriter`. `delivery.csv` is unchanged: per-snapshot receive timestamps wait for the
+  netcode diagnostics hook.
+
 ### Tests
 
 - Cover production clock-steering RTT refreshes and assert per-send egress order across the port,
