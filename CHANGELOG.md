@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while the epoch it recorded is current. A release requested while a shared load is in flight is
   withdrawn when the key is claimed again. The teardown recorder's calls are
   `[Conditional("UNITY_EDITOR")]`, so player builds contain none.
+- **A cancelled claimant no longer fails the shared prefab load (PR #169 review round 3).**
+  `LeasedViewAssetProvider` starts the underlying load with no caller token and each caller honours
+  its own token only at its await, so an old installation's `Dispose` ends its own wait without
+  making `AddressableViewPrefabLoader` throw for the installation that claimed the key next. A key
+  released while its load is in flight is still released when the load completes.
 - **Gameplay input source is injected, not a static (UCF F-06, part 1).** New `GameplayInputRouter`
   (root scope, `IGameplayInputSource`) forwards to the devices and lets the testlab override it.
   `DotsWorldBridge.Construct` and the `GameplayPanelDriver` constructor receive it; `TestLabRunner`
