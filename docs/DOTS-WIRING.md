@@ -128,7 +128,11 @@ degrades to absent code, not compile errors — the same contract the package ho
   `ClaimEpoch(key)` each time a prewarm or async acquire starts, the installation records it
   (`IViewClaimEpochs`), and the late release is skipped when the epoch moved. Providers without
   `IViewClaimEpochs` keep the plain late release. A release requested while the shared load is
-  in flight is withdrawn when the key is claimed again. `EcsSessionInstallation.TeardownRecorder`
+  in flight is withdrawn when the key is claimed again. The shared prefab load is started with no
+  caller token; each caller honours its own token only at its await (`AwaitOrCancel`), so cancelling
+  one installation never cancels the load another waits on. Pooled-instance prewarm keeps per-caller
+  cancellation: it is synchronous, tracks what it created, and a later prewarm only tops up.
+  `EcsSessionInstallation.TeardownRecorder`
   (internal, tests only; the `Step` calls are `[Conditional("UNITY_EDITOR")]`, absent from player
   builds) records every teardown step; `EcsSessionInstallationTests` assert the whole sequence.
 - **Input backend**: this project runs Input System (new) only (`activeInputHandler: 1`), under
