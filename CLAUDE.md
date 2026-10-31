@@ -517,7 +517,7 @@ Run `git submodule update --init --recursive` after clone.
 - `LoadingSceneScope` — loading scene container
 - `MainSceneScope` — main gameplay container
 - Scene scopes are child containers of GameLifetimeScope
-- `DIExtensions.GetCurrentContainer()` — service locator fallback for non-injected contexts
+- Gameplay input: `IGameplayInputSource` is injected (`GameplayInputRouter`, root scope); no static service locator exists
 
 ### Key Libraries
 | Library | Purpose |

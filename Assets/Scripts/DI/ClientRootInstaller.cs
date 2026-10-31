@@ -54,6 +54,10 @@ namespace Scripts.DI
                 transports: new DefaultTransportFactory(
                     backend.TransportKey, networkSettings.BuildGatewayTlsOptions()));
 
+            // The single holder of the gameplay input source: the devices by default, a scripted
+            // source while a testlab run overrides it. Replaces the static GameplayInput.Source.
+            builder.Register<GameplayInputRouter>(Lifetime.Singleton).As<IGameplayInputSource>().AsSelf();
+
             // The device id is pinned on the settings, not only used once: the auth provider
             // re-authenticates on a cold reconnect and must land on the same account.
             builder.RegisterNakama(new NakamaSettings

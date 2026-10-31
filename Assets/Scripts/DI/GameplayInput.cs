@@ -1,11 +1,12 @@
 namespace Scripts.DI
 {
+    using System;
     using UnityEngine;
 
     /// <summary>
     /// Where the gameplay controls come from: the movement vector, the one-shot buttons and the
     /// aim point. <c>DotsWorldBridge</c> and <c>GameplayPanelDriver</c> read every
-    /// control through <see cref="GameplayInput.Source"/>, never from a device directly.
+    /// control through an injected <see cref="IGameplayInputSource"/>, never from a device directly.
     /// </summary>
     /// <remarks>
     /// The production source is <see cref="DeviceGameplayInputSource"/> (keyboard, mouse, pointer).
@@ -43,21 +44,37 @@ namespace Scripts.DI
         bool TryAimPoint(Vector3 feet, out Vector3 aim);
     }
 
-    /// <summary>The active <see cref="IGameplayInputSource"/>; devices unless a test run replaced it.</summary>
+    /// <summary>
+    /// Obsolete static forwarder to the injected <see cref="GameplayInputRouter"/>. Inject
+    /// <see cref="IGameplayInputSource"/> instead; this stays for one release so a missed caller
+    /// still works, and nothing in production code reads it.
+    /// </summary>
+    [Obsolete("Inject IGameplayInputSource (GameplayInputRouter) instead. Removed after one release.")]
     public static class GameplayInput
     {
-        private static IGameplayInputSource source = DeviceGameplayInputSource.Instance;
+        /// <summary>The router of the live root container; set by its constructor.</summary>
+        internal static GameplayInputRouter Router;
 
-        /// <summary>The source every gameplay read goes through. Setting null restores the devices.</summary>
+        /// <summary>The routed source; the devices while no container has built a router. Setting null clears the override.</summary>
         public static IGameplayInputSource Source
         {
-            get => source;
-            set => source = value ?? DeviceGameplayInputSource.Instance;
+            get => (IGameplayInputSource)Router ?? DeviceGameplayInputSource.Instance;
+            set
+            {
+                if (value == null)
+                {
+                    Router?.ClearOverride();
+                }
+                else
+                {
+                    Router?.Override(value);
+                }
+            }
         }
 
-        /// <summary>Statics survive a play session when domain reload is disabled; start from devices.</summary>
+        /// <summary>Statics survive a play session when domain reload is disabled; start without a router.</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetOnPlay() => source = DeviceGameplayInputSource.Instance;
+        private static void ResetOnPlay() => Router = null;
     }
 
     /// <summary>

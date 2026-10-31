@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Gameplay input source is injected, not a static (UCF F-06, part 1).** New `GameplayInputRouter`
+  (root scope, `IGameplayInputSource`) forwards to the devices and lets the testlab override it.
+  `DotsWorldBridge.Construct` and the `GameplayPanelDriver` constructor receive it; `TestLabRunner`
+  overrides and clears the router instead of writing `GameplayInput.Source`. `GameplayInput.Source`
+  stays one release as an `[Obsolete]` forwarder. Behaviour is unchanged. See `docs/TESTLAB.md`.
+
+### Removed
+
+- `Scripts.Extensions.DIExtensions` (`GetCurrentContainer`, a static service locator with no
+  callers) and the dangling `"Scripts"` reference in `NDC.Scripts.DI.asmdef`.
+
 ### Added
 
 - **First-connect retry progress is shown (Part of #151).** `MainSessionDriver` subscribes to

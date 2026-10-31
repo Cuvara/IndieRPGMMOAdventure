@@ -26,7 +26,7 @@ namespace TestLab
     /// </summary>
     /// <remarks>
     /// <para><b>What it touches.</b> It installs a <see cref="ScriptedInputSource"/> as
-    /// <see cref="GameplayInput.Source"/> and otherwise only reads: the network client's merged
+    /// <see cref="GameplayInputRouter"/> and otherwise only reads: the network client's merged
     /// world (what this client received), the predictor's counters, and the rendered
     /// <c>LocalTransform</c> of every replicated entity. It never writes a transform or calls
     /// <c>SendInput</c>; the game sends what the scripted source returns.</para>
@@ -52,6 +52,7 @@ namespace TestLab
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
         private readonly ScriptedInputSource source = new ScriptedInputSource();
+        private GameplayInputRouter router;
         private readonly FrameStats frames = new FrameStats();
         private readonly List<PlannerEntity> plannerEntities = new List<PlannerEntity>(256);
         private readonly List<Vector2> clientPositions = new List<Vector2>(8);
@@ -194,7 +195,6 @@ namespace TestLab
             this.source.CastRead = this.OnCastRead;
             this.lifecycle = new EntityLifecycle(this.Event);
             this.oneShotFired = new bool[plan.actions.Length];
-            GameplayInput.Source = this.source;
 
             this.gcAllocRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
             this.usedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Total Used Memory");
@@ -661,6 +661,11 @@ namespace TestLab
                 return;
             }
 
+            // Overrides the injected input router before the client is set, so the first frame
+            // that sees a client already reads the scripted source.
+            this.router = scope.Container.Resolve(typeof(GameplayInputRouter)) as GameplayInputRouter;
+            this.router.Override(this.source);
+
             this.client = scope.Container.Resolve(typeof(NetworkClient)) as NetworkClient;
             try
             {
@@ -915,7 +920,7 @@ namespace TestLab
 
             this.WriteSummary(outcome);
             this.WriteStatus();
-            GameplayInput.Source = null;
+            this.router?.ClearOverride();
 
             if (this.plan.quit_on_done)
             {

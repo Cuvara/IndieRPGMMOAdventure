@@ -54,6 +54,7 @@ namespace Scripts.DI
         private readonly NetworkClient client;
         private readonly GameContentService content;
         private readonly BackendSettings backend;
+        private readonly IGameplayInputSource input;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
 
         private NetworkClientCommandChannel channel;
@@ -66,11 +67,12 @@ namespace Scripts.DI
         private float nextStatsAt;
         private PlayerStatsSnapshot lastStats = PlayerStatsSnapshot.Absent;
 
-        public GameplayPanelDriver(NetworkClient client, GameContentService content, BackendSettings backend)
+        public GameplayPanelDriver(NetworkClient client, GameContentService content, BackendSettings backend, IGameplayInputSource input)
         {
             this.client = client ?? throw new ArgumentNullException(nameof(client));
             this.content = content ?? throw new ArgumentNullException(nameof(content));
             this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
+            this.input = input ?? throw new ArgumentNullException(nameof(input));
         }
 
         /// <summary>The inventory service; null before <see cref="Start"/>.</summary>
@@ -106,11 +108,11 @@ namespace Scripts.DI
 
             if (this.presenter != null)
             {
-                if (GameplayInput.Source.InventoryTogglePressed()) this.presenter.ToggleInventory();
-                if (GameplayInput.Source.PickupPressed()) this.presenter.Pickup();
+                if (this.input.InventoryTogglePressed()) this.presenter.ToggleInventory();
+                if (this.input.PickupPressed()) this.presenter.Pickup();
                 this.PushStats();
             }
-            else if (GameplayInput.Source.PickupPressed())
+            else if (this.input.PickupPressed())
             {
                 var target = this.FindNearestItem();
                 if (target != null) this.inventory.PickupAsync(target, this.lifetime.Token).Forget();

@@ -11,10 +11,12 @@ The rpg-factory testlab (`rpg-factory/testlab/README.md`) drives real, rendered 
   - `JumpPressed` / `CastPressed` / `PickupPressed` / `InventoryTogglePressed`
   - `TryPointerPosition`
   - `TryAimPoint`, an explicit wire-space aim for a cast.
-- **`GameplayInput.Source`** is the active source:
-  - It is `DeviceGameplayInputSource` (keyboard, mouse, pointer) unless something replaces it.
-  - It resets to devices on every play (`SubsystemRegistration`).
-- **Readers:** `DotsWorldBridge.Update` (move, jump, cast, aim) and `GameplayPanelDriver` (pickup, inventory) read through it.
+- **`GameplayInputRouter`** (`Assets/Scripts/DI/GameplayInputRouter.cs`) is the single holder, registered in the root scope as `IGameplayInputSource`:
+  - It forwards to `DeviceGameplayInputSource` (keyboard, mouse, pointer) by default.
+  - `Override(source)` replaces the source, `ClearOverride()` restores the devices. `TestLabRunner` resolves the router from the root container and calls these; it writes no static.
+  - A new container builds a new router, so every play starts on the devices.
+- **`GameplayInput.Source`** is an `[Obsolete]` static forwarder to the live router, kept for one release. No production code reads it.
+- **Readers:** `DotsWorldBridge` (move, jump, cast, aim; `Construct` injection) and `GameplayPanelDriver` (pickup, inventory; constructor injection) read the injected source.
 
 The send schedule, `SendInput`, `LocalMovePredictor.RecordInput`, clock steering and projectile prediction are unchanged. One component still owns input (`docs/DOTS-WIRING.md`); only where the values come from is pluggable.
 

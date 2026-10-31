@@ -96,7 +96,7 @@ degrades to absent code, not compile errors — the same contract the package ho
 - **One input owner.** `DotsWorldBridge.driveInput` samples, sends, and records the same tick
   stream. `NetworkBootstrap`'s `SendSyntheticInput` must be OFF in any scene hosting the bridge,
   or the server integrates input the predictor never saw.
-- **Input values come from `GameplayInput.Source`** (`IGameplayInputSource`): devices by default, a scripted source in a testlab run (`docs/TESTLAB.md`). The owner above is unchanged; only where the values come from is pluggable.
+- **Input values come from the injected `IGameplayInputSource`** (`GameplayInputRouter`, root scope): devices by default, a scripted source in a testlab run (`docs/TESTLAB.md`). The owner above is unchanged; only where the values come from is pluggable.
 - **Wire hp lands on `NetworkEntityState`, not `Health`** (`writeHealth` stays false): `Health`
   means "destroy at zero", and the server owns entity lifetime.
 - **Teardown order** (bridge `OnDestroy`): prediction → netcode adapter → destroy the mirrored
