@@ -56,9 +56,12 @@ namespace Scripts.DI.Dots
             DotsPredictionBootstrap.NoteInputSent(this.installation.World, tick);
             if (DotsPredictionBootstrap.TryGetClockSteering(this.installation.World, out var steering))
             {
-                steering.RoundTripMs = this.client.Session?.RoundTripMs ?? 0L;
+                RefreshClockSteeringRoundTripMs(value => steering.RoundTripMs = value, this.client.Session?.RoundTripMs ?? 0L);
             }
         }
+
+        internal static void RefreshClockSteeringRoundTripMs(System.Action<long> setRoundTripMs, long roundTripMs) =>
+            setRoundTripMs(roundTripMs);
     }
 }
 #endif
