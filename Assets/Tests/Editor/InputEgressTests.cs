@@ -263,7 +263,10 @@ namespace Tests.Editor
 
             gate.Tick(true, session, s => h.Log.Add("reset"), h.Egress.Step);
 
-            Assert.That(h.Log, Is.EqualTo(new[] { "reset", "SendInput:1" }));
+            Assert.That(h.Log, Is.EqualTo(new[]
+            {
+                "reset", "SendInput:1", "RecordInput:1", "NoteInputSent:1", "NoteSent:1",
+            }));
         }
 
         // ---- harness ---------------------------------------------------------------------------
