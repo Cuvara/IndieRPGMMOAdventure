@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Input egress extracted from `DotsWorldBridge` (UCF F-07, part 2).** New plain-C# `InputEgress`
+  owns input sampling, edge latching of jump and cast, the `InputSendSchedule` cadence, building
+  and sending the `InputMessage`, `predictor.RecordInput`, the clock-steering feed, the render
+  time stamp and the cast/aim composition. It reaches the live session through the new
+  `IInputEgressPort` (production: `InstallationInputPort`). `DotsWorldBridge` now keeps the
+  serialized fields, `Construct` and `Update`, which still runs session gate, input egress, then
+  ingress. The 10-unit no-pointer aim distance is the named constant
+  `InputEgress.NoPointerAimDistance`. No behaviour change: same cadence, values, order and log
+  lines. New `InputEgressTests` assert sent == recorded over several cadence periods, the
+  cadence, the cast composition and the order after the session reset. See `docs/DOTS-WIRING.md`.
 - **Session ECS installation extracted from `DotsWorldBridge` (UCF F-07, part 1).** New plain-C#
   `EcsSessionInstallation : IDisposable` owns the install of the simulation, catalog, netcode,
   prediction, session modules and elevation, the prewarm (now cancelled on `Dispose`), the

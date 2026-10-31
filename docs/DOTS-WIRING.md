@@ -13,8 +13,8 @@ Two halves, split by lifetime, mirroring how networking is already wired:
 | Root | `GameLifetimeScope` → `ClientRootInstaller.Install` → `builder.RegisterDots(viewRoot: transform, ...)` | MessagePipe brokers for the 5 package messages, `IViewAssetProvider`, `EntityViewRegistry` + `ChunkViewProvisioner` + `DotsViewBootstrap` install (via `RegisterDotsViews`), `ISimulationModel`, the session's single `LocalMovePredictor` |
 | Scene | `MainSceneScope` → `MainSceneInstaller.Install`, whose build callback injects a `DotsWorldBridge` found in the scene | `DotsSimulationBootstrap`, the code-built `ViewConfigCatalog`, `TypeArchetypeResolver`, `DotsEntityView`, `DotsNetcodeBootstrap` + `DotsPredictionBootstrap`, the per-frame `WorldViewBinder.Tick`, input send + `RecordInput` |
 
-The scene half is split again: `DotsWorldBridge` (a `MonoBehaviour`) keeps the serialized fields,
-method injection, and input sampling/send/aim/cast, and drives an `EcsSessionInstallation` (plain
+The scene half is split again: `DotsWorldBridge` (a `MonoBehaviour`) keeps the serialized fields
+and method injection, and drives an `InputEgress` (input sampling/send/aim/cast) and an `EcsSessionInstallation` (plain
 C#, `IDisposable`) that owns everything installed into the world, the `SessionResetGate`, the
 per-frame ingress tick (binder tick, projectile advance, elevation feed, predicted views) and the
 exact-reverse teardown on `Dispose`. The world comes from the root-scoped `IEcsWorldProvider`
@@ -24,8 +24,21 @@ tests). It is a seam for one world, not multi-World support. `HudWorldBridge`, t
 the TestLab still read the default world directly.
 
 Per-frame order in `DotsWorldBridge.Update` is unchanged: install (once), prewarm poll, then
-`installation.Tick(SendInput)`, which runs the session-reset gate, then `SendInput`, then the
+`installation.Tick(SendInput)`, which runs the session-reset gate, then `SendInput` (which hands
+the serialized `driveInput` to `InputEgress.DriveInput` and calls `InputEgress.Step`), then the
 ingress tick.
+
+`InputEgress` is plain C#. It samples the injected `IGameplayInputSource`, latches jump/cast
+presses until the next send, paces sends with `InputSendSchedule` at
+`InputCadence.RecommendedSendHz`, and per send builds the `InputMessage` (cast and aim included),
+stamps the binder's render tick, sends it, calls `predictor.RecordInput` with the same tick and
+values, and tells the prediction clock steering. Its invariant is that the input recorded is the
+input sent. It reaches the session only through `IInputEgressPort` (`InstallationInputPort` in
+production: client state and session, content, the installation's binder, world and projectile
+predictor), which is also the test seam. Moved from the bridge: `SendInput` body, `inputTick`,
+`sendSchedule`, `sendScheduleStarted`, `pendingJump`, `pendingCast`, `castWarningLogged`,
+`TryAddProjectileCast`, `TryGetLocalFeet`, `AimFrom` -> `InputEgress` (same names); the 10-unit
+no-pointer aim distance is now `InputEgress.NoPointerAimDistance`.
 
 All of it lives in `Assets/Scripts/DI/Dots/` (assembly `NDC.Scripts.DI`). The bridge hangs off
 the **same** `NetworkClient` that `RegisterNetworking()` registers and `NetworkBootstrap`
