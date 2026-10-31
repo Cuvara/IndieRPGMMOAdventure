@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace Tests.Editor
 {
     /// <summary>
-    /// Why <c>DotsWorldBridge.OnReconnected</c> resets the <see cref="WorldViewBinder"/>: after a
+    /// Why <c>EcsSessionInstallation</c> (formerly inline in <c>DotsWorldBridge</c>) resets the <see cref="WorldViewBinder"/>: after a
     /// reconnect to a server whose ticks are lower than the old session's, a binder that was not
     /// reset never buffers a sample and its <see cref="WorldViewBinder.RenderTick"/> stays in the
     /// old tick space. The bridge itself needs an installed ECS world and a live

@@ -19,7 +19,8 @@ namespace Tests.Editor
     /// Proves the scene-scoped half — the install/uninstall sequence <c>DotsWorldBridge</c> runs —
     /// against a throwaway world: the group tree comes up, the singletons exist, and teardown in
     /// the documented order (prediction → netcode → catalog) leaves no singleton and no live blob
-    /// behind.
+    /// behind. The production sequence itself, <c>EcsSessionInstallation</c>, is exercised end to
+    /// end by <c>EcsSessionInstallationTests</c>; this fixture pins the package bootstraps it calls.
     /// </summary>
     public class DotsBootstrapLifecycleTests
     {
@@ -136,7 +137,7 @@ namespace Tests.Editor
         {
             this.InstallAll();
 
-            // The order DotsWorldBridge.OnDestroy runs: prediction hands transforms back first,
+            // The order EcsSessionInstallation.Dispose runs: prediction hands transforms back first,
             // then the adapter goes, then the catalog blob is freed.
             DotsPredictionBootstrap.Uninstall(this.world);
             DotsNetcodeBootstrap.Uninstall(this.world);

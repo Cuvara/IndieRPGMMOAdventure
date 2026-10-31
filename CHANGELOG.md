@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Session ECS installation extracted from `DotsWorldBridge` (UCF F-07, part 1).** New plain-C#
+  `EcsSessionInstallation : IDisposable` owns the install of the simulation, catalog, netcode,
+  prediction, session modules and elevation, the prewarm (now cancelled on `Dispose`), the
+  `SessionResetGate`, the per-frame ingress tick and the exact-reverse teardown. New root-scoped
+  `IEcsWorldProvider` (`DefaultEcsWorldProvider`) replaces the bridge's direct read of
+  `World.DefaultGameObjectInjectionWorld`; `DotsWorldBridge.Construct` takes it. No behaviour
+  change: same install, teardown and reset order, same log lines, same constants. New
+  `EcsSessionInstallationTests` run the real install/teardown over a throwaway world. See
+  `docs/DOTS-WIRING.md`.
 - **Gameplay input source is injected, not a static (UCF F-06, part 1).** New `GameplayInputRouter`
   (root scope, `IGameplayInputSource`) forwards to the devices and lets the testlab override it.
   `DotsWorldBridge.Construct` and the `GameplayPanelDriver` constructor receive it; `TestLabRunner`

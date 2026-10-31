@@ -13,6 +13,20 @@ Two halves, split by lifetime, mirroring how networking is already wired:
 | Root | `GameLifetimeScope` → `ClientRootInstaller.Install` → `builder.RegisterDots(viewRoot: transform, ...)` | MessagePipe brokers for the 5 package messages, `IViewAssetProvider`, `EntityViewRegistry` + `ChunkViewProvisioner` + `DotsViewBootstrap` install (via `RegisterDotsViews`), `ISimulationModel`, the session's single `LocalMovePredictor` |
 | Scene | `MainSceneScope` → `MainSceneInstaller.Install`, whose build callback injects a `DotsWorldBridge` found in the scene | `DotsSimulationBootstrap`, the code-built `ViewConfigCatalog`, `TypeArchetypeResolver`, `DotsEntityView`, `DotsNetcodeBootstrap` + `DotsPredictionBootstrap`, the per-frame `WorldViewBinder.Tick`, input send + `RecordInput` |
 
+The scene half is split again: `DotsWorldBridge` (a `MonoBehaviour`) keeps the serialized fields,
+method injection, and input sampling/send/aim/cast, and drives an `EcsSessionInstallation` (plain
+C#, `IDisposable`) that owns everything installed into the world, the `SessionResetGate`, the
+per-frame ingress tick (binder tick, projectile advance, elevation feed, predicted views) and the
+exact-reverse teardown on `Dispose`. The world comes from the root-scoped `IEcsWorldProvider`
+(`DefaultEcsWorldProvider`: `World.DefaultGameObjectInjectionWorld`, throwing a named
+`InvalidOperationException` when it is null; `RootInstallerArgs.World` pins a throwaway world in
+tests). It is a seam for one world, not multi-World support. `HudWorldBridge`, the benchmark and
+the TestLab still read the default world directly.
+
+Per-frame order in `DotsWorldBridge.Update` is unchanged: install (once), prewarm poll, then
+`installation.Tick(SendInput)`, which runs the session-reset gate, then `SendInput`, then the
+ingress tick.
+
 All of it lives in `Assets/Scripts/DI/Dots/` (assembly `NDC.Scripts.DI`). The bridge hangs off
 the **same** `NetworkClient` that `RegisterNetworking()` registers and `NetworkBootstrap`
 prefers — there is one connection, one merged `WorldState`, one predictor.
