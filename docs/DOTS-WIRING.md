@@ -123,7 +123,7 @@ degrades to absent code, not compile errors — the same contract the package ho
   provider creates instances synchronously and checks the token before each, and the leased
   provider completes a release that arrives while a prefab loads, so a cancelled key leaves no
   warm lease or pooled instance. A provider that ignores the token and settles successfully after
-  `Dispose` has its key released again on settle � but only while no newer claimant took the key:
+  `Dispose` has its key released again on settle — but only while no newer claimant took the key:
   `LeasedViewAssetProvider` (one lease per key, shared by every scene installation) raises
   `ClaimEpoch(key)` each time a prewarm or async acquire starts, the installation records it
   (`IViewClaimEpochs`), and the late release is skipped when the epoch moved. Providers without

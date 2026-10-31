@@ -127,7 +127,7 @@ namespace Scripts.DI.Dots
 
         /// <summary>
         /// Rises each time a <see cref="PrewarmAsync"/> or <see cref="AcquireAsync"/> starts for the
-        /// key — the only two calls that can create or revive a lease. Lets a late cleanup tell
+        /// key â€” the only two calls that can create or revive a lease. Lets a late cleanup tell
         /// whether a newer claimant took the key over.
         /// </summary>
         public int ClaimEpoch(string key) =>

@@ -74,12 +74,12 @@ namespace Tests.Editor
             }
         }
 
-        private EcsSessionInstallation NewInstallation(IEcsWorldProvider worldProvider = null) =>
+        private EcsSessionInstallation NewInstallation(IEcsWorldProvider worldProvider = null, IViewAssetProvider assets = null) =>
             new EcsSessionInstallation(
                 worldProvider ?? new DefaultEcsWorldProvider(this.world),
                 this.client,
                 this.predictor,
-                this.provider,
+                assets ?? this.provider,
                 new DotsViewLibraryReference { Asset = null, Mode = DotsViewProviderMode.Primitive },
                 new EcsSessionInstallation.Settings { EnableCameraFollow = false });
 
@@ -241,12 +241,12 @@ namespace Tests.Editor
             try
             {
                 var shared = new EpochTokenIgnoringProvider(leased);
-                var old = this.NewInstallation(shared);
+                var old = this.NewInstallation(null, shared);
                 old.TryInstall();
                 old.Dispose();
 
                 // Scene reload: the next installation claims the same keys through the same provider.
-                this.installation = this.NewInstallation(shared);
+                this.installation = this.NewInstallation(null, shared);
                 this.installation.TryInstall();
 
                 foreach (var key in loader.PendingKeys.ToList()) loader.Complete(key);
@@ -279,10 +279,10 @@ namespace Tests.Editor
             try
             {
                 var plain = new TokenIgnoringProvider(leased);
-                var old = this.NewInstallation(plain);
+                var old = this.NewInstallation(null, plain);
                 old.TryInstall();
                 old.Dispose();
-                this.installation = this.NewInstallation(plain);
+                this.installation = this.NewInstallation(null, plain);
                 this.installation.TryInstall();
 
                 foreach (var key in loader.PendingKeys.ToList()) loader.Complete(key);
@@ -531,7 +531,7 @@ namespace Tests.Editor
 
         /// <summary>
         /// Forwards to a real <see cref="LeasedViewAssetProvider"/> but drops the cancellation
-        /// token, so an old installation's prewarm settles after its <c>Dispose</c> — the case the
+        /// token, so an old installation's prewarm settles after its <c>Dispose</c> â€” the case the
         /// claim epoch guards.
         /// </summary>
         private class TokenIgnoringProvider : IViewAssetProvider
@@ -561,7 +561,7 @@ namespace Tests.Editor
             public void Release(string key) => this.inner.Release(key);
         }
 
-        /// <summary>The same, and says who claimed a key last — what the real provider does.</summary>
+        /// <summary>The same, and says who claimed a key last â€” what the real provider does.</summary>
         private sealed class EpochTokenIgnoringProvider : TokenIgnoringProvider, IViewClaimEpochs
         {
             public EpochTokenIgnoringProvider(LeasedViewAssetProvider inner) : base(inner)
