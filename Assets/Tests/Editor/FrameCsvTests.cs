@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using System;
 using TestLab;
-using UnityEngine.TestTools.Constraints;
 
 namespace Tests.Editor
 {
@@ -77,7 +76,7 @@ namespace Tests.Editor
                     {
                         rows[i] = this.frameCsv.Row(i, "1.5", "16.6", "0.25", 2048, 3, 12345000, 100L * 1024 * 1024);
                     }
-                }, Is.AllocatingGCMemory());
+                }, UnityEngine.TestTools.Constraints.Is.AllocatingGCMemory());
             }
 
             Assert.AreEqual(100, rows.Length);
