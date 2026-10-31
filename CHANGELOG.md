@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BackgroundFileWriter`. `delivery.csv` is unchanged: per-snapshot receive timestamps wait for the
   netcode diagnostics hook.
 
+### Fixed
+
+- **`Tools/run-clients.sh --kill` no longer kills every player on the host (Cuvara/rpg-factory#58, #60).**
+  It ran `taskkill /F /IM IndieRPGMMOAdventure.exe`, which also stopped players the user or another
+  agent had started, and `Tools/verify-multiclient.sh` called it at start and in its exit trap.
+  `run-clients.sh` now records each player's Windows PID and exe path in `<log-dir>/clients.pids`;
+  `--kill` stops only those PIDs (`taskkill /PID <pid> /T /F`) and only while the live image path still
+  equals the recorded one (PID-reuse guard). Without a pid file it lists the running players read-only
+  and tells you to stop them by PID. `verify-multiclient.sh` cleans up through the pid-scoped kill with
+  its own log dir, only warns about players it did not start, and captures windows from its own PID
+  file. `run-clients.sh --self-test` covers the pid file, the image check and the no-pid-file path
+  with a harmless child it starts itself. Pass the launch's `--log-dir` to `--kill`. `CLAUDE.md` now says so
+  and finds a player's window by its recorded PID instead of by image name.
+
 ### Tests
 
 - Cover production clock-steering RTT refreshes and assert per-send egress order across the port,

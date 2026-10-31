@@ -37,8 +37,9 @@
 # looks exactly like a captured game window. PrintWindow reads the window's own
 # content while it stays occluded and works against this player's D3D12 surface.
 #
-# Note the PIDs run-clients.sh prints are the LAUNCHER's, not the player's, and
-# have no window handle; the players are found by process name instead.
+# run-clients.sh prints and records the players' WINDOWS PIDs in <log-dir>/clients.pids;
+# the capture below reads that file, so only players this run started are captured,
+# and cleanup stops only those PIDs (never by image name).
 #
 # Requires: curl, python3, powershell.exe, and for the Redis assertions either
 # kubectl (--kube-context, an Agones/k3d backend) or docker (--redis-container,
@@ -164,15 +165,22 @@ echo
 
 cleanup() {
     if [ "$KEEP" -eq 0 ]; then
-        "$HERE/run-clients.sh" --exe "$EXE" --kill >/dev/null 2>&1 || true
+        # pid-scoped: stops only the PIDs recorded in this run's own log dir
+        "$HERE/run-clients.sh" --exe "$EXE" --log-dir "$LOG_DIR" --kill >/dev/null 2>&1 || true
     fi
 }
 trap cleanup EXIT
 
 # A player left running from an earlier attempt holds lib_burst_generated.dll and
-# also pollutes players_online, so start from a known-empty state rather than
-# assuming one.
-"$HERE/run-clients.sh" --exe "$EXE" --kill >/dev/null 2>&1 || true
+# also pollutes players_online. This run cannot stop players it did not start, so
+# list them read-only and warn instead of assuming a known-empty state.
+STALE="$("$HERE/run-clients.sh" --exe "$EXE" --log-dir "$LOG_DIR" --kill 2>&1 | grep '^  pid ' || true)"
+if [ -n "$STALE" ]; then
+    echo "WARNING: players already running that this run did not start (left alone):"
+    echo "$STALE"
+    echo "  They count toward players_online. Stop them by PID if they are yours."
+    echo
+fi
 
 LAUNCH=(
     "$HERE/run-clients.sh"
@@ -318,8 +326,10 @@ else
 fi
 
 # --- window capture -------------------------------------------------------
-PIDS=$(powershell.exe -NoProfile -Command \
-    "(Get-Process IndieRPGMMOAdventure -EA SilentlyContinue).Id -join ','" 2>/dev/null | tr -d '\r')
+PIDS=""
+if [ -f "$LOG_DIR/clients.pids" ]; then
+    PIDS=$(cut -f1 "$LOG_DIR/clients.pids" | paste -sd, -)
+fi
 
 if [ -n "$PIDS" ] && ! SHOT_WIN="$(towin "$SHOT_DIR")"; then
     fail "window capture" "screenshot directory converted to a Windows path" "towin failed for $SHOT_DIR (see the error above)"
@@ -383,7 +393,7 @@ fi
 
 echo
 echo "  $PASS passed, $FAIL failed, $SKIP not checked"
-[ "$KEEP" -eq 1 ] && echo "  players left running (--keep); stop with: $HERE/run-clients.sh --exe \"$EXE\" --kill"
+[ "$KEEP" -eq 1 ] && echo "  players left running (--keep); stop with: $HERE/run-clients.sh --exe \"$EXE\" --log-dir \"$LOG_DIR\" --kill"
 echo
 [ "$FAIL" -eq 0 ] || exit 1
 exit 0
