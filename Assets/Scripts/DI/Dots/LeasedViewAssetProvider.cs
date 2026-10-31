@@ -119,7 +119,7 @@ namespace Scripts.DI.Dots
             if (string.IsNullOrEmpty(key)) throw new ArgumentException("Key cannot be empty.", nameof(key));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await this.EnsureLoadedAsync(key, cancellationToken);
+            await AwaitOrCancel(this.EnsureLoadedAsync(key), cancellationToken);
             await this.pool.PrewarmAsync(key, count, cancellationToken);
         }
 
@@ -158,7 +158,7 @@ namespace Scripts.DI.Dots
             if (string.IsNullOrEmpty(key)) return null;
             cancellationToken.ThrowIfCancellationRequested();
 
-            await this.EnsureLoadedAsync(key, cancellationToken);
+            await AwaitOrCancel(this.EnsureLoadedAsync(key), cancellationToken);
             return this.pool.Acquire(key, position, rotation, parent);
         }
 
@@ -216,7 +216,7 @@ namespace Scripts.DI.Dots
             this.leases.Clear();
         }
 
-        private Task<GameObject> EnsureLoadedAsync(string key, CancellationToken cancellationToken)
+        private Task<GameObject> EnsureLoadedAsync(string key)
         {
             this.claimEpochs[key] = this.ClaimEpoch(key) + 1;
 
@@ -239,18 +239,20 @@ namespace Scripts.DI.Dots
             lease.ReleasePending = false;
             if (lease.Loading == null)
             {
-                lease.Loading = this.LoadAndRegisterAsync(key, lease, cancellationToken);
+                lease.Loading = this.LoadAndRegisterAsync(key, lease);
             }
 
             return lease.Loading;
         }
 
-        private async Task<GameObject> LoadAndRegisterAsync(string key, Lease lease, CancellationToken cancellationToken)
+        private async Task<GameObject> LoadAndRegisterAsync(string key, Lease lease)
         {
             GameObject prefab;
             try
             {
-                prefab = await this.loader.LoadAsync(key, cancellationToken);
+                // The load is shared by every caller of the key, so it takes no caller's token:
+                // one claimant cancelling must not fail the load another claimant is waiting on.
+                prefab = await this.loader.LoadAsync(key, CancellationToken.None);
             }
             catch
             {
@@ -285,6 +287,28 @@ namespace Scripts.DI.Dots
             }
 
             return prefab;
+        }
+
+        /// <summary>
+        /// Awaits a shared task but honours only this caller's token: cancelling ends this wait with
+        /// <see cref="OperationCanceledException"/> and leaves the shared task running.
+        /// </summary>
+        private static async Task<T> AwaitOrCancel<T>(Task<T> shared, CancellationToken cancellationToken)
+        {
+            if (shared.IsCompleted || !cancellationToken.CanBeCanceled) return await shared;
+
+            var cancelled = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(state => ((TaskCompletionSource<bool>)state).TrySetResult(true), cancelled))
+            {
+                if (await Task.WhenAny(shared, cancelled.Task) != shared)
+                {
+                    // Abandoned wait: observe a later fault so it is never left unobserved.
+                    shared.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    throw new OperationCanceledException(cancellationToken);
+                }
+            }
+
+            return await shared;
         }
 
         private void CompletePendingReleaseIfIdle(string key)

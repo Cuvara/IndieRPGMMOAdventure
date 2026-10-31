@@ -300,6 +300,97 @@ namespace Tests.Editor
             }
         }
 
+        [Test]
+        public void SharedLoad_IsNotCancelledByTheOldInstallation_WhenTheNewOneClaimedTheKey()
+        {
+            var (loader, leased, root, saved) = this.NewSharedLeasedProvider();
+            try
+            {
+                loader.HonourCancellation = true;
+                var old = this.NewInstallation(null, leased);
+                old.TryInstall();
+                old.Dispose(); // cancels the old installation's token while every load is in flight
+
+                this.installation = this.NewInstallation(null, leased);
+                this.installation.TryInstall();
+
+                foreach (var key in loader.PendingKeys.ToList()) loader.Complete(key);
+
+                LogAssert.NoUnexpectedReceived();
+                Assert.That(loader.Loads, Is.Not.Empty);
+                foreach (var key in loader.Loads.Distinct().ToList())
+                {
+                    Assert.That(leased.IsLoaded(key), Is.True, key);
+                    Assert.That(leased.IsWarm(key), Is.True, key);
+                    Assert.That(loader.ReleasesOf(key), Is.EqualTo(0), key);
+                }
+            }
+            finally
+            {
+                this.installation?.Dispose();
+                this.installation = null;
+                leased.Dispose();
+                loader.DestroyPrefabs();
+                UnityEngine.Object.DestroyImmediate(root.gameObject);
+                SynchronizationContext.SetSynchronizationContext(saved);
+            }
+        }
+
+        [Test]
+        public void CancelledCaller_EndsItsOwnWait_WithoutCancellingTheSharedLoad()
+        {
+            var (loader, leased, root, saved) = this.NewSharedLeasedProvider();
+            try
+            {
+                loader.HonourCancellation = true;
+                using var cts = new CancellationTokenSource();
+                var cancelled = leased.PrewarmAsync("K", 1, cts.Token);
+                var other = leased.PrewarmAsync("K", 1);
+                cts.Cancel();
+
+                Assert.That(cancelled.IsCanceled, Is.True, "the cancelled caller's wait ended");
+                Assert.That(other.IsCompleted, Is.False, "the other caller still waits");
+
+                loader.Complete("K");
+
+                Assert.That(other.IsCompletedSuccessfully, Is.True);
+                Assert.That(leased.IsWarm("K"), Is.True);
+                Assert.That(loader.LoadsOf("K"), Is.EqualTo(1));
+            }
+            finally
+            {
+                leased.Dispose();
+                loader.DestroyPrefabs();
+                UnityEngine.Object.DestroyImmediate(root.gameObject);
+                SynchronizationContext.SetSynchronizationContext(saved);
+            }
+        }
+
+        [Test]
+        public void LastRelease_WhileTheLoadIsInFlight_ReleasesTheHandleWhenItCompletes()
+        {
+            var (loader, leased, root, saved) = this.NewSharedLeasedProvider();
+            try
+            {
+                var waiting = leased.PrewarmAsync("K", 1);
+                leased.Release("K");
+                Assert.That(loader.ReleasesOf("K"), Is.EqualTo(0), "nothing to release yet");
+
+                loader.Complete("K");
+
+                Assert.That(loader.ReleasesOf("K"), Is.EqualTo(1), "handle released on completion");
+                Assert.That(leased.IsLoaded("K"), Is.False);
+                Assert.That(waiting.IsCanceled, Is.True);
+            }
+            finally
+            {
+                leased.Dispose();
+                loader.DestroyPrefabs();
+                UnityEngine.Object.DestroyImmediate(root.gameObject);
+                SynchronizationContext.SetSynchronizationContext(saved);
+            }
+        }
+
         private (FakeViewPrefabLoader, LeasedViewAssetProvider, Transform, SynchronizationContext) NewSharedLeasedProvider()
         {
             // Inline continuations: the editor's context would defer them to the next tick.
