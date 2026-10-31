@@ -10,8 +10,8 @@ Two halves, split by lifetime, mirroring how networking is already wired:
 
 | Half | Where | Owns |
 |---|---|---|
-| Root | `GameLifetimeScope` → `builder.RegisterDots(viewRoot: transform)` | MessagePipe brokers for the 5 package messages, `IViewAssetProvider`, `EntityViewRegistry` + `ChunkViewProvisioner` + `DotsViewBootstrap` install (via `RegisterDotsViews`), `ISimulationModel`, the session's single `LocalMovePredictor` |
-| Scene | `MainSceneScope` build-callback-injects a `DotsWorldBridge` found in the scene | `DotsSimulationBootstrap`, the code-built `ViewConfigCatalog`, `TypeArchetypeResolver`, `DotsEntityView`, `DotsNetcodeBootstrap` + `DotsPredictionBootstrap`, the per-frame `WorldViewBinder.Tick`, input send + `RecordInput` |
+| Root | `GameLifetimeScope` → `ClientRootInstaller.Install` → `builder.RegisterDots(viewRoot: transform, ...)` | MessagePipe brokers for the 5 package messages, `IViewAssetProvider`, `EntityViewRegistry` + `ChunkViewProvisioner` + `DotsViewBootstrap` install (via `RegisterDotsViews`), `ISimulationModel`, the session's single `LocalMovePredictor` |
+| Scene | `MainSceneScope` → `MainSceneInstaller.Install`, whose build callback injects a `DotsWorldBridge` found in the scene | `DotsSimulationBootstrap`, the code-built `ViewConfigCatalog`, `TypeArchetypeResolver`, `DotsEntityView`, `DotsNetcodeBootstrap` + `DotsPredictionBootstrap`, the per-frame `WorldViewBinder.Tick`, input send + `RecordInput` |
 
 All of it lives in `Assets/Scripts/DI/Dots/` (assembly `NDC.Scripts.DI`). The bridge hangs off
 the **same** `NetworkClient` that `RegisterNetworking()` registers and `NetworkBootstrap`
