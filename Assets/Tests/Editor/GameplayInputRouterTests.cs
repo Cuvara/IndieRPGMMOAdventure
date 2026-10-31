@@ -45,6 +45,7 @@ namespace Tests.Editor
             Assert.That(router.IsOverridden, Is.False);
             Assert.That(router.Active, Is.SameAs(DeviceGameplayInputSource.Instance));
             Assert.That(router.TryAimPoint(Vector3.zero, out _), Is.False);
+            router.Dispose();
         }
 
         [Test]
@@ -69,12 +70,15 @@ namespace Tests.Editor
             router.ClearOverride();
             Assert.That(router.IsOverridden, Is.False);
             Assert.That(router.TryAimPoint(Vector3.zero, out _), Is.False);
+            router.Dispose();
         }
 
         [Test]
         public void Override_RejectsNull()
         {
-            Assert.Throws<System.ArgumentNullException>(() => new GameplayInputRouter().Override(null));
+            var router = new GameplayInputRouter();
+            Assert.Throws<System.ArgumentNullException>(() => router.Override(null));
+            router.Dispose();
         }
 
         [Test]
@@ -100,6 +104,35 @@ namespace Tests.Editor
 
             GameplayInput.Source = null;
             Assert.That(router.IsOverridden, Is.False);
+
+            router.Dispose();
+            Assert.That(GameplayInput.Source, Is.SameAs(DeviceGameplayInputSource.Instance));
+        }
+
+        [Test]
+        public void ObsoleteStaticSource_AssignedBeforeRouter_IsAppliedWhenConstructed()
+        {
+            var scripted = new FixedSource();
+            GameplayInput.Source = scripted;
+            Assert.That(GameplayInput.Source, Is.SameAs(scripted));
+
+            var router = new GameplayInputRouter();
+            Assert.That(router.Active, Is.SameAs(scripted));
+            Assert.That(GameplayInput.Source, Is.SameAs(router));
+
+            router.Dispose();
+            GameplayInput.Source = null;
+        }
+
+        [Test]
+        public void ObsoleteStaticSource_ClearedBeforeRouter_UsesDevicesAfterConstruction()
+        {
+            GameplayInput.Source = new FixedSource();
+            GameplayInput.Source = null;
+
+            var router = new GameplayInputRouter();
+            Assert.That(router.Active, Is.SameAs(DeviceGameplayInputSource.Instance));
+            Assert.That(GameplayInput.Source, Is.SameAs(router));
 
             router.Dispose();
             Assert.That(GameplayInput.Source, Is.SameAs(DeviceGameplayInputSource.Instance));

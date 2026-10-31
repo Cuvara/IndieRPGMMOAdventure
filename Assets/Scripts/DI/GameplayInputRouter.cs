@@ -16,7 +16,7 @@ namespace Scripts.DI
         public GameplayInputRouter()
         {
 #pragma warning disable CS0618 // the obsolete static forwarder points at the live router
-            GameplayInput.Router = this;
+            GameplayInput.AttachRouter(this);
 #pragma warning restore CS0618
         }
 

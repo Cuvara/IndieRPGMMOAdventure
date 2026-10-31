@@ -54,16 +54,30 @@ namespace Scripts.DI
     {
         /// <summary>The router of the live root container; set by its constructor.</summary>
         internal static GameplayInputRouter Router;
+        private static IGameplayInputSource pendingSource;
 
-        /// <summary>The routed source; the devices while no container has built a router. Setting null clears the override.</summary>
+        internal static void AttachRouter(GameplayInputRouter router)
+        {
+            Router = router;
+            var source = pendingSource;
+            pendingSource = null;
+            if (source != null) router.Override(source);
+        }
+
+        /// <summary>The routed source; pending assignment or devices before a container has built a router. Setting null clears the override.</summary>
         public static IGameplayInputSource Source
         {
-            get => (IGameplayInputSource)Router ?? DeviceGameplayInputSource.Instance;
+            get => (IGameplayInputSource)Router ?? pendingSource ?? DeviceGameplayInputSource.Instance;
             set
             {
                 if (value == null)
                 {
+                    pendingSource = null;
                     Router?.ClearOverride();
+                }
+                else if (Router == null)
+                {
+                    pendingSource = value;
                 }
                 else
                 {
@@ -74,7 +88,11 @@ namespace Scripts.DI
 
         /// <summary>Statics survive a play session when domain reload is disabled; start without a router.</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetOnPlay() => Router = null;
+        private static void ResetOnPlay()
+        {
+            Router = null;
+            pendingSource = null;
+        }
     }
 
     /// <summary>
