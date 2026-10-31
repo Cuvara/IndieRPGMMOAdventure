@@ -44,7 +44,7 @@ namespace Tests.Editor
         {
             var bridge = new BridgeStandIn();
             bridge.Observe(new object());
-            bridge.Predictor.RecordInput(1, 1f, 0f);
+            bridge.RecordInput(1);
             Assert.That(bridge.Predictor.PendingCount, Is.EqualTo(1), "precondition");
 
             bridge.Observe(new object());
@@ -103,7 +103,7 @@ namespace Tests.Editor
             for (int i = 0; i < 100; i++)
             {
                 bridge.Feed(world, 100 + i, i);
-                bridge.Predictor.RecordInput(i + 1, 1f, 0f);
+                bridge.RecordInput(i + 1);
             }
 
             Assert.That(bridge.Binder.RenderTick, Is.GreaterThan(150.0), "precondition: session A interpolates");
@@ -128,6 +128,7 @@ namespace Tests.Editor
         {
             private readonly SessionBoundary boundary = new SessionBoundary();
             private readonly FakeClock clock = new FakeClock();
+            private bool seeded;
 
             public BridgeStandIn()
             {
@@ -155,6 +156,19 @@ namespace Tests.Editor
                 this.Binder.Reset();
                 this.BinderResets++;
                 this.Predictor.Reset();
+                this.seeded = false;
+            }
+
+            /// <summary>Records one input; the first Reconcile after a Reset seeds the predictor, as a snapshot does.</summary>
+            public void RecordInput(long tick)
+            {
+                if (!this.seeded)
+                {
+                    this.Predictor.Reconcile(Vec2.Zero, 0);
+                    this.seeded = true;
+                }
+
+                this.Predictor.RecordInput(tick, 1f, 0f);
             }
 
             public void Feed(WorldState world, long tick, int i)
