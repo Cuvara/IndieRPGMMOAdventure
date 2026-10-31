@@ -41,6 +41,24 @@ Similarly the `ViewConfigCatalog` is built in code (no authored art exists); whe
 assets exist, list them in a `ViewArchetypeLibrary` asset and give `DotsWorldBridge` a
 serialized reference instead.
 
+### Session boundary
+
+Every new session is a boundary, not only a netcode `Reconnected`. `SessionBoundary` remembers the
+`GameSessionClient` object last begun; the first `Update` in `InWorld` that sees a new one (and
+`OnReconnected`, which goes through the same check) runs `OnSessionBegan` once per object, before
+that frame's `binder.Tick`: `view.BeginGeneration()`, `binder.Reset()`, `predictor`,
+`projectilePredictor` and `elevationFeeder` reset, the protocol/geometry selection below, then the
+camera smoothing reset. Retry, dungeon joins, map transfers and a fresh connect after a failed one
+all build a new session object, so all take this path. Logged as
+`[DotsWorldBridge] Session began:`; a reconnect additionally logs `[DotsWorldBridge] Reconnected:`
+(saying so when the per-frame check had already begun that session).
+
+The routing is `SessionResetGate<GameSessionClient>`: `Update` calls `gate.Tick(inWorld, session,
+OnSessionBegan, RunFrame)`, which begins a new session before `RunFrame` (input send and the binder
+feed); `OnReconnected` calls `gate.OnReconnected(session, OnSessionBegan)`. The event relies on
+com.cuvara.netcode v0.50.0 setting `NetworkClient._session` to the new session before raising
+`Reconnected`; with no session at callback time it warns and the per-frame check begins it.
+
 ### Protocol 3 additions (Core v3)
 
 The bridge also owns, per session: the protocol switch (`UseServerProtocol`) and map geometry

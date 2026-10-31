@@ -55,8 +55,10 @@ namespace Scripts.DI.Dots
     /// ticking only once that completes, so the first spawn never hits an unloaded key.
     /// </para>
     /// <para>
-    /// <b>Reconnect is a generation boundary.</b> On <c>NetworkClient.Reconnected</c> the view
-    /// begins a new generation (queued old-session commands are dropped, old mirrors torn down
+    /// <b>Every new session is a generation boundary.</b> The first frame that sees a session
+    /// object it has not begun (a first connect, a reconnect, a manual retry, a dungeon join, a
+    /// map transfer - <c>NetworkClient.Reconnected</c> reaches the same path and is idempotent
+    /// per session object) the view begins a new generation (queued old-session commands are dropped, old mirrors torn down
     /// before the new session's first snapshot is applied), the predictor is reset so its input
     /// backlog does not replay against a server that never saw it, and the camera's smoothing is
     /// reset so it snaps to the re-placed avatar instead of sweeping across the map.
@@ -167,7 +169,10 @@ namespace Scripts.DI.Dots
         private bool elevationInstalled;
         private ProjectilePredictor projectilePredictor;
         private PredictedProjectileViews predictedViews;
-        private GameSessionClient protocolAppliedTo;
+        private readonly SessionResetGate<GameSessionClient> sessionGate = new SessionResetGate<GameSessionClient>();
+        private Action<GameSessionClient> beginSession;
+        private Action runFrame;
+        private int lastGeneration;
         private bool castWarningLogged;
 
         /// <summary>True once the catalog is installed and every key is warm; the binder ticks only then.</summary>
@@ -212,11 +217,19 @@ namespace Scripts.DI.Dots
                 return;
             }
 
-            if (this.client.State == NetworkClientState.InWorld)
-            {
-                this.EnsureServerProtocolApplied();
-            }
+            // The gate runs the session reset before RunFrame (input send and the binder feed), so
+            // the first frame of a new session never meets the old session's binder, predictor or
+            // view generation.
+            this.sessionGate.Tick(
+                this.client.State == NetworkClientState.InWorld,
+                this.client.Session,
+                this.beginSession,
+                this.runFrame);
+        }
 
+        /// <summary>Input send, then the binder feed: everything in a frame that follows the session reset.</summary>
+        private void RunFrame()
+        {
             if (this.driveInput && this.client.State == NetworkClientState.InWorld)
             {
                 // Input is sampled and SENT here, not inside the prediction driver: the tick
@@ -368,6 +381,8 @@ namespace Scripts.DI.Dots
 
             this.predictedViews = new PredictedProjectileViews(this.transform);
 
+            this.beginSession = this.OnSessionBegan;
+            this.runFrame = this.RunFrame;
             this.client.Reconnected += this.OnReconnected;
 
             // Prewarm from the catalog's own pool sizes rather than numbers typed here. In
@@ -507,36 +522,68 @@ namespace Scripts.DI.Dots
             }
         }
 
+        /// <summary>
+        /// Routes the netcode <c>Reconnected</c> event through the same once-per-session reset as
+        /// the per-frame check.
+        /// </summary>
+        /// <remarks>
+        /// Contract relied on (com.cuvara.netcode v0.50.0, <c>Runtime/Client/NetworkClient.cs</c>):
+        /// <c>Reconnected</c> is raised only after <c>_session</c> is set to the new
+        /// <see cref="GameSessionClient"/> in the join commit, so <c>client.Session</c> is already
+        /// the new object here. If it is null anyway, nothing is reset now and the per-frame check
+        /// begins the session when a non-null object is seen in the world.
+        /// </remarks>
         private void OnReconnected()
         {
             if (!this.installed || this.view == null) return;
 
+            var outcome = this.sessionGate.OnReconnected(this.client.Session, this.beginSession);
+            switch (outcome)
+            {
+                case ReconnectOutcome.Began:
+                    this.ReconnectsHandled++;
+                    Debug.Log($"[DotsWorldBridge] Reconnected: view generation {this.lastGeneration}, predictor reset, camera smoothing reset.");
+                    break;
+                case ReconnectOutcome.AlreadyBegun:
+                    this.ReconnectsHandled++;
+                    Debug.Log($"[DotsWorldBridge] Reconnected: reset already ran for this session (view generation {this.lastGeneration}); no second reset.");
+                    break;
+                default:
+                    Debug.LogWarning("[DotsWorldBridge] Reconnected: no session object at callback time; no reset ran, the per-frame check will begin the session.");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// The one session-start reset: a connect, reconnect, manual retry, dungeon join or map
+        /// transfer all arrive here with a new <see cref="GameSessionClient"/>.
+        /// </summary>
+        private void OnSessionBegan(GameSessionClient session)
+        {
             // Order: generation first, so the old session's queued commands are already stale by
-            // the time the binder's next Tick feeds the reconnected world in; then the predictor's
-            // backlog, which the new server never acknowledged; then the camera, which would
-            // otherwise sweep from the last known position to the re-placed avatar.
-            var generation = this.view.BeginGeneration();
+            // the time the binder's next Tick feeds the new world in; then the binder and the
+            // predictor's backlog, which the new server never acknowledged; then the camera,
+            // which would otherwise sweep from the last known position to the re-placed avatar.
+            this.lastGeneration = this.view.BeginGeneration();
 
             // The binder's interpolation clock, last world tick and live set belong to the old
-            // session too. NetworkClient resets the world on reconnect, and a new server (a drain
-            // to another pod, a restart) counts ticks from far below the old ones: without this,
-            // `world.Tick > lastWorldTick` stays false until the new ticks pass the old, so no
-            // sample is buffered (remotes drawn at raw snapshot positions) and RenderTick - sent
-            // as the lag-compensation render time - stays frozen in the old tick space. After
-            // BeginGeneration, so its despawns are stale no-ops for the drain.
+            // session too. NetworkClient resets the world on a new session, and a new server (a
+            // drain to another pod, a restart, a dungeon) counts ticks from far below or above the
+            // old ones: without this, `world.Tick > lastWorldTick` can stay false until the new
+            // ticks pass the old, so no sample is buffered, and RenderTick - sent as the
+            // lag-compensation render time - stays in the old tick space. After BeginGeneration,
+            // so its despawns are stale no-ops for the drain.
             this.binder.Reset();
             this.predictor?.Reset();
             this.projectilePredictor?.Reset();
             this.elevationFeeder?.Reset();
 
-            // The reconnected session may be a different server (a transfer, a restarted pod):
-            // re-select the movement model and geometry for it before its first reconcile.
-            this.protocolAppliedTo = null;
-            this.EnsureServerProtocolApplied();
+            // The new session may be a different server: select the movement model and geometry
+            // for it before its first reconcile.
+            this.ApplyServerProtocol();
             CameraFollowBootstrap.ResetSmoothing(this.world);
-            this.ReconnectsHandled++;
 
-            Debug.Log($"[DotsWorldBridge] Reconnected: view generation {generation}, predictor reset, camera smoothing reset.");
+            Debug.Log($"[DotsWorldBridge] Session began: view generation {this.lastGeneration}, binder and predictor reset.");
         }
 
         private void OnDestroy()
@@ -613,19 +660,11 @@ namespace Scripts.DI.Dots
         }
 
         /// <summary>
-        /// Once per session (and again after a reconnect): selects the server's movement model,
-        /// supplies the map's geometry, and creates the projectile predictor for a protocol 3
-        /// server. Keyed on the session object, so a transfer or reconnect re-applies.
+        /// Called from <see cref="OnSessionBegan"/>: selects the server's movement model, supplies
+        /// the map's geometry, and creates the projectile predictor for a protocol 3 server.
         /// </summary>
-        private void EnsureServerProtocolApplied()
+        private void ApplyServerProtocol()
         {
-            var session = this.client.Session;
-            if (session == null || ReferenceEquals(session, this.protocolAppliedTo))
-            {
-                return;
-            }
-
-            this.protocolAppliedTo = session;
             var version = this.client.ServerProtocolVersion;
             var mapId = this.client.CurrentMapId;
             var geometry = MapGeometrySource.LoadOrNull(mapId, out var origin);
