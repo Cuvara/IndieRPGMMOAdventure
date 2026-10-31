@@ -235,6 +235,84 @@ namespace Tests.Editor
         }
 
         [Test]
+        public void LateSettle_OfAnOldInstallation_DoesNotReleaseKeysTheNewInstallationClaimed()
+        {
+            var (loader, leased, root, saved) = this.NewSharedLeasedProvider();
+            try
+            {
+                var shared = new EpochTokenIgnoringProvider(leased);
+                var old = this.NewInstallation(shared);
+                old.TryInstall();
+                old.Dispose();
+
+                // Scene reload: the next installation claims the same keys through the same provider.
+                this.installation = this.NewInstallation(shared);
+                this.installation.TryInstall();
+
+                foreach (var key in loader.PendingKeys.ToList()) loader.Complete(key);
+
+                Assert.That(loader.Releases, Is.Empty, "the old installation's late settle released nothing");
+                Assert.That(leased.PooledCount, Is.GreaterThan(0));
+                foreach (var key in loader.Loads.Distinct().ToList())
+                {
+                    Assert.That(leased.IsLoaded(key), Is.True, key);
+                    Assert.That(leased.IsWarm(key), Is.True, key);
+                }
+
+                Assert.That(loader.Loads, Is.Not.Empty);
+            }
+            finally
+            {
+                this.installation?.Dispose();
+                this.installation = null;
+                leased.Dispose();
+                loader.DestroyPrefabs();
+                UnityEngine.Object.DestroyImmediate(root.gameObject);
+                SynchronizationContext.SetSynchronizationContext(saved);
+            }
+        }
+
+        [Test]
+        public void LateSettle_WithAProviderWithoutClaimEpochs_KeepsThePlainRelease()
+        {
+            var (loader, leased, root, saved) = this.NewSharedLeasedProvider();
+            try
+            {
+                var plain = new TokenIgnoringProvider(leased);
+                var old = this.NewInstallation(plain);
+                old.TryInstall();
+                old.Dispose();
+                this.installation = this.NewInstallation(plain);
+                this.installation.TryInstall();
+
+                foreach (var key in loader.PendingKeys.ToList()) loader.Complete(key);
+
+                Assert.That(loader.Releases, Is.Not.Empty, "control: without epochs the old release still lands");
+            }
+            finally
+            {
+                this.installation?.Dispose();
+                this.installation = null;
+                leased.Dispose();
+                loader.DestroyPrefabs();
+                UnityEngine.Object.DestroyImmediate(root.gameObject);
+                SynchronizationContext.SetSynchronizationContext(saved);
+            }
+        }
+
+        private (FakeViewPrefabLoader, LeasedViewAssetProvider, Transform, SynchronizationContext) NewSharedLeasedProvider()
+        {
+            // Inline continuations: the editor's context would defer them to the next tick.
+            var saved = SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(null);
+            var loader = new FakeViewPrefabLoader();
+            var root = new GameObject("[SharedLeaseRoot]").transform;
+            var leased = new LeasedViewAssetProvider(
+                new PooledViewAssetProvider(root, defaultPoolSize: 1, maxPoolSize: 8), loader);
+            return (loader, leased, root, saved);
+        }
+
+        [Test]
         public void Prewarm_CompletesIntoReady()
         {
             this.installation = this.NewInstallation();
@@ -449,6 +527,48 @@ namespace Tests.Editor
                     (netcode.IsEmpty ? "netcode-gone" : "netcode-live") + "," +
                     (catalog.IsEmpty ? "catalog-gone" : "catalog-live"));
             }
+        }
+
+        /// <summary>
+        /// Forwards to a real <see cref="LeasedViewAssetProvider"/> but drops the cancellation
+        /// token, so an old installation's prewarm settles after its <c>Dispose</c> — the case the
+        /// claim epoch guards.
+        /// </summary>
+        private class TokenIgnoringProvider : IViewAssetProvider
+        {
+            protected readonly LeasedViewAssetProvider inner;
+
+            public TokenIgnoringProvider(LeasedViewAssetProvider inner)
+            {
+                this.inner = inner;
+            }
+
+            public Task PrewarmAsync(string key, int count, CancellationToken cancellationToken = default) =>
+                this.inner.PrewarmAsync(key, count, CancellationToken.None);
+
+            public bool IsWarm(string key) => this.inner.IsWarm(key);
+
+            public GameObject Acquire(string key, Vector3 position, Quaternion rotation, Transform parent = null) =>
+                this.inner.Acquire(key, position, rotation, parent);
+
+            public Task<GameObject> AcquireAsync(
+                string key, Vector3 position, Quaternion rotation, Transform parent = null,
+                CancellationToken cancellationToken = default) =>
+                this.inner.AcquireAsync(key, position, rotation, parent, CancellationToken.None);
+
+            public void ReleaseInstance(GameObject instance) => this.inner.ReleaseInstance(instance);
+
+            public void Release(string key) => this.inner.Release(key);
+        }
+
+        /// <summary>The same, and says who claimed a key last — what the real provider does.</summary>
+        private sealed class EpochTokenIgnoringProvider : TokenIgnoringProvider, IViewClaimEpochs
+        {
+            public EpochTokenIgnoringProvider(LeasedViewAssetProvider inner) : base(inner)
+            {
+            }
+
+            public int ClaimEpoch(string key) => this.inner.ClaimEpoch(key);
         }
     }
 }

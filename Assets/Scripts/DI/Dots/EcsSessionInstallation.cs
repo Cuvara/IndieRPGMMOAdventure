@@ -81,6 +81,7 @@ namespace Scripts.DI.Dots
         private int lastGeneration;
         private readonly Dictionary<string, Task> keyPrewarms = new Dictionary<string, Task>();
         private readonly HashSet<string> pendingAtDispose = new HashSet<string>();
+        private readonly Dictionary<string, int> claimEpochs = new Dictionary<string, int>();
 
         /// <summary>Everything the installation needs from the bridge, resolved.</summary>
         public sealed class Settings
@@ -121,7 +122,8 @@ namespace Scripts.DI.Dots
 
         /// <summary>
         /// Receives the name of every teardown step as <see cref="Dispose"/> performs it, in order.
-        /// Tests only; null in production, so teardown behaviour is unchanged.
+        /// Tests only; the calls are compiled out of player builds (<c>UNITY_EDITOR</c>), and
+        /// null in the Editor unless a test sets it, so teardown behaviour is unchanged.
         /// </summary>
         internal Action<string> TeardownRecorder { get; set; }
 
@@ -448,6 +450,11 @@ namespace Scripts.DI.Dots
                 var task = this.viewAssetProvider.PrewarmAsync(pair.Key, pair.Value, cancellationToken);
                 tasks.Add(task);
                 this.keyPrewarms[pair.Key] = task;
+                if (this.viewAssetProvider is IViewClaimEpochs epochs)
+                {
+                    this.claimEpochs[pair.Key] = epochs.ClaimEpoch(pair.Key);
+                }
+
                 _ = this.ObserveKeyAsync(pair.Key, task);
             }
 
@@ -476,10 +483,17 @@ namespace Scripts.DI.Dots
                 return;
             }
 
-            if (this.pendingAtDispose.Contains(key))
+            if (!this.pendingAtDispose.Contains(key)) return;
+
+            // A newer claimant (the next scene's installation, sharing this provider) owns the key
+            // now; releasing it here would drop the lease and pooled instances that one relies on.
+            if (this.viewAssetProvider is IViewClaimEpochs epochs
+                && epochs.ClaimEpoch(key) != this.claimEpochs[key])
             {
-                this.viewAssetProvider.Release(key);
+                return;
             }
+
+            this.viewAssetProvider.Release(key);
         }
 
         // The aggregate task is polled by TryFinishPrewarm; this only keeps it observed when
@@ -496,6 +510,7 @@ namespace Scripts.DI.Dots
             }
         }
 
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
         private void Step(string name) => this.TeardownRecorder?.Invoke(name);
 
         private void InstallSessionModules()

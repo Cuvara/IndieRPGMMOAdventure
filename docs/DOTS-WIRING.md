@@ -123,9 +123,14 @@ degrades to absent code, not compile errors â€” the same contract the package ho
   provider creates instances synchronously and checks the token before each, and the leased
   provider completes a release that arrives while a prefab loads, so a cancelled key leaves no
   warm lease or pooled instance. A provider that ignores the token and settles successfully after
-  `Dispose` has its key released again on settle. `EcsSessionInstallation.TeardownRecorder`
-  (internal, tests only) records every teardown step; `EcsSessionInstallationTests` assert the
-  whole sequence.
+  `Dispose` has its key released again on settle — but only while no newer claimant took the key:
+  `LeasedViewAssetProvider` (one lease per key, shared by every scene installation) raises
+  `ClaimEpoch(key)` each time a prewarm or async acquire starts, the installation records it
+  (`IViewClaimEpochs`), and the late release is skipped when the epoch moved. Providers without
+  `IViewClaimEpochs` keep the plain late release. A release requested while the shared load is
+  in flight is withdrawn when the key is claimed again. `EcsSessionInstallation.TeardownRecorder`
+  (internal, tests only; the `Step` calls are `[Conditional("UNITY_EDITOR")]`, absent from player
+  builds) records every teardown step; `EcsSessionInstallationTests` assert the whole sequence.
 - **Input backend**: this project runs Input System (new) only (`activeInputHandler: 1`), under
   which legacy `UnityEngine.Input` throws; the bridge reads `Keyboard.current` under
   `ENABLE_INPUT_SYSTEM` and falls back per define, same as the netcode DOTS sample.

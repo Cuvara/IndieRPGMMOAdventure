@@ -33,6 +33,8 @@ namespace Tests.Editor
 
         public int PendingCount => this.pending.Count;
 
+        public IEnumerable<string> PendingKeys => this.pending.Keys;
+
         public bool CanLoad(string key) => key != null && (this.known.Count == 0 || this.known.Contains(key));
 
         public Task<GameObject> LoadAsync(string key, CancellationToken cancellationToken = default)

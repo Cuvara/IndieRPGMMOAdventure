@@ -44,7 +44,7 @@ namespace Scripts.DI.Dots
     /// </para>
     /// <para>Main thread only.</para>
     /// </remarks>
-    public sealed class LeasedViewAssetProvider : IViewAssetProvider, IDisposable
+    public sealed class LeasedViewAssetProvider : IViewAssetProvider, IViewClaimEpochs, IDisposable
     {
         private sealed class Lease
         {
@@ -57,6 +57,7 @@ namespace Scripts.DI.Dots
         private readonly IViewPrefabLoader loader;
         private readonly Dictionary<string, Lease> leases = new Dictionary<string, Lease>();
         private readonly HashSet<string> warnedUnloaded = new HashSet<string>();
+        private readonly Dictionary<string, int> claimEpochs = new Dictionary<string, int>();
         private bool disposed;
 
         public LeasedViewAssetProvider(PooledViewAssetProvider pool, IViewPrefabLoader loader)
@@ -123,6 +124,14 @@ namespace Scripts.DI.Dots
         }
 
         public bool IsWarm(string key) => this.IsLoaded(key) && this.pool.IsWarm(key);
+
+        /// <summary>
+        /// Rises each time a <see cref="PrewarmAsync"/> or <see cref="AcquireAsync"/> starts for the
+        /// key — the only two calls that can create or revive a lease. Lets a late cleanup tell
+        /// whether a newer claimant took the key over.
+        /// </summary>
+        public int ClaimEpoch(string key) =>
+            key != null && this.claimEpochs.TryGetValue(key, out var epoch) ? epoch : 0;
 
         public GameObject Acquire(string key, Vector3 position, Quaternion rotation, Transform parent = null)
         {
@@ -209,6 +218,8 @@ namespace Scripts.DI.Dots
 
         private Task<GameObject> EnsureLoadedAsync(string key, CancellationToken cancellationToken)
         {
+            this.claimEpochs[key] = this.ClaimEpoch(key) + 1;
+
             if (!this.leases.TryGetValue(key, out var lease))
             {
                 lease = new Lease();
@@ -223,9 +234,11 @@ namespace Scripts.DI.Dots
                 return Task.FromResult(lease.Prefab);
             }
 
+            // Wanted again: a release requested while the shared load is still in flight is
+            // withdrawn, exactly as for a loaded key above.
+            lease.ReleasePending = false;
             if (lease.Loading == null)
             {
-                lease.ReleasePending = false;
                 lease.Loading = this.LoadAndRegisterAsync(key, lease, cancellationToken);
             }
 
