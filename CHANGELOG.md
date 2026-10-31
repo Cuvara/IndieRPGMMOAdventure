@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Every new session resets the DOTS bridge, not only a netcode reconnect (UCF F-05).**
+  `DotsWorldBridge` ran the view generation, binder, predictor, projectile-predictor, elevation and
+  camera-smoothing reset only in `OnReconnected`. A manual Retry, a dungeon join, a map transfer or
+  a fresh connect after a failed one got none of it, and only the tick-went-backwards heuristics
+  protected them, which miss a new session whose ticks start above the old ones. A new
+  `SessionBoundary` tracks the session object; `OnSessionBegan` runs the reset once per object,
+  before that frame's binder feed, and `OnReconnected` goes through the same path (idempotent, so
+  no double reset). The `[DotsWorldBridge] Reconnected:` log line is unchanged; a new
+  `[DotsWorldBridge] Session began:` line is logged for every session. See `docs/DOTS-WIRING.md`.
 - **Multi-client tools work from Git Bash and with WSL-native Docker.** Both scripts share a
   `wslpath`/`cygpath` Windows path converter, and `verify-multiclient.sh` automatically uses WSL
   Docker for Redis when Windows Docker is unavailable (or accepts `--redis-wsl DISTRO`). The
