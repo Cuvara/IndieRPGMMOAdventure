@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "screen": "UseConfirm",
+  "overlay": true,
+  "size": [
+    640.0,
+    360.0
+  ],
+  "flows": [
+    {
+      "name": "Main",
+      "start": "MainMenu"
+    }
+  ],
+  "interactions": [
+    {
+      "id": "UseConfirm.YesButton.click#0",
+      "element": "YesButton",
+      "trigger": "click",
+      "delayMs": null,
+      "action": "close-overlay",
+      "target": null,
+      "position": null,
+      "manual": null,
+      "closeOnOutside": null,
+      "scrim": null,
+      "animation": null
+    },
+    {
+      "id": "UseConfirm.NoButton.click#0",
+      "element": "NoButton",
+      "trigger": "click",
+      "delayMs": null,
+      "action": "close-overlay",
+      "target": null,
+      "position": null,
+      "manual": null,
+      "closeOnOutside": null,
+      "scrim": null,
+      "animation": null
+    }
+  ],
+  "controls": [
+    {
+      "name": "NoButton",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a6c869"
+      },
+      "label": {
+        "text": "No",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e6f37c89a976",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    },
+    {
+      "name": "YesButton",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a6c869"
+      },
+      "label": {
+        "text": "Yes",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e6f37c7acdc7",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    }
+  ],
+  "lists": [],
+  "scrolls": [],
+  "motion": {
+    "back": "reverse",
+    "enabled": true
+  }
+}

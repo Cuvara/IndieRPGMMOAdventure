@@ -1,0 +1,95 @@
+/* generated from Penpot board 2ae07385-a5c7-8059-8008-e6f37c458500 ([approved] UseConfirm) - IR sha256:f009c52665126724 - do not edit */
+
+.rpg-button-primary {
+    padding: 0;
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("../Art/button.primary.normal.png");
+    -unity-slice-left: 22;
+    -unity-slice-top: 20;
+    -unity-slice-right: 22;
+    -unity-slice-bottom: 20;
+}
+
+.rpg-button-primary:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.rpg-button-primary:active {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("../Art/button.primary.pressed.png");
+    -unity-slice-left: 22;
+    -unity-slice-top: 20;
+    -unity-slice-right: 22;
+    -unity-slice-bottom: 20;
+}
+
+.rpg-button-primary:disabled {
+    opacity: 1;
+    color: #888888;
+}
+
+.rpg-use-confirm {
+    width: 640px;
+    height: 360px;
+    flex-shrink: 0;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding-top: 84px;
+    padding-right: 60px;
+    padding-bottom: 84px;
+    padding-left: 60px;
+    overflow: hidden;
+    background-image: url("../Art/panel.frame.png");
+    -unity-slice-left: 28;
+    -unity-slice-top: 28;
+    -unity-slice-right: 28;
+    -unity-slice-bottom: 28;
+}
+
+.rpg-use-confirm-question {
+    width: 520px;
+    height: 48px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-gold);
+    font-size: 36px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Bold SDF.asset");
+    -unity-text-align: upper-center;
+    white-space: normal;
+}
+
+.rpg-use-confirm-answers {
+    height: 80px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 28px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.rpg-use-confirm-answers-yes-button {
+    width: 240px;
+    height: 80px;
+    flex-shrink: 0;
+    margin: 0;
+    color: #ffffff;
+    font-size: 28px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-center;
+}
+
+.rpg-use-confirm-answers-no-button {
+    width: 240px;
+    height: 80px;
+    flex-shrink: 0;
+    margin: 0 0 0 24px;
+    color: #ffffff;
+    font-size: 28px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-center;
+}

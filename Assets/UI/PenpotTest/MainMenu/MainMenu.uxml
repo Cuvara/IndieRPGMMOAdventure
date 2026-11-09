@@ -1,0 +1,13 @@
+<!-- generated from Penpot board 2ae07385-a5c7-8059-8008-e6f37c10e554 ([approved] MainMenu) - IR sha256:6259affda6c5020a - do not edit -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../Theme/rpg-tokens.uss" />
+    <Style src="MainMenu.uss" />
+    <Style src="MainMenu.motion.uss" />
+    <ui:VisualElement name="MainMenu" class="rpg-main-menu">
+        <ui:Label name="Title" class="rpg-main-menu-title rpg-text-title" text="MAIN MENU" />
+        <ui:VisualElement name="MenuPanel" class="rpg-main-menu-menu-panel">
+            <ui:Button name="InventoryButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-main-menu-menu-panel-inventory-button" usage-hints="DynamicTransform, DynamicColor" text="Inventory" />
+            <ui:Button name="SettingsButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-main-menu-menu-panel-settings-button" usage-hints="DynamicTransform, DynamicColor" text="Settings" enabled="false" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

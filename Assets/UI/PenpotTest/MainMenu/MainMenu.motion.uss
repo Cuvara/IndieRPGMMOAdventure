@@ -1,0 +1,12 @@
+/* motion presets used by this screen - generated from Penpot board 2ae07385-a5c7-8059-8008-e6f37c10e554 ([approved] MainMenu) - IR sha256:6259affda6c5020a - do not edit */
+
+.rpg-motion-press {
+    transition-property: scale, -unity-background-image-tint-color;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+}
+
+.rpg-motion-press:active {
+    scale: 0.96;
+    -unity-background-image-tint-color: #cccccc;
+}

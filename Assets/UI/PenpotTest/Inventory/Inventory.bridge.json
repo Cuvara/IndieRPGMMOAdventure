@@ -1,0 +1,429 @@
+{
+  "api": {
+    "interactions": [
+      "Inventory.CloseButton.click#0",
+      "Inventory.UseButton.click#0"
+    ],
+    "members": [
+      {
+        "element": null,
+        "member": "Bind",
+        "sig": "static InventoryBindings Bind(VisualElement)"
+      },
+      {
+        "element": "Body",
+        "member": "Body",
+        "sig": "VisualElement Body { get; }"
+      },
+      {
+        "element": "CloseButton",
+        "member": "CloseButton",
+        "sig": "Button CloseButton { get; }"
+      },
+      {
+        "element": "CloseButton",
+        "member": "CloseButtonClicked",
+        "sig": "event Action CloseButtonClicked"
+      },
+      {
+        "element": "DetailsPanel",
+        "member": "DetailsPanel",
+        "sig": "VisualElement DetailsPanel { get; }"
+      },
+      {
+        "element": null,
+        "member": "Dispose",
+        "sig": "void Dispose()"
+      },
+      {
+        "element": "DropButton",
+        "member": "DropButton",
+        "sig": "Button DropButton { get; }"
+      },
+      {
+        "element": "DropButton",
+        "member": "DropButtonClicked",
+        "sig": "event Action DropButtonClicked"
+      },
+      {
+        "element": "Footer",
+        "member": "Footer",
+        "sig": "VisualElement Footer { get; }"
+      },
+      {
+        "element": "Header",
+        "member": "Header",
+        "sig": "VisualElement Header { get; }"
+      },
+      {
+        "element": "Inventory",
+        "member": "Inventory",
+        "sig": "VisualElement Inventory { get; }"
+      },
+      {
+        "element": null,
+        "member": "InventoryBindings",
+        "sig": "class InventoryBindings : IDisposable"
+      },
+      {
+        "element": "InventoryPanel",
+        "member": "InventoryPanel",
+        "sig": "VisualElement InventoryPanel { get; }"
+      },
+      {
+        "element": "ItemDesc",
+        "member": "ItemDesc",
+        "sig": "Label ItemDesc { get; }"
+      },
+      {
+        "element": "ItemGrid",
+        "member": "ItemGrid",
+        "sig": "ScrollView ItemGrid { get; }"
+      },
+      {
+        "element": "ItemGrid",
+        "member": "ItemGridSelectionChanged",
+        "sig": "event Action<int> ItemGridSelectionChanged"
+      },
+      {
+        "element": "ItemName",
+        "member": "ItemName",
+        "sig": "Label ItemName { get; }"
+      },
+      {
+        "element": "PanelTitle",
+        "member": "PanelTitle",
+        "sig": "Label PanelTitle { get; }"
+      },
+      {
+        "element": "RarityLabel",
+        "member": "RarityLabel",
+        "sig": "Label RarityLabel { get; }"
+      },
+      {
+        "element": "RarityRow",
+        "member": "RarityRow",
+        "sig": "VisualElement RarityRow { get; }"
+      },
+      {
+        "element": "RarityValue",
+        "member": "RarityValue",
+        "sig": "Label RarityValue { get; }"
+      },
+      {
+        "element": null,
+        "member": "Root",
+        "sig": "VisualElement Root { get; }"
+      },
+      {
+        "element": null,
+        "member": "SetEnabled",
+        "sig": "static void SetEnabled(VisualElement, bool)"
+      },
+      {
+        "element": "SortButton",
+        "member": "SortButton",
+        "sig": "Button SortButton { get; }"
+      },
+      {
+        "element": "SortButton",
+        "member": "SortButtonClicked",
+        "sig": "event Action SortButtonClicked"
+      },
+      {
+        "element": "StatName0",
+        "member": "StatName0",
+        "sig": "Label StatName0 { get; }"
+      },
+      {
+        "element": "StatName1",
+        "member": "StatName1",
+        "sig": "Label StatName1 { get; }"
+      },
+      {
+        "element": "StatName2",
+        "member": "StatName2",
+        "sig": "Label StatName2 { get; }"
+      },
+      {
+        "element": "StatName3",
+        "member": "StatName3",
+        "sig": "Label StatName3 { get; }"
+      },
+      {
+        "element": "StatName4",
+        "member": "StatName4",
+        "sig": "Label StatName4 { get; }"
+      },
+      {
+        "element": "StatName5",
+        "member": "StatName5",
+        "sig": "Label StatName5 { get; }"
+      },
+      {
+        "element": "StatName6",
+        "member": "StatName6",
+        "sig": "Label StatName6 { get; }"
+      },
+      {
+        "element": "StatName7",
+        "member": "StatName7",
+        "sig": "Label StatName7 { get; }"
+      },
+      {
+        "element": "StatRow0",
+        "member": "StatRow0",
+        "sig": "VisualElement StatRow0 { get; }"
+      },
+      {
+        "element": "StatRow1",
+        "member": "StatRow1",
+        "sig": "VisualElement StatRow1 { get; }"
+      },
+      {
+        "element": "StatRow2",
+        "member": "StatRow2",
+        "sig": "VisualElement StatRow2 { get; }"
+      },
+      {
+        "element": "StatRow3",
+        "member": "StatRow3",
+        "sig": "VisualElement StatRow3 { get; }"
+      },
+      {
+        "element": "StatRow4",
+        "member": "StatRow4",
+        "sig": "VisualElement StatRow4 { get; }"
+      },
+      {
+        "element": "StatRow5",
+        "member": "StatRow5",
+        "sig": "VisualElement StatRow5 { get; }"
+      },
+      {
+        "element": "StatRow6",
+        "member": "StatRow6",
+        "sig": "VisualElement StatRow6 { get; }"
+      },
+      {
+        "element": "StatRow7",
+        "member": "StatRow7",
+        "sig": "VisualElement StatRow7 { get; }"
+      },
+      {
+        "element": "StatValue0",
+        "member": "StatValue0",
+        "sig": "Label StatValue0 { get; }"
+      },
+      {
+        "element": "StatValue1",
+        "member": "StatValue1",
+        "sig": "Label StatValue1 { get; }"
+      },
+      {
+        "element": "StatValue2",
+        "member": "StatValue2",
+        "sig": "Label StatValue2 { get; }"
+      },
+      {
+        "element": "StatValue3",
+        "member": "StatValue3",
+        "sig": "Label StatValue3 { get; }"
+      },
+      {
+        "element": "StatValue4",
+        "member": "StatValue4",
+        "sig": "Label StatValue4 { get; }"
+      },
+      {
+        "element": "StatValue5",
+        "member": "StatValue5",
+        "sig": "Label StatValue5 { get; }"
+      },
+      {
+        "element": "StatValue6",
+        "member": "StatValue6",
+        "sig": "Label StatValue6 { get; }"
+      },
+      {
+        "element": "StatValue7",
+        "member": "StatValue7",
+        "sig": "Label StatValue7 { get; }"
+      },
+      {
+        "element": "Stats",
+        "member": "Stats",
+        "sig": "ScrollView Stats { get; }"
+      },
+      {
+        "element": "Title",
+        "member": "Title",
+        "sig": "Label Title { get; }"
+      },
+      {
+        "element": null,
+        "member": "TransitionFinished",
+        "sig": "event Action TransitionFinished"
+      },
+      {
+        "element": null,
+        "member": "Unbind",
+        "sig": "void Unbind()"
+      },
+      {
+        "element": "UseButton",
+        "member": "UseButton",
+        "sig": "Button UseButton { get; }"
+      },
+      {
+        "element": "UseButton",
+        "member": "UseButtonClicked",
+        "sig": "event Action UseButtonClicked"
+      },
+      {
+        "element": null,
+        "member": "UxmlName",
+        "sig": "const string UxmlName"
+      },
+      {
+        "element": "WeightLabel",
+        "member": "WeightLabel",
+        "sig": "Label WeightLabel { get; }"
+      },
+      {
+        "element": "WeightRow",
+        "member": "WeightRow",
+        "sig": "VisualElement WeightRow { get; }"
+      },
+      {
+        "element": "WeightValue",
+        "member": "WeightValue",
+        "sig": "Label WeightValue { get; }"
+      }
+    ]
+  },
+  "assets": [
+    "button.primary.normal",
+    "button.primary.pressed",
+    "icon.potion",
+    "panel.frame",
+    "slot.frame"
+  ],
+  "boardId": "2ae07385-a5c7-8059-8008-e676f86bc2dc",
+  "files": [
+    "PenpotTest/Inventory/Inventory.bindings.g.cs",
+    "PenpotTest/Inventory/Inventory.flow.json",
+    "PenpotTest/Inventory/Inventory.motion.json",
+    "PenpotTest/Inventory/Inventory.motion.uss",
+    "PenpotTest/Inventory/Inventory.uss",
+    "PenpotTest/Inventory/Inventory.uxml",
+    "PenpotTest/Inventory/ItemSlot.uxml",
+    "PenpotTest/Inventory/Inventory.bridge.json"
+  ],
+  "irHash": "sha256:2e226a80930727b6",
+  "names": {
+    "Inventory": [
+      "Inventory",
+      "Header",
+      "Title",
+      "CloseButton",
+      "Body",
+      "InventoryPanel",
+      "PanelTitle",
+      "ItemGrid",
+      "DetailsPanel",
+      "ItemName",
+      "ItemDesc",
+      "RarityRow",
+      "RarityLabel",
+      "RarityValue",
+      "WeightRow",
+      "WeightLabel",
+      "WeightValue",
+      "Stats",
+      "StatRow0",
+      "StatName0",
+      "StatValue0",
+      "StatRow1",
+      "StatName1",
+      "StatValue1",
+      "StatRow2",
+      "StatName2",
+      "StatValue2",
+      "StatRow3",
+      "StatName3",
+      "StatValue3",
+      "StatRow4",
+      "StatName4",
+      "StatValue4",
+      "StatRow5",
+      "StatName5",
+      "StatValue5",
+      "StatRow6",
+      "StatName6",
+      "StatValue6",
+      "StatRow7",
+      "StatName7",
+      "StatValue7",
+      "Footer",
+      "UseButton",
+      "DropButton",
+      "SortButton"
+    ],
+    "ItemSlot": [
+      "ItemSlot0",
+      "Icon",
+      "Qty",
+      "Selected"
+    ]
+  },
+  "screen": "Inventory",
+  "types": {
+    "Body": "ui:VisualElement",
+    "CloseButton": "ui:Button",
+    "DetailsPanel": "ui:VisualElement",
+    "DropButton": "ui:Button",
+    "Footer": "ui:VisualElement",
+    "Header": "ui:VisualElement",
+    "Inventory": "ui:VisualElement",
+    "InventoryPanel": "ui:VisualElement",
+    "ItemDesc": "ui:Label",
+    "ItemGrid": "ui:ScrollView",
+    "ItemName": "ui:Label",
+    "PanelTitle": "ui:Label",
+    "RarityLabel": "ui:Label",
+    "RarityRow": "ui:VisualElement",
+    "RarityValue": "ui:Label",
+    "SortButton": "ui:Button",
+    "StatName0": "ui:Label",
+    "StatName1": "ui:Label",
+    "StatName2": "ui:Label",
+    "StatName3": "ui:Label",
+    "StatName4": "ui:Label",
+    "StatName5": "ui:Label",
+    "StatName6": "ui:Label",
+    "StatName7": "ui:Label",
+    "StatRow0": "ui:VisualElement",
+    "StatRow1": "ui:VisualElement",
+    "StatRow2": "ui:VisualElement",
+    "StatRow3": "ui:VisualElement",
+    "StatRow4": "ui:VisualElement",
+    "StatRow5": "ui:VisualElement",
+    "StatRow6": "ui:VisualElement",
+    "StatRow7": "ui:VisualElement",
+    "StatValue0": "ui:Label",
+    "StatValue1": "ui:Label",
+    "StatValue2": "ui:Label",
+    "StatValue3": "ui:Label",
+    "StatValue4": "ui:Label",
+    "StatValue5": "ui:Label",
+    "StatValue6": "ui:Label",
+    "StatValue7": "ui:Label",
+    "Stats": "ui:ScrollView",
+    "Title": "ui:Label",
+    "UseButton": "ui:Button",
+    "WeightLabel": "ui:Label",
+    "WeightRow": "ui:VisualElement",
+    "WeightValue": "ui:Label"
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "api": {
+    "interactions": [],
+    "members": [
+      {
+        "element": null,
+        "member": "Bind",
+        "sig": "static CrossfadeDemoBindings Bind(VisualElement)"
+      },
+      {
+        "element": "CrossfadeDemo",
+        "member": "CrossfadeDemo",
+        "sig": "VisualElement CrossfadeDemo { get; }"
+      },
+      {
+        "element": null,
+        "member": "CrossfadeDemoBindings",
+        "sig": "class CrossfadeDemoBindings : IDisposable"
+      },
+      {
+        "element": "DemoPanel",
+        "member": "DemoPanel",
+        "sig": "VisualElement DemoPanel { get; }"
+      },
+      {
+        "element": null,
+        "member": "Dispose",
+        "sig": "void Dispose()"
+      },
+      {
+        "element": "GlowButton",
+        "member": "GlowButton",
+        "sig": "Button GlowButton { get; }"
+      },
+      {
+        "element": "GlowButton",
+        "member": "GlowButtonClicked",
+        "sig": "event Action GlowButtonClicked"
+      },
+      {
+        "element": "LockedButton",
+        "member": "LockedButton",
+        "sig": "Button LockedButton { get; }"
+      },
+      {
+        "element": "LockedButton",
+        "member": "LockedButtonClicked",
+        "sig": "event Action LockedButtonClicked"
+      },
+      {
+        "element": "PlainButton",
+        "member": "PlainButton",
+        "sig": "Button PlainButton { get; }"
+      },
+      {
+        "element": "PlainButton",
+        "member": "PlainButtonClicked",
+        "sig": "event Action PlainButtonClicked"
+      },
+      {
+        "element": null,
+        "member": "Root",
+        "sig": "VisualElement Root { get; }"
+      },
+      {
+        "element": null,
+        "member": "SetEnabled",
+        "sig": "static void SetEnabled(VisualElement, bool)"
+      },
+      {
+        "element": "Title",
+        "member": "Title",
+        "sig": "Label Title { get; }"
+      },
+      {
+        "element": null,
+        "member": "TransitionFinished",
+        "sig": "event Action TransitionFinished"
+      },
+      {
+        "element": null,
+        "member": "Unbind",
+        "sig": "void Unbind()"
+      },
+      {
+        "element": null,
+        "member": "UxmlName",
+        "sig": "const string UxmlName"
+      }
+    ]
+  },
+  "assets": [
+    "button.hero.hover",
+    "button.primary.normal",
+    "button.primary.pressed",
+    "panel.frame"
+  ],
+  "boardId": "6c58d709-07b3-8073-8008-ea1e3086b282",
+  "files": [
+    "PenpotTest/CrossfadeDemo/CrossfadeDemo.bindings.g.cs",
+    "PenpotTest/CrossfadeDemo/CrossfadeDemo.flow.json",
+    "PenpotTest/CrossfadeDemo/CrossfadeDemo.motion.json",
+    "PenpotTest/CrossfadeDemo/CrossfadeDemo.motion.uss",
+    "PenpotTest/CrossfadeDemo/CrossfadeDemo.uss",
+    "PenpotTest/CrossfadeDemo/CrossfadeDemo.uxml",
+    "PenpotTest/CrossfadeDemo/CrossfadeDemo.bridge.json"
+  ],
+  "generated": {
+    "CrossfadeDemo": [
+      "GlowButton__frame",
+      "GlowButton__hover",
+      "GlowButton__normal",
+      "LockedButton__frame",
+      "LockedButton__hover",
+      "LockedButton__normal"
+    ]
+  },
+  "irHash": "sha256:763c935127c585e7",
+  "names": {
+    "CrossfadeDemo": [
+      "CrossfadeDemo",
+      "Title",
+      "DemoPanel",
+      "GlowButton",
+      "PlainButton",
+      "LockedButton"
+    ]
+  },
+  "screen": "CrossfadeDemo",
+  "types": {
+    "CrossfadeDemo": "ui:VisualElement",
+    "DemoPanel": "ui:VisualElement",
+    "GlowButton": "ui:Button",
+    "LockedButton": "ui:Button",
+    "PlainButton": "ui:Button",
+    "Title": "ui:Label"
+  }
+}

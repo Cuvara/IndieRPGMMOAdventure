@@ -1,0 +1,12 @@
+{
+ "version": 1,
+ "border": [
+  14,
+  14,
+  14,
+  14
+ ],
+ "pixelsPerUnit": 100,
+ "maxSize": 2048,
+ "group": "panels"
+}

@@ -1,0 +1,995 @@
+{
+  "api": {
+    "interactions": [],
+    "members": [
+      {
+        "element": "AbsBoard",
+        "member": "AbsBoard",
+        "sig": "VisualElement AbsBoard { get; }"
+      },
+      {
+        "element": "AbsCenter",
+        "member": "AbsCenter",
+        "sig": "VisualElement AbsCenter { get; }"
+      },
+      {
+        "element": "AbsLeftTop",
+        "member": "AbsLeftTop",
+        "sig": "VisualElement AbsLeftTop { get; }"
+      },
+      {
+        "element": "AbsRightTop",
+        "member": "AbsRightTop",
+        "sig": "VisualElement AbsRightTop { get; }"
+      },
+      {
+        "element": "AbsRotated",
+        "member": "AbsRotated",
+        "sig": "VisualElement AbsRotated { get; }"
+      },
+      {
+        "element": "AbsRow",
+        "member": "AbsRow",
+        "sig": "VisualElement AbsRow { get; }"
+      },
+      {
+        "element": "AbsStretchBottom",
+        "member": "AbsStretchBottom",
+        "sig": "VisualElement AbsStretchBottom { get; }"
+      },
+      {
+        "element": "AlignCenter",
+        "member": "AlignCenter",
+        "sig": "VisualElement AlignCenter { get; }"
+      },
+      {
+        "element": "AlignCenterBox0",
+        "member": "AlignCenterBox0",
+        "sig": "VisualElement AlignCenterBox0 { get; }"
+      },
+      {
+        "element": "AlignCenterBox1",
+        "member": "AlignCenterBox1",
+        "sig": "VisualElement AlignCenterBox1 { get; }"
+      },
+      {
+        "element": "AlignCenterBox2",
+        "member": "AlignCenterBox2",
+        "sig": "VisualElement AlignCenterBox2 { get; }"
+      },
+      {
+        "element": "AlignEnd",
+        "member": "AlignEnd",
+        "sig": "VisualElement AlignEnd { get; }"
+      },
+      {
+        "element": "AlignEndBox0",
+        "member": "AlignEndBox0",
+        "sig": "VisualElement AlignEndBox0 { get; }"
+      },
+      {
+        "element": "AlignEndBox1",
+        "member": "AlignEndBox1",
+        "sig": "VisualElement AlignEndBox1 { get; }"
+      },
+      {
+        "element": "AlignEndBox2",
+        "member": "AlignEndBox2",
+        "sig": "VisualElement AlignEndBox2 { get; }"
+      },
+      {
+        "element": "AlignRow",
+        "member": "AlignRow",
+        "sig": "VisualElement AlignRow { get; }"
+      },
+      {
+        "element": "AlignSelfA",
+        "member": "AlignSelfA",
+        "sig": "VisualElement AlignSelfA { get; }"
+      },
+      {
+        "element": "AlignSelfB",
+        "member": "AlignSelfB",
+        "sig": "VisualElement AlignSelfB { get; }"
+      },
+      {
+        "element": "AlignSelfBox",
+        "member": "AlignSelfBox",
+        "sig": "VisualElement AlignSelfBox { get; }"
+      },
+      {
+        "element": "AlignStart",
+        "member": "AlignStart",
+        "sig": "VisualElement AlignStart { get; }"
+      },
+      {
+        "element": "AlignStartBox0",
+        "member": "AlignStartBox0",
+        "sig": "VisualElement AlignStartBox0 { get; }"
+      },
+      {
+        "element": "AlignStartBox1",
+        "member": "AlignStartBox1",
+        "sig": "VisualElement AlignStartBox1 { get; }"
+      },
+      {
+        "element": "AlignStartBox2",
+        "member": "AlignStartBox2",
+        "sig": "VisualElement AlignStartBox2 { get; }"
+      },
+      {
+        "element": "AlignStretch",
+        "member": "AlignStretch",
+        "sig": "VisualElement AlignStretch { get; }"
+      },
+      {
+        "element": "AlignStretchBox0",
+        "member": "AlignStretchBox0",
+        "sig": "VisualElement AlignStretchBox0 { get; }"
+      },
+      {
+        "element": "AlignStretchBox1",
+        "member": "AlignStretchBox1",
+        "sig": "VisualElement AlignStretchBox1 { get; }"
+      },
+      {
+        "element": "AlignStretchBox2",
+        "member": "AlignStretchBox2",
+        "sig": "VisualElement AlignStretchBox2 { get; }"
+      },
+      {
+        "element": null,
+        "member": "Bind",
+        "sig": "static KitchenSinkSupportedBindings Bind(VisualElement)"
+      },
+      {
+        "element": "ButtonDisabled",
+        "member": "ButtonDisabled",
+        "sig": "Button ButtonDisabled { get; }"
+      },
+      {
+        "element": "ButtonDisabled",
+        "member": "ButtonDisabledClicked",
+        "sig": "event Action ButtonDisabledClicked"
+      },
+      {
+        "element": "ButtonHover",
+        "member": "ButtonHover",
+        "sig": "Button ButtonHover { get; }"
+      },
+      {
+        "element": "ButtonHover",
+        "member": "ButtonHoverClicked",
+        "sig": "event Action ButtonHoverClicked"
+      },
+      {
+        "element": "ButtonNormal",
+        "member": "ButtonNormal",
+        "sig": "Button ButtonNormal { get; }"
+      },
+      {
+        "element": "ButtonNormal",
+        "member": "ButtonNormalClicked",
+        "sig": "event Action ButtonNormalClicked"
+      },
+      {
+        "element": "ButtonPressed",
+        "member": "ButtonPressed",
+        "sig": "Button ButtonPressed { get; }"
+      },
+      {
+        "element": "ButtonPressed",
+        "member": "ButtonPressedClicked",
+        "sig": "event Action ButtonPressedClicked"
+      },
+      {
+        "element": "ButtonRow",
+        "member": "ButtonRow",
+        "sig": "VisualElement ButtonRow { get; }"
+      },
+      {
+        "element": "CellGrid",
+        "member": "CellGrid",
+        "sig": "ScrollView CellGrid { get; }"
+      },
+      {
+        "element": "CellGrid",
+        "member": "CellGridSelectionChanged",
+        "sig": "event Action<int> CellGridSelectionChanged"
+      },
+      {
+        "element": "ColumnBox",
+        "member": "ColumnBox",
+        "sig": "VisualElement ColumnBox { get; }"
+      },
+      {
+        "element": "ColumnItem0",
+        "member": "ColumnItem0",
+        "sig": "VisualElement ColumnItem0 { get; }"
+      },
+      {
+        "element": "ColumnItem1",
+        "member": "ColumnItem1",
+        "sig": "VisualElement ColumnItem1 { get; }"
+      },
+      {
+        "element": "ColumnItem2",
+        "member": "ColumnItem2",
+        "sig": "VisualElement ColumnItem2 { get; }"
+      },
+      {
+        "element": null,
+        "member": "Dispose",
+        "sig": "void Dispose()"
+      },
+      {
+        "element": "FillAlpha",
+        "member": "FillAlpha",
+        "sig": "VisualElement FillAlpha { get; }"
+      },
+      {
+        "element": "FillSolid",
+        "member": "FillSolid",
+        "sig": "VisualElement FillSolid { get; }"
+      },
+      {
+        "element": "FillToken",
+        "member": "FillToken",
+        "sig": "VisualElement FillToken { get; }"
+      },
+      {
+        "element": "FlexAbsA",
+        "member": "FlexAbsA",
+        "sig": "VisualElement FlexAbsA { get; }"
+      },
+      {
+        "element": "FlexAbsB",
+        "member": "FlexAbsB",
+        "sig": "VisualElement FlexAbsB { get; }"
+      },
+      {
+        "element": "FlexAbsBox",
+        "member": "FlexAbsBox",
+        "sig": "VisualElement FlexAbsBox { get; }"
+      },
+      {
+        "element": "FlexAbsFree",
+        "member": "FlexAbsFree",
+        "sig": "VisualElement FlexAbsFree { get; }"
+      },
+      {
+        "element": "HiddenBox",
+        "member": "HiddenBox",
+        "sig": "VisualElement HiddenBox { get; }"
+      },
+      {
+        "element": "ImagePlain",
+        "member": "ImagePlain",
+        "sig": "VisualElement ImagePlain { get; }"
+      },
+      {
+        "element": "ImageSliceNative",
+        "member": "ImageSliceNative",
+        "sig": "VisualElement ImageSliceNative { get; }"
+      },
+      {
+        "element": "ImageSliceStretched",
+        "member": "ImageSliceStretched",
+        "sig": "VisualElement ImageSliceStretched { get; }"
+      },
+      {
+        "element": "JustifyCenter",
+        "member": "JustifyCenter",
+        "sig": "VisualElement JustifyCenter { get; }"
+      },
+      {
+        "element": "JustifyCenterBox0",
+        "member": "JustifyCenterBox0",
+        "sig": "VisualElement JustifyCenterBox0 { get; }"
+      },
+      {
+        "element": "JustifyCenterBox1",
+        "member": "JustifyCenterBox1",
+        "sig": "VisualElement JustifyCenterBox1 { get; }"
+      },
+      {
+        "element": "JustifyCenterBox2",
+        "member": "JustifyCenterBox2",
+        "sig": "VisualElement JustifyCenterBox2 { get; }"
+      },
+      {
+        "element": "JustifyEnd",
+        "member": "JustifyEnd",
+        "sig": "VisualElement JustifyEnd { get; }"
+      },
+      {
+        "element": "JustifyEndBox0",
+        "member": "JustifyEndBox0",
+        "sig": "VisualElement JustifyEndBox0 { get; }"
+      },
+      {
+        "element": "JustifyEndBox1",
+        "member": "JustifyEndBox1",
+        "sig": "VisualElement JustifyEndBox1 { get; }"
+      },
+      {
+        "element": "JustifyEndBox2",
+        "member": "JustifyEndBox2",
+        "sig": "VisualElement JustifyEndBox2 { get; }"
+      },
+      {
+        "element": "JustifyRow",
+        "member": "JustifyRow",
+        "sig": "VisualElement JustifyRow { get; }"
+      },
+      {
+        "element": "JustifySpaceAround",
+        "member": "JustifySpaceAround",
+        "sig": "VisualElement JustifySpaceAround { get; }"
+      },
+      {
+        "element": "JustifySpaceAroundBox0",
+        "member": "JustifySpaceAroundBox0",
+        "sig": "VisualElement JustifySpaceAroundBox0 { get; }"
+      },
+      {
+        "element": "JustifySpaceAroundBox1",
+        "member": "JustifySpaceAroundBox1",
+        "sig": "VisualElement JustifySpaceAroundBox1 { get; }"
+      },
+      {
+        "element": "JustifySpaceAroundBox2",
+        "member": "JustifySpaceAroundBox2",
+        "sig": "VisualElement JustifySpaceAroundBox2 { get; }"
+      },
+      {
+        "element": "JustifySpaceBetween",
+        "member": "JustifySpaceBetween",
+        "sig": "VisualElement JustifySpaceBetween { get; }"
+      },
+      {
+        "element": "JustifySpaceBetweenBox0",
+        "member": "JustifySpaceBetweenBox0",
+        "sig": "VisualElement JustifySpaceBetweenBox0 { get; }"
+      },
+      {
+        "element": "JustifySpaceBetweenBox1",
+        "member": "JustifySpaceBetweenBox1",
+        "sig": "VisualElement JustifySpaceBetweenBox1 { get; }"
+      },
+      {
+        "element": "JustifySpaceBetweenBox2",
+        "member": "JustifySpaceBetweenBox2",
+        "sig": "VisualElement JustifySpaceBetweenBox2 { get; }"
+      },
+      {
+        "element": "JustifySpaceEvenly",
+        "member": "JustifySpaceEvenly",
+        "sig": "VisualElement JustifySpaceEvenly { get; }"
+      },
+      {
+        "element": "JustifySpaceEvenlyBox0",
+        "member": "JustifySpaceEvenlyBox0",
+        "sig": "VisualElement JustifySpaceEvenlyBox0 { get; }"
+      },
+      {
+        "element": "JustifySpaceEvenlyBox1",
+        "member": "JustifySpaceEvenlyBox1",
+        "sig": "VisualElement JustifySpaceEvenlyBox1 { get; }"
+      },
+      {
+        "element": "JustifySpaceEvenlyBox2",
+        "member": "JustifySpaceEvenlyBox2",
+        "sig": "VisualElement JustifySpaceEvenlyBox2 { get; }"
+      },
+      {
+        "element": "JustifyStart",
+        "member": "JustifyStart",
+        "sig": "VisualElement JustifyStart { get; }"
+      },
+      {
+        "element": "JustifyStartBox0",
+        "member": "JustifyStartBox0",
+        "sig": "VisualElement JustifyStartBox0 { get; }"
+      },
+      {
+        "element": "JustifyStartBox1",
+        "member": "JustifyStartBox1",
+        "sig": "VisualElement JustifyStartBox1 { get; }"
+      },
+      {
+        "element": "JustifyStartBox2",
+        "member": "JustifyStartBox2",
+        "sig": "VisualElement JustifyStartBox2 { get; }"
+      },
+      {
+        "element": "KitchenSinkSupported",
+        "member": "KitchenSinkSupported",
+        "sig": "VisualElement KitchenSinkSupported { get; }"
+      },
+      {
+        "element": null,
+        "member": "KitchenSinkSupportedBindings",
+        "sig": "class KitchenSinkSupportedBindings : IDisposable"
+      },
+      {
+        "element": "LayerOpacity",
+        "member": "LayerOpacity",
+        "sig": "VisualElement LayerOpacity { get; }"
+      },
+      {
+        "element": "ListRow",
+        "member": "ListRow",
+        "sig": "VisualElement ListRow { get; }"
+      },
+      {
+        "element": "PanelBox",
+        "member": "PanelBox",
+        "sig": "VisualElement PanelBox { get; }"
+      },
+      {
+        "element": "PanelText",
+        "member": "PanelText",
+        "sig": "Label PanelText { get; }"
+      },
+      {
+        "element": "RadiusCorners",
+        "member": "RadiusCorners",
+        "sig": "VisualElement RadiusCorners { get; }"
+      },
+      {
+        "element": "RadiusUniform",
+        "member": "RadiusUniform",
+        "sig": "VisualElement RadiusUniform { get; }"
+      },
+      {
+        "element": null,
+        "member": "Root",
+        "sig": "VisualElement Root { get; }"
+      },
+      {
+        "element": "RowList",
+        "member": "RowList",
+        "sig": "ListView RowList { get; }"
+      },
+      {
+        "element": "RowList",
+        "member": "RowListSelectionChanged",
+        "sig": "event Action<int> RowListSelectionChanged"
+      },
+      {
+        "element": "ScrollArea",
+        "member": "ScrollArea",
+        "sig": "ScrollView ScrollArea { get; }"
+      },
+      {
+        "element": "ScrollItem0",
+        "member": "ScrollItem0",
+        "sig": "VisualElement ScrollItem0 { get; }"
+      },
+      {
+        "element": "ScrollItem1",
+        "member": "ScrollItem1",
+        "sig": "VisualElement ScrollItem1 { get; }"
+      },
+      {
+        "element": "ScrollItem2",
+        "member": "ScrollItem2",
+        "sig": "VisualElement ScrollItem2 { get; }"
+      },
+      {
+        "element": "ScrollItem3",
+        "member": "ScrollItem3",
+        "sig": "VisualElement ScrollItem3 { get; }"
+      },
+      {
+        "element": "ScrollItem4",
+        "member": "ScrollItem4",
+        "sig": "VisualElement ScrollItem4 { get; }"
+      },
+      {
+        "element": "ScrollItem5",
+        "member": "ScrollItem5",
+        "sig": "VisualElement ScrollItem5 { get; }"
+      },
+      {
+        "element": "ScrollText0",
+        "member": "ScrollText0",
+        "sig": "Label ScrollText0 { get; }"
+      },
+      {
+        "element": "ScrollText1",
+        "member": "ScrollText1",
+        "sig": "Label ScrollText1 { get; }"
+      },
+      {
+        "element": "ScrollText2",
+        "member": "ScrollText2",
+        "sig": "Label ScrollText2 { get; }"
+      },
+      {
+        "element": "ScrollText3",
+        "member": "ScrollText3",
+        "sig": "Label ScrollText3 { get; }"
+      },
+      {
+        "element": "ScrollText4",
+        "member": "ScrollText4",
+        "sig": "Label ScrollText4 { get; }"
+      },
+      {
+        "element": "ScrollText5",
+        "member": "ScrollText5",
+        "sig": "Label ScrollText5 { get; }"
+      },
+      {
+        "element": null,
+        "member": "SetEnabled",
+        "sig": "static void SetEnabled(VisualElement, bool)"
+      },
+      {
+        "element": "SizeAutoBox",
+        "member": "SizeAutoBox",
+        "sig": "VisualElement SizeAutoBox { get; }"
+      },
+      {
+        "element": "SizeAutoText",
+        "member": "SizeAutoText",
+        "sig": "Label SizeAutoText { get; }"
+      },
+      {
+        "element": "SizeFill",
+        "member": "SizeFill",
+        "sig": "VisualElement SizeFill { get; }"
+      },
+      {
+        "element": "SizeFix",
+        "member": "SizeFix",
+        "sig": "VisualElement SizeFix { get; }"
+      },
+      {
+        "element": "SizeMargin",
+        "member": "SizeMargin",
+        "sig": "VisualElement SizeMargin { get; }"
+      },
+      {
+        "element": "SizeMax",
+        "member": "SizeMax",
+        "sig": "VisualElement SizeMax { get; }"
+      },
+      {
+        "element": "SizingRow",
+        "member": "SizingRow",
+        "sig": "VisualElement SizingRow { get; }"
+      },
+      {
+        "element": "StrokeInner",
+        "member": "StrokeInner",
+        "sig": "VisualElement StrokeInner { get; }"
+      },
+      {
+        "element": "StyleRow",
+        "member": "StyleRow",
+        "sig": "VisualElement StyleRow { get; }"
+      },
+      {
+        "element": "TextCenter",
+        "member": "TextCenter",
+        "sig": "Label TextCenter { get; }"
+      },
+      {
+        "element": "TextColA",
+        "member": "TextColA",
+        "sig": "VisualElement TextColA { get; }"
+      },
+      {
+        "element": "TextColB",
+        "member": "TextColB",
+        "sig": "VisualElement TextColB { get; }"
+      },
+      {
+        "element": "TextColC",
+        "member": "TextColC",
+        "sig": "VisualElement TextColC { get; }"
+      },
+      {
+        "element": "TextColD",
+        "member": "TextColD",
+        "sig": "VisualElement TextColD { get; }"
+      },
+      {
+        "element": "TextDim",
+        "member": "TextDim",
+        "sig": "Label TextDim { get; }"
+      },
+      {
+        "element": "TextHeading",
+        "member": "TextHeading",
+        "sig": "Label TextHeading { get; }"
+      },
+      {
+        "element": "TextMiddle",
+        "member": "TextMiddle",
+        "sig": "Label TextMiddle { get; }"
+      },
+      {
+        "element": "TextMulti",
+        "member": "TextMulti",
+        "sig": "Label TextMulti { get; }"
+      },
+      {
+        "element": "TextRich",
+        "member": "TextRich",
+        "sig": "Label TextRich { get; }"
+      },
+      {
+        "element": "TextRight",
+        "member": "TextRight",
+        "sig": "Label TextRight { get; }"
+      },
+      {
+        "element": "TextRow",
+        "member": "TextRow",
+        "sig": "VisualElement TextRow { get; }"
+      },
+      {
+        "element": "TextSingle",
+        "member": "TextSingle",
+        "sig": "Label TextSingle { get; }"
+      },
+      {
+        "element": "TextTitle",
+        "member": "TextTitle",
+        "sig": "Label TextTitle { get; }"
+      },
+      {
+        "element": "TextToken",
+        "member": "TextToken",
+        "sig": "Label TextToken { get; }"
+      },
+      {
+        "element": "TextUnderline",
+        "member": "TextUnderline",
+        "sig": "Label TextUnderline { get; }"
+      },
+      {
+        "element": null,
+        "member": "TransitionFinished",
+        "sig": "event Action TransitionFinished"
+      },
+      {
+        "element": null,
+        "member": "Unbind",
+        "sig": "void Unbind()"
+      },
+      {
+        "element": null,
+        "member": "UxmlName",
+        "sig": "const string UxmlName"
+      },
+      {
+        "element": "WrapBox",
+        "member": "WrapBox",
+        "sig": "VisualElement WrapBox { get; }"
+      },
+      {
+        "element": "WrapItem0",
+        "member": "WrapItem0",
+        "sig": "VisualElement WrapItem0 { get; }"
+      },
+      {
+        "element": "WrapItem1",
+        "member": "WrapItem1",
+        "sig": "VisualElement WrapItem1 { get; }"
+      },
+      {
+        "element": "WrapItem2",
+        "member": "WrapItem2",
+        "sig": "VisualElement WrapItem2 { get; }"
+      },
+      {
+        "element": "WrapItem3",
+        "member": "WrapItem3",
+        "sig": "VisualElement WrapItem3 { get; }"
+      },
+      {
+        "element": "WrapItem4",
+        "member": "WrapItem4",
+        "sig": "VisualElement WrapItem4 { get; }"
+      },
+      {
+        "element": "WrapItem5",
+        "member": "WrapItem5",
+        "sig": "VisualElement WrapItem5 { get; }"
+      }
+    ]
+  },
+  "assets": [
+    "button.primary.normal",
+    "button.primary.pressed",
+    "icon.coin",
+    "panel.frame",
+    "slot.frame"
+  ],
+  "boardId": "2ae07385-a5c7-8059-8008-e682adfe5381",
+  "files": [
+    "PenpotTest/KitchenSinkSupported/Cell.uxml",
+    "PenpotTest/KitchenSinkSupported/KitchenSinkSupported.bindings.g.cs",
+    "PenpotTest/KitchenSinkSupported/KitchenSinkSupported.flow.json",
+    "PenpotTest/KitchenSinkSupported/KitchenSinkSupported.motion.json",
+    "PenpotTest/KitchenSinkSupported/KitchenSinkSupported.motion.uss",
+    "PenpotTest/KitchenSinkSupported/KitchenSinkSupported.uss",
+    "PenpotTest/KitchenSinkSupported/KitchenSinkSupported.uxml",
+    "PenpotTest/KitchenSinkSupported/RowItem.uxml",
+    "PenpotTest/KitchenSinkSupported/KitchenSinkSupported.bridge.json"
+  ],
+  "irHash": "sha256:e7cbee0befaccf6c",
+  "names": {
+    "Cell": [
+      "Cell0",
+      "CellText0"
+    ],
+    "KitchenSinkSupported": [
+      "KitchenSinkSupported",
+      "JustifyRow",
+      "JustifyStart",
+      "JustifyStartBox0",
+      "JustifyStartBox1",
+      "JustifyStartBox2",
+      "JustifyCenter",
+      "JustifyCenterBox0",
+      "JustifyCenterBox1",
+      "JustifyCenterBox2",
+      "JustifyEnd",
+      "JustifyEndBox0",
+      "JustifyEndBox1",
+      "JustifyEndBox2",
+      "JustifySpaceBetween",
+      "JustifySpaceBetweenBox0",
+      "JustifySpaceBetweenBox1",
+      "JustifySpaceBetweenBox2",
+      "JustifySpaceAround",
+      "JustifySpaceAroundBox0",
+      "JustifySpaceAroundBox1",
+      "JustifySpaceAroundBox2",
+      "JustifySpaceEvenly",
+      "JustifySpaceEvenlyBox0",
+      "JustifySpaceEvenlyBox1",
+      "JustifySpaceEvenlyBox2",
+      "AlignRow",
+      "AlignStart",
+      "AlignStartBox0",
+      "AlignStartBox1",
+      "AlignStartBox2",
+      "AlignCenter",
+      "AlignCenterBox0",
+      "AlignCenterBox1",
+      "AlignCenterBox2",
+      "AlignEnd",
+      "AlignEndBox0",
+      "AlignEndBox1",
+      "AlignEndBox2",
+      "AlignStretch",
+      "AlignStretchBox0",
+      "AlignStretchBox1",
+      "AlignStretchBox2",
+      "AlignSelfBox",
+      "AlignSelfA",
+      "AlignSelfB",
+      "SizingRow",
+      "SizeFix",
+      "SizeFill",
+      "SizeMax",
+      "SizeMargin",
+      "SizeAutoBox",
+      "SizeAutoText",
+      "WrapBox",
+      "WrapItem0",
+      "WrapItem1",
+      "WrapItem2",
+      "WrapItem3",
+      "WrapItem4",
+      "WrapItem5",
+      "ColumnBox",
+      "ColumnItem0",
+      "ColumnItem1",
+      "ColumnItem2",
+      "TextRow",
+      "TextColA",
+      "TextSingle",
+      "TextMulti",
+      "TextToken",
+      "TextColB",
+      "TextCenter",
+      "TextRight",
+      "TextMiddle",
+      "TextColC",
+      "TextTitle",
+      "TextHeading",
+      "TextColD",
+      "TextRich",
+      "TextUnderline",
+      "TextDim",
+      "StyleRow",
+      "FillSolid",
+      "FillToken",
+      "FillAlpha",
+      "RadiusUniform",
+      "RadiusCorners",
+      "StrokeInner",
+      "LayerOpacity",
+      "HiddenBox",
+      "ImagePlain",
+      "ImageSliceNative",
+      "ImageSliceStretched",
+      "PanelBox",
+      "PanelText",
+      "AbsRow",
+      "AbsBoard",
+      "AbsLeftTop",
+      "AbsRightTop",
+      "AbsStretchBottom",
+      "AbsCenter",
+      "AbsRotated",
+      "FlexAbsBox",
+      "FlexAbsA",
+      "FlexAbsB",
+      "FlexAbsFree",
+      "ButtonRow",
+      "ButtonNormal",
+      "ButtonHover",
+      "ButtonPressed",
+      "ButtonDisabled",
+      "ListRow",
+      "ScrollArea",
+      "ScrollItem0",
+      "ScrollText0",
+      "ScrollItem1",
+      "ScrollText1",
+      "ScrollItem2",
+      "ScrollText2",
+      "ScrollItem3",
+      "ScrollText3",
+      "ScrollItem4",
+      "ScrollText4",
+      "ScrollItem5",
+      "ScrollText5",
+      "RowList",
+      "CellGrid"
+    ],
+    "RowItem": [
+      "RowItem0",
+      "RowName0",
+      "RowValue0"
+    ]
+  },
+  "screen": "KitchenSinkSupported",
+  "types": {
+    "AbsBoard": "ui:VisualElement",
+    "AbsCenter": "ui:VisualElement",
+    "AbsLeftTop": "ui:VisualElement",
+    "AbsRightTop": "ui:VisualElement",
+    "AbsRotated": "ui:VisualElement",
+    "AbsRow": "ui:VisualElement",
+    "AbsStretchBottom": "ui:VisualElement",
+    "AlignCenter": "ui:VisualElement",
+    "AlignCenterBox0": "ui:VisualElement",
+    "AlignCenterBox1": "ui:VisualElement",
+    "AlignCenterBox2": "ui:VisualElement",
+    "AlignEnd": "ui:VisualElement",
+    "AlignEndBox0": "ui:VisualElement",
+    "AlignEndBox1": "ui:VisualElement",
+    "AlignEndBox2": "ui:VisualElement",
+    "AlignRow": "ui:VisualElement",
+    "AlignSelfA": "ui:VisualElement",
+    "AlignSelfB": "ui:VisualElement",
+    "AlignSelfBox": "ui:VisualElement",
+    "AlignStart": "ui:VisualElement",
+    "AlignStartBox0": "ui:VisualElement",
+    "AlignStartBox1": "ui:VisualElement",
+    "AlignStartBox2": "ui:VisualElement",
+    "AlignStretch": "ui:VisualElement",
+    "AlignStretchBox0": "ui:VisualElement",
+    "AlignStretchBox1": "ui:VisualElement",
+    "AlignStretchBox2": "ui:VisualElement",
+    "ButtonDisabled": "ui:Button",
+    "ButtonHover": "ui:Button",
+    "ButtonNormal": "ui:Button",
+    "ButtonPressed": "ui:Button",
+    "ButtonRow": "ui:VisualElement",
+    "CellGrid": "ui:ScrollView",
+    "ColumnBox": "ui:VisualElement",
+    "ColumnItem0": "ui:VisualElement",
+    "ColumnItem1": "ui:VisualElement",
+    "ColumnItem2": "ui:VisualElement",
+    "FillAlpha": "ui:VisualElement",
+    "FillSolid": "ui:VisualElement",
+    "FillToken": "ui:VisualElement",
+    "FlexAbsA": "ui:VisualElement",
+    "FlexAbsB": "ui:VisualElement",
+    "FlexAbsBox": "ui:VisualElement",
+    "FlexAbsFree": "ui:VisualElement",
+    "HiddenBox": "ui:VisualElement",
+    "ImagePlain": "ui:VisualElement",
+    "ImageSliceNative": "ui:VisualElement",
+    "ImageSliceStretched": "ui:VisualElement",
+    "JustifyCenter": "ui:VisualElement",
+    "JustifyCenterBox0": "ui:VisualElement",
+    "JustifyCenterBox1": "ui:VisualElement",
+    "JustifyCenterBox2": "ui:VisualElement",
+    "JustifyEnd": "ui:VisualElement",
+    "JustifyEndBox0": "ui:VisualElement",
+    "JustifyEndBox1": "ui:VisualElement",
+    "JustifyEndBox2": "ui:VisualElement",
+    "JustifyRow": "ui:VisualElement",
+    "JustifySpaceAround": "ui:VisualElement",
+    "JustifySpaceAroundBox0": "ui:VisualElement",
+    "JustifySpaceAroundBox1": "ui:VisualElement",
+    "JustifySpaceAroundBox2": "ui:VisualElement",
+    "JustifySpaceBetween": "ui:VisualElement",
+    "JustifySpaceBetweenBox0": "ui:VisualElement",
+    "JustifySpaceBetweenBox1": "ui:VisualElement",
+    "JustifySpaceBetweenBox2": "ui:VisualElement",
+    "JustifySpaceEvenly": "ui:VisualElement",
+    "JustifySpaceEvenlyBox0": "ui:VisualElement",
+    "JustifySpaceEvenlyBox1": "ui:VisualElement",
+    "JustifySpaceEvenlyBox2": "ui:VisualElement",
+    "JustifyStart": "ui:VisualElement",
+    "JustifyStartBox0": "ui:VisualElement",
+    "JustifyStartBox1": "ui:VisualElement",
+    "JustifyStartBox2": "ui:VisualElement",
+    "KitchenSinkSupported": "ui:VisualElement",
+    "LayerOpacity": "ui:VisualElement",
+    "ListRow": "ui:VisualElement",
+    "PanelBox": "ui:VisualElement",
+    "PanelText": "ui:Label",
+    "RadiusCorners": "ui:VisualElement",
+    "RadiusUniform": "ui:VisualElement",
+    "RowList": "ui:ListView",
+    "ScrollArea": "ui:ScrollView",
+    "ScrollItem0": "ui:VisualElement",
+    "ScrollItem1": "ui:VisualElement",
+    "ScrollItem2": "ui:VisualElement",
+    "ScrollItem3": "ui:VisualElement",
+    "ScrollItem4": "ui:VisualElement",
+    "ScrollItem5": "ui:VisualElement",
+    "ScrollText0": "ui:Label",
+    "ScrollText1": "ui:Label",
+    "ScrollText2": "ui:Label",
+    "ScrollText3": "ui:Label",
+    "ScrollText4": "ui:Label",
+    "ScrollText5": "ui:Label",
+    "SizeAutoBox": "ui:VisualElement",
+    "SizeAutoText": "ui:Label",
+    "SizeFill": "ui:VisualElement",
+    "SizeFix": "ui:VisualElement",
+    "SizeMargin": "ui:VisualElement",
+    "SizeMax": "ui:VisualElement",
+    "SizingRow": "ui:VisualElement",
+    "StrokeInner": "ui:VisualElement",
+    "StyleRow": "ui:VisualElement",
+    "TextCenter": "ui:Label",
+    "TextColA": "ui:VisualElement",
+    "TextColB": "ui:VisualElement",
+    "TextColC": "ui:VisualElement",
+    "TextColD": "ui:VisualElement",
+    "TextDim": "ui:Label",
+    "TextHeading": "ui:Label",
+    "TextMiddle": "ui:Label",
+    "TextMulti": "ui:Label",
+    "TextRich": "ui:Label",
+    "TextRight": "ui:Label",
+    "TextRow": "ui:VisualElement",
+    "TextSingle": "ui:Label",
+    "TextTitle": "ui:Label",
+    "TextToken": "ui:Label",
+    "TextUnderline": "ui:Label",
+    "WrapBox": "ui:VisualElement",
+    "WrapItem0": "ui:VisualElement",
+    "WrapItem1": "ui:VisualElement",
+    "WrapItem2": "ui:VisualElement",
+    "WrapItem3": "ui:VisualElement",
+    "WrapItem4": "ui:VisualElement",
+    "WrapItem5": "ui:VisualElement"
+  }
+}

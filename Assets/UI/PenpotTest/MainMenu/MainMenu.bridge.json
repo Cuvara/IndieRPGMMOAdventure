@@ -1,0 +1,117 @@
+{
+  "api": {
+    "interactions": [
+      "MainMenu.InventoryButton.click#0"
+    ],
+    "members": [
+      {
+        "element": null,
+        "member": "Bind",
+        "sig": "static MainMenuBindings Bind(VisualElement)"
+      },
+      {
+        "element": null,
+        "member": "Dispose",
+        "sig": "void Dispose()"
+      },
+      {
+        "element": "InventoryButton",
+        "member": "InventoryButton",
+        "sig": "Button InventoryButton { get; }"
+      },
+      {
+        "element": "InventoryButton",
+        "member": "InventoryButtonClicked",
+        "sig": "event Action InventoryButtonClicked"
+      },
+      {
+        "element": "MainMenu",
+        "member": "MainMenu",
+        "sig": "VisualElement MainMenu { get; }"
+      },
+      {
+        "element": null,
+        "member": "MainMenuBindings",
+        "sig": "class MainMenuBindings : IDisposable"
+      },
+      {
+        "element": "MenuPanel",
+        "member": "MenuPanel",
+        "sig": "VisualElement MenuPanel { get; }"
+      },
+      {
+        "element": null,
+        "member": "Root",
+        "sig": "VisualElement Root { get; }"
+      },
+      {
+        "element": null,
+        "member": "SetEnabled",
+        "sig": "static void SetEnabled(VisualElement, bool)"
+      },
+      {
+        "element": "SettingsButton",
+        "member": "SettingsButton",
+        "sig": "Button SettingsButton { get; }"
+      },
+      {
+        "element": "SettingsButton",
+        "member": "SettingsButtonClicked",
+        "sig": "event Action SettingsButtonClicked"
+      },
+      {
+        "element": "Title",
+        "member": "Title",
+        "sig": "Label Title { get; }"
+      },
+      {
+        "element": null,
+        "member": "TransitionFinished",
+        "sig": "event Action TransitionFinished"
+      },
+      {
+        "element": null,
+        "member": "Unbind",
+        "sig": "void Unbind()"
+      },
+      {
+        "element": null,
+        "member": "UxmlName",
+        "sig": "const string UxmlName"
+      }
+    ]
+  },
+  "assets": [
+    "button.primary.normal",
+    "button.primary.pressed",
+    "panel.frame"
+  ],
+  "boardId": "2ae07385-a5c7-8059-8008-e6f37c10e554",
+  "files": [
+    "PenpotTest/MainMenu/MainMenu.bindings.g.cs",
+    "PenpotTest/MainMenu/MainMenu.flow.json",
+    "PenpotTest/MainMenu/MainMenu.motion.json",
+    "PenpotTest/MainMenu/MainMenu.motion.uss",
+    "PenpotTest/MainMenu/MainMenu.uss",
+    "PenpotTest/MainMenu/MainMenu.uxml",
+    "PenpotTest/MainMenu/MainMenu.bridge.json"
+  ],
+  "irHash": "sha256:6259affda6c5020a",
+  "names": {
+    "MainMenu": [
+      "MainMenu",
+      "Title",
+      "MenuPanel",
+      "InventoryButton",
+      "SettingsButton"
+    ]
+  },
+  "screen": "MainMenu",
+  "types": {
+    "InventoryButton": "ui:Button",
+    "MainMenu": "ui:VisualElement",
+    "MenuPanel": "ui:VisualElement",
+    "SettingsButton": "ui:Button",
+    "Title": "ui:Label"
+  }
+}

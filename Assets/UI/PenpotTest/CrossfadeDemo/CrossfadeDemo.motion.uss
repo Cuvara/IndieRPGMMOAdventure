@@ -1,0 +1,13 @@
+/* motion presets used by this screen - generated from Penpot board 6c58d709-07b3-8073-8008-ea1e3086b282 ([approved] CrossfadeDemo) - IR sha256:763c935127c585e7 - do not edit */
+
+.rpg-motion-hover-fade {
+    transition-property: color;
+    transition-duration: 200ms;
+    transition-timing-function: ease-out;
+}
+
+.rpg--crossfade--hover-fade {
+    transition-property: opacity;
+    transition-duration: 200ms;
+    transition-timing-function: ease-out;
+}

@@ -1,0 +1,12 @@
+{
+ "version": 1,
+ "border": [
+  22,
+  20,
+  22,
+  20
+ ],
+ "pixelsPerUnit": 100,
+ "maxSize": 2048,
+ "group": "buttons"
+}

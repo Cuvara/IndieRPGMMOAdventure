@@ -1,0 +1,22 @@
+<!-- generated from Penpot board 6c58d709-07b3-8073-8008-ea1e3086b282 ([approved] CrossfadeDemo) - IR sha256:763c935127c585e7 - do not edit -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../Theme/rpg-tokens.uss" />
+    <Style src="CrossfadeDemo.uss" />
+    <Style src="CrossfadeDemo.motion.uss" />
+    <ui:VisualElement name="CrossfadeDemo" class="rpg-crossfade-demo">
+        <ui:Label name="Title" class="rpg-crossfade-demo-title rpg-text-title" text="CROSSFADE" />
+        <ui:VisualElement name="DemoPanel" class="rpg-crossfade-demo-demo-panel">
+            <ui:VisualElement name="GlowButton__frame" class="rpg--crossfade rpg-crossfade-demo-demo-panel-glow-button">
+                <ui:VisualElement name="GlowButton__normal" picking-mode="Ignore" class="rpg--crossfade-layer rpg-button-hero--crossfade-normal" />
+                <ui:VisualElement name="GlowButton__hover" picking-mode="Ignore" class="rpg--crossfade-layer rpg--crossfade-hover rpg-button-hero--crossfade-hover rpg--crossfade--hover-fade" />
+                <ui:Button name="GlowButton" class="rpg-button rpg-button-hero rpg-motion-hover-fade rpg--crossfade-button rpg-crossfade-demo-demo-panel-glow-button--button" usage-hints="DynamicColor" text="Glow" />
+            </ui:VisualElement>
+            <ui:Button name="PlainButton" class="rpg-button rpg-button-hero rpg-crossfade-demo-demo-panel-plain-button" text="Plain" />
+            <ui:VisualElement name="LockedButton__frame" class="rpg--crossfade rpg-crossfade-demo-demo-panel-locked-button" enabled="false">
+                <ui:VisualElement name="LockedButton__normal" picking-mode="Ignore" class="rpg--crossfade-layer rpg-button-hero--crossfade-normal" />
+                <ui:VisualElement name="LockedButton__hover" picking-mode="Ignore" class="rpg--crossfade-layer rpg--crossfade-hover rpg-button-hero--crossfade-hover rpg--crossfade--hover-fade" />
+                <ui:Button name="LockedButton" class="rpg-button rpg-button-hero rpg-motion-hover-fade rpg--crossfade-button rpg-crossfade-demo-demo-panel-locked-button--button" usage-hints="DynamicColor" text="Locked" enabled="false" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

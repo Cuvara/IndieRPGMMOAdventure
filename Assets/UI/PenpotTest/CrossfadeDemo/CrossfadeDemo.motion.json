@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "durations": [
+    {
+      "name": "fast",
+      "ms": 120
+    },
+    {
+      "name": "normal",
+      "ms": 200
+    },
+    {
+      "name": "slow",
+      "ms": 320
+    }
+  ],
+  "presets": [
+    {
+      "name": "hover-fade",
+      "duration": "normal",
+      "easing": "ease-out",
+      "delayMs": 0,
+      "properties": [
+        "color"
+      ],
+      "crossfade": true,
+      "states": []
+    }
+  ]
+}

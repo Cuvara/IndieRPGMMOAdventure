@@ -1,0 +1,18 @@
+/* motion presets used by this screen - generated from Penpot board 2ae07385-a5c7-8059-8008-e676f86bc2dc ([approved] Inventory) - IR sha256:2e226a80930727b6 - do not edit */
+
+.rpg-motion-fade {
+    transition-property: opacity;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+}
+
+.rpg-motion-press {
+    transition-property: scale, -unity-background-image-tint-color;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+}
+
+.rpg-motion-press:active {
+    scale: 0.96;
+    -unity-background-image-tint-color: #cccccc;
+}

@@ -1,0 +1,611 @@
+/* generated from Penpot board 2ae07385-a5c7-8059-8008-e676f86bc2dc ([approved] Inventory) - IR sha256:2e226a80930727b6 - do not edit */
+
+.rpg-button-primary {
+    padding: 0;
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("../Art/button.primary.normal.png");
+    -unity-slice-left: 22;
+    -unity-slice-top: 20;
+    -unity-slice-right: 22;
+    -unity-slice-bottom: 20;
+}
+
+.rpg-button-primary:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.rpg-button-primary:active {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("../Art/button.primary.pressed.png");
+    -unity-slice-left: 22;
+    -unity-slice-top: 20;
+    -unity-slice-right: 22;
+    -unity-slice-bottom: 20;
+}
+
+.rpg-button-primary:disabled {
+    opacity: 1;
+    color: #888888;
+}
+
+.rpg-inventory {
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    padding-top: 40px;
+    padding-right: 60px;
+    padding-bottom: 40px;
+    padding-left: 60px;
+    overflow: hidden;
+    background-color: var(--rpg-color-bg);
+}
+
+.rpg-inventory-header {
+    height: 96px;
+    flex-shrink: 0;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-header-title {
+    width: 320px;
+    height: 64px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 48px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Bold SDF.asset");
+    letter-spacing: 1px;
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
+.rpg-inventory-header-close-button {
+    width: 96px;
+    height: 64px;
+    flex-shrink: 0;
+    margin: 0;
+    color: #ffffff;
+    font-size: 28px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-center;
+}
+
+.rpg-inventory-body {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-top: 24px;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+
+.rpg-inventory-body-inventory-panel {
+    flex-grow: 1;
+    flex-basis: 0;
+    align-self: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    padding-top: 84px;
+    padding-right: 84px;
+    padding-bottom: 84px;
+    padding-left: 84px;
+    background-image: url("../Art/panel.frame.png");
+    -unity-slice-left: 28;
+    -unity-slice-top: 28;
+    -unity-slice-right: 28;
+    -unity-slice-bottom: 28;
+}
+
+.rpg-inventory-body-inventory-panel-panel-title {
+    height: 44px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-gold);
+    font-size: 36px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Bold SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-inventory-panel-item-grid-item-slot0 {
+    width: 112px;
+    height: 136px;
+    flex-shrink: 0;
+    margin-right: 16px;
+    margin-bottom: 16px;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding-top: 8px;
+    padding-right: 8px;
+    padding-bottom: 8px;
+    padding-left: 8px;
+    background-image: url("../Art/slot.frame.png");
+    -unity-slice-left: 14;
+    -unity-slice-top: 14;
+    -unity-slice-right: 14;
+    -unity-slice-bottom: 14;
+}
+
+.rpg-inventory-body-inventory-panel-item-grid-item-slot0-icon {
+    width: 80px;
+    height: 80px;
+    flex-shrink: 0;
+    background-image: url("../Art/icon.potion.png");
+    -unity-slice-left: 0;
+    -unity-slice-top: 0;
+    -unity-slice-right: 0;
+    -unity-slice-bottom: 0;
+}
+
+.rpg-inventory-body-inventory-panel-item-grid-item-slot0-qty {
+    height: 24px;
+    flex-shrink: 0;
+    margin: 4px 0 0 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.selected .rpg-inventory-body-inventory-panel-item-grid-item-slot0-selected, .unity-collection-view__item--selected .rpg-inventory-body-inventory-panel-item-grid-item-slot0-selected {
+    opacity: 1;
+}
+
+.rpg-inventory-body-inventory-panel-item-grid-item-slot0-selected {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+    top: 0px;
+    bottom: 0px;
+    border-width: 4px;
+    border-color: #d4af37;
+    opacity: 0;
+}
+
+.rpg-inventory-body-inventory-panel-item-grid {
+    flex-grow: 1;
+    flex-basis: 0;
+    align-self: stretch;
+    margin: 24px 0 0 0;
+}
+
+.rpg-inventory-body-inventory-panel-item-grid .unity-scroll-view__content-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    align-content: flex-start;
+    margin-right: -16px;
+    margin-bottom: -16px;
+}
+
+.rpg-inventory-body-details-panel {
+    width: 560px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-left: 40px;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    padding-top: 84px;
+    padding-right: 84px;
+    padding-bottom: 84px;
+    padding-left: 84px;
+    background-image: url("../Art/panel.frame.png");
+    -unity-slice-left: 28;
+    -unity-slice-top: 28;
+    -unity-slice-right: 28;
+    -unity-slice-bottom: 28;
+}
+
+.rpg-inventory-body-details-panel-item-name {
+    height: 44px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-gold);
+    font-size: 36px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Bold SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-item-desc {
+    width: 464px;
+    height: 72px;
+    flex-shrink: 0;
+    margin: 16px 0 0 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 24px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
+.rpg-inventory-body-details-panel-rarity-row {
+    height: 32px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 16px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-rarity-row-rarity-label {
+    height: 29px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 24px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-rarity-row-rarity-value {
+    height: 29px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-good);
+    font-size: 24px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-weight-row {
+    height: 32px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 16px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-weight-row-weight-label {
+    height: 29px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 24px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-weight-row-weight-value {
+    height: 29px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 24px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats {
+    height: 120px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin: 16px 0 0 0;
+    overflow: hidden;
+}
+
+.rpg-inventory-body-details-panel-stats .unity-scroll-view__content-container {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row0 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row0-stat-name0 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row0-stat-value0 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row1 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row1-stat-name1 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row1-stat-value1 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row2 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row2-stat-name2 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row2-stat-value2 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row3 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row3-stat-name3 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row3-stat-value3 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row4 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row4-stat-name4 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row4-stat-value4 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row5 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row5-stat-name5 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row5-stat-value5 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row6 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row6-stat-name6 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row6-stat-value6 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row7 {
+    height: 28px;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-top: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row7-stat-name7 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-dim);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-body-details-panel-stats-stat-row7-stat-value7 {
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    color: var(--rpg-color-text);
+    font-size: 20px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.rpg-inventory-footer {
+    height: 80px;
+    flex-shrink: 0;
+    margin-top: 24px;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.rpg-inventory-footer-use-button {
+    width: 240px;
+    height: 80px;
+    flex-shrink: 0;
+    margin: 0;
+    color: #ffffff;
+    font-size: 28px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-center;
+}
+
+.rpg-inventory-footer-drop-button {
+    width: 240px;
+    height: 80px;
+    flex-shrink: 0;
+    margin: 0 0 0 24px;
+    color: #888888;
+    font-size: 28px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-center;
+}
+
+.rpg-inventory-footer-sort-button {
+    width: 240px;
+    height: 80px;
+    flex-shrink: 0;
+    margin: 0 0 0 24px;
+    color: #ffffff;
+    font-size: 28px;
+    -unity-font-definition: url("project://database/Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset");
+    -unity-text-align: middle-center;
+}
