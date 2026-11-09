@@ -1,0 +1,10 @@
+<!-- generated from Penpot board 2ae07385-a5c7-8059-8008-e676f86bc2dc ([approved] Inventory) - IR sha256:2e226a80930727b6 - do not edit -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../Theme/rpg-tokens.uss" />
+    <Style src="Inventory.uss" />
+    <ui:VisualElement name="ItemSlot0" class="rpg-inventory-body-inventory-panel-item-grid-item-slot0 rpg-item-slot">
+        <ui:VisualElement name="Icon" class="rpg-inventory-body-inventory-panel-item-grid-item-slot0-icon" />
+        <ui:Label name="Qty" class="rpg-inventory-body-inventory-panel-item-grid-item-slot0-qty rpg-text-small" text="x3" />
+        <ui:VisualElement name="Selected" class="rpg-inventory-body-inventory-panel-item-grid-item-slot0-selected selection-mark rpg-motion-fade" />
+    </ui:VisualElement>
+</ui:UXML>

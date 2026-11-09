@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "durations": [
+    {
+      "name": "fast",
+      "ms": 120
+    },
+    {
+      "name": "normal",
+      "ms": 200
+    },
+    {
+      "name": "slow",
+      "ms": 320
+    }
+  ],
+  "presets": [
+    {
+      "name": "fade",
+      "duration": "fast",
+      "easing": "ease-out",
+      "delayMs": 0,
+      "properties": [
+        "opacity"
+      ],
+      "crossfade": false,
+      "states": []
+    },
+    {
+      "name": "press",
+      "duration": "fast",
+      "easing": "ease-out",
+      "delayMs": 0,
+      "properties": [
+        "scale",
+        "-unity-background-image-tint-color"
+      ],
+      "crossfade": false,
+      "states": [
+        {
+          "state": "pressed",
+          "scale": "0.96",
+          "tint": "#cccccc"
+        }
+      ]
+    }
+  ]
+}

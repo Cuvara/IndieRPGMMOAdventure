@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "screen": "CrossfadeDemo",
+  "overlay": false,
+  "size": [
+    1920.0,
+    1080.0
+  ],
+  "flows": [
+    {
+      "name": "Main",
+      "start": "MainMenu"
+    }
+  ],
+  "interactions": [],
+  "controls": [
+    {
+      "name": "GlowButton",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/hero",
+        "id": "6c58d709-07b3-8073-8008-ea1e069ad6ec"
+      },
+      "label": {
+        "text": "Glow",
+        "visible": true
+      },
+      "shapeId": "6c58d709-07b3-8073-8008-ea1e313573bd",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.hero.hover",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "hover-fade",
+      "crossfade": {
+        "frame": "GlowButton__frame",
+        "normal": "GlowButton__normal",
+        "hover": "GlowButton__hover",
+        "preset": "hover-fade"
+      }
+    },
+    {
+      "name": "LockedButton",
+      "type": "Button",
+      "enabled": false,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/hero",
+        "id": "6c58d709-07b3-8073-8008-ea1e072937fd"
+      },
+      "label": {
+        "text": "Locked",
+        "visible": true
+      },
+      "shapeId": "6c58d709-07b3-8073-8008-ea1e315980b0",
+      "drawnState": "disabled",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.hero.hover",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "hover-fade",
+      "crossfade": {
+        "frame": "LockedButton__frame",
+        "normal": "LockedButton__normal",
+        "hover": "LockedButton__hover",
+        "preset": "hover-fade"
+      }
+    },
+    {
+      "name": "PlainButton",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/hero",
+        "id": "6c58d709-07b3-8073-8008-ea1e069ad6ec"
+      },
+      "label": {
+        "text": "Plain",
+        "visible": true
+      },
+      "shapeId": "6c58d709-07b3-8073-8008-ea1e31438e51",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.hero.hover",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      }
+    }
+  ],
+  "lists": [],
+  "scrolls": [],
+  "motion": {
+    "back": "reverse",
+    "enabled": true
+  }
+}

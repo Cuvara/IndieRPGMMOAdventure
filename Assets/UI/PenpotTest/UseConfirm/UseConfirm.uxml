@@ -1,0 +1,13 @@
+<!-- generated from Penpot board 2ae07385-a5c7-8059-8008-e6f37c458500 ([approved] UseConfirm) - IR sha256:f009c52665126724 - do not edit -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../Theme/rpg-tokens.uss" />
+    <Style src="UseConfirm.uss" />
+    <Style src="UseConfirm.motion.uss" />
+    <ui:VisualElement name="UseConfirm" class="rpg-use-confirm">
+        <ui:Label name="Question" class="rpg-use-confirm-question rpg-text-heading" text="Use Health Potion?" />
+        <ui:VisualElement name="Answers" class="rpg-use-confirm-answers">
+            <ui:Button name="YesButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-use-confirm-answers-yes-button" usage-hints="DynamicTransform, DynamicColor" text="Yes" />
+            <ui:Button name="NoButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-use-confirm-answers-no-button" usage-hints="DynamicTransform, DynamicColor" text="No" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

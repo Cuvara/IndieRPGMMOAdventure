@@ -1,0 +1,8 @@
+<!-- generated from Penpot board 2ae07385-a5c7-8059-8008-e682adfe5381 ([approved] KitchenSinkSupported) - IR sha256:e7cbee0befaccf6c - do not edit -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../Theme/rpg-tokens.uss" />
+    <Style src="KitchenSinkSupported.uss" />
+    <ui:VisualElement name="Cell0" class="rpg-kitchen-sink-supported-list-row-cell-grid-cell0">
+        <ui:Label name="CellText0" class="rpg-kitchen-sink-supported-list-row-cell-grid-cell0-cell-text0 rpg-text-small" text="C0" />
+    </ui:VisualElement>
+</ui:UXML>

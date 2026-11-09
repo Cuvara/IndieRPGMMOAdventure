@@ -18,6 +18,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BackgroundFileWriter`. `delivery.csv` is unchanged: per-snapshot receive timestamps wait for the
   netcode diagnostics hook.
 
+- **Penpot bridge test screens (`Assets/UI/PenpotTest/`).** Five screens generated from approved Penpot
+  boards by the private penpot-uitoolkit-bridge tool (MainMenu, Inventory, UseConfirm,
+  KitchenSinkSupported, CrossfadeDemo: UXML, USS, `*.bindings.g.cs`, `flow.json`, motion presets, 9-slice
+  art with `.slice.json` sidecars, Source Sans Pro font assets, `rpg-tokens.uss`), the bridge profile
+  (`penpot-bridge.profile.yaml`, art source path relative) and the preview scene `PenpotPreview.unity`,
+  which plays the prototype with `Cuvara.UIToolkit.Prototype.PrototypeRunner`. Nothing here depends on
+  the bridge package: it stays a local `file:` development dependency and is not in the committed
+  manifest. `ProjectSettings/CuvaraSlicedArtSettings.json` enables the uitoolkit `SlicedArtImporter` for
+  `Assets/UI/PenpotTest/Art/` only (9-slice borders and pixel-exact import settings from the sidecars).
+  The preview scene also holds `PenpotPrototypeEditorHost` (Editor-only, from the local bridge package),
+  which fills lists with the designer's sample items; without the bridge's `file:` package that
+  component is a missing script and the lists stay empty, while the runner still plays the prototype.
+  The scene is not in the build settings.
+
+### Changed
+
+- **`com.cuvara.uitoolkit` v0.7.2 → v0.9.0.** Manifest and lock both move; the lock is what resolves
+  (`hash` = tag commit `05a3ec3`). 0.8.0 adds the theme service (`RootUIDocument.applyTheme`, on by
+  default; the built-in dialog, toast and scrim are styled by `cuvara-*` classes with the old values as
+  defaults), Screen Creator "Existing UXML" and the gated Figma assemblies; 0.9.0 adds the
+  `Cuvara.UIToolkit.Prototype` runner (`flow.json` v1), the `Cuvara.UIToolkit.Motion` helpers, the opt-in
+  sliced-art importer and the UI import checker. No public API was removed (MIGRATION-0.8); no client
+  code change was needed.
+
 ### Fixed
 
 - **`Tools/run-clients.sh --kill` no longer kills every player on the host (Cuvara/rpg-factory#58, #60).**

@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "screen": "Inventory",
+  "artDir": "Assets/UI/PenpotTest/Art",
+  "lists": [
+    {
+      "name": "ItemGrid",
+      "kind": "scroll",
+      "template": "ItemSlot",
+      "templatePath": "Assets/UI/PenpotTest/Inventory/ItemSlot.uxml",
+      "items": [
+        {
+          "root": "ItemSlot0",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "asset": "icon.potion"
+            },
+            {
+              "name": "Qty",
+              "text": "x3",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "root": "ItemSlot1",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "asset": "icon.sword"
+            },
+            {
+              "name": "Qty",
+              "text": "x6",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "root": "ItemSlot2",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "asset": "icon.shield"
+            },
+            {
+              "name": "Qty",
+              "text": "x9",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "root": "ItemSlot3",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "asset": "icon.coin"
+            },
+            {
+              "name": "Qty",
+              "text": "x12",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "root": "ItemSlot4",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "asset": "icon.potion"
+            },
+            {
+              "name": "Qty",
+              "text": "x15",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "root": "ItemSlot5",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "hidden": true,
+              "asset": "icon.potion"
+            },
+            {
+              "name": "Qty",
+              "hidden": true,
+              "text": "x3",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "root": "ItemSlot6",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "hidden": true,
+              "asset": "icon.potion"
+            },
+            {
+              "name": "Qty",
+              "hidden": true,
+              "text": "x3",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "root": "ItemSlot7",
+          "values": [
+            {
+              "name": "ItemSlot0",
+              "asset": "slot.frame"
+            },
+            {
+              "name": "Icon",
+              "hidden": true,
+              "asset": "icon.potion"
+            },
+            {
+              "name": "Qty",
+              "hidden": true,
+              "text": "x3",
+              "rich": false
+            },
+            {
+              "name": "Selected",
+              "hidden": true
+            }
+          ]
+        }
+      ],
+      "selectionMotion": "fade"
+    }
+  ],
+  "states": [],
+  "assets": [
+    {
+      "key": "icon.coin",
+      "file": "C:/Workspaces/UnityIndie/penpot-uitoolkit-bridge/art/icon.coin.png"
+    },
+    {
+      "key": "icon.potion",
+      "file": "C:/Workspaces/UnityIndie/penpot-uitoolkit-bridge/art/icon.potion.png"
+    },
+    {
+      "key": "icon.shield",
+      "file": "C:/Workspaces/UnityIndie/penpot-uitoolkit-bridge/art/icon.shield.png"
+    },
+    {
+      "key": "icon.sword",
+      "file": "C:/Workspaces/UnityIndie/penpot-uitoolkit-bridge/art/icon.sword.png"
+    },
+    {
+      "key": "slot.frame",
+      "file": "C:/Workspaces/UnityIndie/penpot-uitoolkit-bridge/art/slot.frame.png"
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "screen": "KitchenSinkSupported",
+  "artDir": "Assets/UI/PenpotTest/Art",
+  "lists": [
+    {
+      "name": "RowList",
+      "kind": "listview",
+      "template": "RowItem",
+      "templatePath": "Assets/UI/PenpotTest/KitchenSinkSupported/RowItem.uxml",
+      "items": [
+        {
+          "root": "RowItem0",
+          "values": [
+            {
+              "name": "RowItem0"
+            },
+            {
+              "name": "RowName0",
+              "text": "Item 0",
+              "rich": false
+            },
+            {
+              "name": "RowValue0",
+              "text": "x0",
+              "rich": false
+            }
+          ]
+        },
+        {
+          "root": "RowItem1",
+          "values": [
+            {
+              "name": "RowItem0"
+            },
+            {
+              "name": "RowName0",
+              "text": "Item 1",
+              "rich": false
+            },
+            {
+              "name": "RowValue0",
+              "text": "x1",
+              "rich": false
+            }
+          ]
+        },
+        {
+          "root": "RowItem2",
+          "values": [
+            {
+              "name": "RowItem0"
+            },
+            {
+              "name": "RowName0",
+              "text": "Item 2",
+              "rich": false
+            },
+            {
+              "name": "RowValue0",
+              "text": "x2",
+              "rich": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CellGrid",
+      "kind": "scroll",
+      "template": "Cell",
+      "templatePath": "Assets/UI/PenpotTest/KitchenSinkSupported/Cell.uxml",
+      "items": [
+        {
+          "root": "Cell0",
+          "values": [
+            {
+              "name": "Cell0"
+            },
+            {
+              "name": "CellText0",
+              "text": "C0",
+              "rich": false
+            }
+          ]
+        },
+        {
+          "root": "Cell1",
+          "values": [
+            {
+              "name": "Cell0"
+            },
+            {
+              "name": "CellText0",
+              "text": "C1",
+              "rich": false
+            }
+          ]
+        },
+        {
+          "root": "Cell2",
+          "values": [
+            {
+              "name": "Cell0"
+            },
+            {
+              "name": "CellText0",
+              "text": "C2",
+              "rich": false
+            }
+          ]
+        },
+        {
+          "root": "Cell3",
+          "values": [
+            {
+              "name": "Cell0"
+            },
+            {
+              "name": "CellText0",
+              "text": "C3",
+              "rich": false
+            }
+          ]
+        },
+        {
+          "root": "Cell4",
+          "values": [
+            {
+              "name": "Cell0"
+            },
+            {
+              "name": "CellText0",
+              "text": "C4",
+              "rich": false
+            }
+          ]
+        },
+        {
+          "root": "Cell5",
+          "values": [
+            {
+              "name": "Cell0"
+            },
+            {
+              "name": "CellText0",
+              "text": "C5",
+              "rich": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "states": [
+    {
+      "name": "ButtonHover",
+      "state": "hover"
+    },
+    {
+      "name": "ButtonPressed",
+      "state": "pressed"
+    }
+  ],
+  "assets": []
+}

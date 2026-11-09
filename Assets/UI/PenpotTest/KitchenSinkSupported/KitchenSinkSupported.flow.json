@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "screen": "KitchenSinkSupported",
+  "overlay": false,
+  "size": [
+    1920.0,
+    1080.0
+  ],
+  "flows": [
+    {
+      "name": "Main",
+      "start": "MainMenu"
+    }
+  ],
+  "interactions": [],
+  "controls": [
+    {
+      "name": "ButtonDisabled",
+      "type": "Button",
+      "enabled": false,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2aadfc1"
+      },
+      "label": {
+        "text": "Disabled",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e682b3b591a9",
+      "drawnState": "disabled",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    },
+    {
+      "name": "ButtonHover",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a8ab0a"
+      },
+      "label": {
+        "text": "Hover",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e682b39e89da",
+      "drawnState": "hover",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    },
+    {
+      "name": "ButtonNormal",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a6c869"
+      },
+      "label": {
+        "text": "Normal",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e682b393a1f1",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    },
+    {
+      "name": "ButtonPressed",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a9edae"
+      },
+      "label": {
+        "text": "Pressed",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e682b3acedab",
+      "drawnState": "pressed",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    }
+  ],
+  "lists": [
+    {
+      "name": "RowList",
+      "kind": "listview",
+      "template": "RowItem",
+      "selectable": true
+    },
+    {
+      "name": "CellGrid",
+      "kind": "scroll",
+      "template": "Cell",
+      "selectable": true
+    }
+  ],
+  "scrolls": [
+    {
+      "name": "ScrollArea",
+      "mode": "Vertical"
+    },
+    {
+      "name": "CellGrid",
+      "mode": "Vertical"
+    }
+  ],
+  "motion": {
+    "back": "reverse",
+    "enabled": true
+  }
+}

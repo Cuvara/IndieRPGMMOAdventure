@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "screen": "Inventory",
+  "overlay": false,
+  "size": [
+    1920.0,
+    1080.0
+  ],
+  "flows": [
+    {
+      "name": "Main",
+      "start": "MainMenu"
+    }
+  ],
+  "interactions": [
+    {
+      "id": "Inventory.CloseButton.click#0",
+      "element": "CloseButton",
+      "trigger": "click",
+      "delayMs": null,
+      "action": "previous-screen",
+      "target": null,
+      "position": null,
+      "manual": null,
+      "closeOnOutside": null,
+      "scrim": null,
+      "animation": null
+    },
+    {
+      "id": "Inventory.UseButton.click#0",
+      "element": "UseButton",
+      "trigger": "click",
+      "delayMs": null,
+      "action": "open-overlay",
+      "target": "UseConfirm",
+      "position": "center",
+      "manual": null,
+      "closeOnOutside": true,
+      "scrim": true,
+      "animation": {
+        "type": "dissolve",
+        "durationMs": 200,
+        "easing": "ease-in-out",
+        "way": null,
+        "direction": null,
+        "offsetEffect": null
+      }
+    }
+  ],
+  "controls": [
+    {
+      "name": "CloseButton",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        96,
+        64
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a6c869"
+      },
+      "label": {
+        "text": "X",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e676f88c6413",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    },
+    {
+      "name": "DropButton",
+      "type": "Button",
+      "enabled": false,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2aadfc1"
+      },
+      "label": {
+        "text": "Drop",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e676fa8110ff",
+      "drawnState": "disabled",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    },
+    {
+      "name": "SortButton",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a6c869"
+      },
+      "label": {
+        "text": "Sort",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e676fa86862a",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    },
+    {
+      "name": "UseButton",
+      "type": "Button",
+      "enabled": true,
+      "size": [
+        240,
+        80
+      ],
+      "component": {
+        "key": "rpg/button/primary",
+        "id": "2ae07385-a5c7-8059-8008-e65fb2a6c869"
+      },
+      "label": {
+        "text": "Use",
+        "visible": true
+      },
+      "shapeId": "2ae07385-a5c7-8059-8008-e676fa7a5e6c",
+      "drawnState": "normal",
+      "variants": {
+        "disabled": "button.primary.normal",
+        "hover": "button.primary.normal",
+        "normal": "button.primary.normal",
+        "pressed": "button.primary.pressed"
+      },
+      "labelColors": {
+        "disabled": "#888888",
+        "hover": "#ffffff",
+        "normal": "#ffffff",
+        "pressed": "#ffffff"
+      },
+      "motion": "press"
+    }
+  ],
+  "lists": [
+    {
+      "name": "ItemGrid",
+      "kind": "scroll",
+      "template": "ItemSlot",
+      "selectable": true,
+      "selectionMotion": "fade"
+    }
+  ],
+  "scrolls": [
+    {
+      "name": "ItemGrid",
+      "mode": "Vertical"
+    },
+    {
+      "name": "Stats",
+      "mode": "Vertical"
+    }
+  ],
+  "motion": {
+    "back": "reverse",
+    "enabled": true
+  }
+}

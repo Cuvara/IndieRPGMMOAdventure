@@ -34,7 +34,7 @@
       "hash": "0d4b2e57a30449125656deb40352c3fd9ebe7546"
     },
     "com.cuvara.uitoolkit": {
-      "version": "https://github.com/Cuvara/UIToolkit.git#v0.7.2",
+      "version": "https://github.com/Cuvara/UIToolkit.git#v0.9.0",
       "depth": 0,
       "source": "git",
       "dependencies": {
@@ -42,7 +42,7 @@
         "com.unity.modules.uielements": "1.0.0",
         "jp.hadashikick.vcontainer": "1.16.9"
       },
-      "hash": "3c6fde9ac818cbfa8fc85a1bdf0c57b223607a47"
+      "hash": "05a3ec39406feefe23a8a6c0457eb5a4a91058a7"
     },
     "com.cysharp.messagepipe": {
       "version": "1.8.1",

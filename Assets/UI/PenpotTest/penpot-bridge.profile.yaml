@@ -1,0 +1,81 @@
+# Profile of the Penpot -> UI Toolkit bridge for this client (used by `python -m bridge sync <Screen> --profile <this file>`).
+# Paths are relative to this file.
+
+classPrefix: rpg
+outDir: ..                      # = Assets/UI ; screens land in Assets/UI/PenpotTest/<Screen>/
+unityAssetRoot: Assets/UI
+screensDir: PenpotTest          # <outDir>/PenpotTest/<Screen>/<Screen>.uxml|uss
+artDir: PenpotTest/Art
+themeFile: PenpotTest/Theme/rpg-tokens.uss
+assetsDir: ../../../../penpot-uitoolkit-bridge/art   # <rpg.asset key>.png + .slice.json
+
+requireApproved: true
+imageRadius: forbid
+visualDiffThreshold: 0.02       # gate 5, share of unmasked pixels (see diffChannelTolerance)
+diffChannelTolerance: 24
+boundsTolerance: 2
+textBoundsTolerance: 4
+
+acceptedLoss:
+  - text.lineHeight
+  - text.justify
+
+tokens:
+  colors:
+    "rpg/color/gold": --rpg-color-gold
+    "rpg/color/bg": --rpg-color-bg
+    "rpg/color/text": --rpg-color-text
+    "rpg/color/dim": --rpg-color-dim
+    "rpg/color/good": --rpg-color-good
+    "rpg/color/danger": --rpg-color-danger
+  typography:
+    "rpg/text/title": rpg-text-title
+    "rpg/text/heading": rpg-text-heading
+    "rpg/text/body": rpg-text-body
+    "rpg/text/button": rpg-text-button
+    "rpg/text/small": rpg-text-small
+
+# component path globs whose instances become ordinary boards (list items with an icon, a label and a selection mark)
+composites: [rpg/item/*]
+
+ui-map:
+  "rpg/button/*":
+    element: ui:Button
+    classes: [rpg-button]
+    textAttr: text
+
+# "<Penpot fontFamily>:<fontWeight>" -> Unity FontAsset (OFL Source Sans Pro, licence next to the files)
+font-map:
+  "sourcesanspro:400": Assets/UI/PenpotTest/Fonts/SourceSansPro-Regular SDF.asset
+  "sourcesanspro:700": Assets/UI/PenpotTest/Fonts/SourceSansPro-Bold SDF.asset
+
+scrollbars: hidden               # Penpot designs show no scrollbars
+colorSpace: linear              # the client project is Linear (URP): alpha is blended in linear light (see PENPOT-CONVENTIONS)
+
+# imported animation and motion presets (gate 8); see profile.example.yaml of the bridge
+motion:
+  enabled: true
+  back: reverse
+  durations: { fast: 120, normal: 200, slow: 320 }   # ms
+  caps: { controlMs: 600, screenMs: 1000 }
+  presets:
+    press:                       # Button components tagged rpg.motion=press
+      duration: fast
+      easing: ease-out
+      delay: 0
+      properties: [scale, -unity-background-image-tint-color]
+      states:
+        pressed: { scale: 0.96, -unity-background-image-tint-color: "#CCCCCC" }
+      crossfade: false
+    fade:                        # composite list items tagged rpg.motion=fade: the Selected layer fades
+      duration: fast
+      easing: ease-out
+      properties: [opacity]
+    hover-fade:                  # Button instances tagged rpg.motion=hover-fade: the hover art crossfades (frame + art layers)
+      duration: normal
+      easing: ease-out
+      properties: [color]
+      crossfade: true
+
+raster:
+  maxEdge: 2048

@@ -1,0 +1,69 @@
+<!-- generated from Penpot board 2ae07385-a5c7-8059-8008-e676f86bc2dc ([approved] Inventory) - IR sha256:2e226a80930727b6 - do not edit -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../Theme/rpg-tokens.uss" />
+    <Style src="Inventory.uss" />
+    <Style src="Inventory.motion.uss" />
+    <ui:VisualElement name="Inventory" class="rpg-inventory">
+        <ui:VisualElement name="Header" class="rpg-inventory-header">
+            <ui:Label name="Title" class="rpg-inventory-header-title rpg-text-title" text="INVENTORY" />
+            <ui:Button name="CloseButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-inventory-header-close-button" usage-hints="DynamicTransform, DynamicColor" text="X" />
+        </ui:VisualElement>
+        <ui:VisualElement name="Body" class="rpg-inventory-body">
+            <ui:VisualElement name="InventoryPanel" class="rpg-inventory-body-inventory-panel">
+                <ui:Label name="PanelTitle" class="rpg-inventory-body-inventory-panel-panel-title rpg-text-heading" text="Backpack" />
+                <ui:ScrollView name="ItemGrid" class="rpg-inventory-body-inventory-panel-item-grid" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
+            </ui:VisualElement>
+            <ui:VisualElement name="DetailsPanel" class="rpg-inventory-body-details-panel">
+                <ui:Label name="ItemName" class="rpg-inventory-body-details-panel-item-name rpg-text-heading" text="Health Potion" />
+                <ui:Label name="ItemDesc" class="rpg-inventory-body-details-panel-item-desc rpg-text-body" text="Restores 50 HP instantly. Can be used in combat. Stacks up to 99." />
+                <ui:VisualElement name="RarityRow" class="rpg-inventory-body-details-panel-rarity-row">
+                    <ui:Label name="RarityLabel" class="rpg-inventory-body-details-panel-rarity-row-rarity-label rpg-text-body" text="Rarity" />
+                    <ui:Label name="RarityValue" class="rpg-inventory-body-details-panel-rarity-row-rarity-value rpg-text-body" text="Common" />
+                </ui:VisualElement>
+                <ui:VisualElement name="WeightRow" class="rpg-inventory-body-details-panel-weight-row">
+                    <ui:Label name="WeightLabel" class="rpg-inventory-body-details-panel-weight-row-weight-label rpg-text-body" text="Weight" />
+                    <ui:Label name="WeightValue" class="rpg-inventory-body-details-panel-weight-row-weight-value rpg-text-body" text="0.5 kg" />
+                </ui:VisualElement>
+                <ui:ScrollView name="Stats" class="rpg-inventory-body-details-panel-stats" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
+                    <ui:VisualElement name="StatRow0" class="rpg-inventory-body-details-panel-stats-stat-row0">
+                        <ui:Label name="StatName0" class="rpg-inventory-body-details-panel-stats-stat-row0-stat-name0 rpg-text-small" text="Attack" />
+                        <ui:Label name="StatValue0" class="rpg-inventory-body-details-panel-stats-stat-row0-stat-value0 rpg-text-small" text="10" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="StatRow1" class="rpg-inventory-body-details-panel-stats-stat-row1">
+                        <ui:Label name="StatName1" class="rpg-inventory-body-details-panel-stats-stat-row1-stat-name1 rpg-text-small" text="Defense" />
+                        <ui:Label name="StatValue1" class="rpg-inventory-body-details-panel-stats-stat-row1-stat-value1 rpg-text-small" text="13" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="StatRow2" class="rpg-inventory-body-details-panel-stats-stat-row2">
+                        <ui:Label name="StatName2" class="rpg-inventory-body-details-panel-stats-stat-row2-stat-name2 rpg-text-small" text="Speed" />
+                        <ui:Label name="StatValue2" class="rpg-inventory-body-details-panel-stats-stat-row2-stat-value2 rpg-text-small" text="16" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="StatRow3" class="rpg-inventory-body-details-panel-stats-stat-row3">
+                        <ui:Label name="StatName3" class="rpg-inventory-body-details-panel-stats-stat-row3-stat-name3 rpg-text-small" text="Luck" />
+                        <ui:Label name="StatValue3" class="rpg-inventory-body-details-panel-stats-stat-row3-stat-value3 rpg-text-small" text="19" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="StatRow4" class="rpg-inventory-body-details-panel-stats-stat-row4">
+                        <ui:Label name="StatName4" class="rpg-inventory-body-details-panel-stats-stat-row4-stat-name4 rpg-text-small" text="Charm" />
+                        <ui:Label name="StatValue4" class="rpg-inventory-body-details-panel-stats-stat-row4-stat-value4 rpg-text-small" text="22" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="StatRow5" class="rpg-inventory-body-details-panel-stats-stat-row5">
+                        <ui:Label name="StatName5" class="rpg-inventory-body-details-panel-stats-stat-row5-stat-name5 rpg-text-small" text="Stamina" />
+                        <ui:Label name="StatValue5" class="rpg-inventory-body-details-panel-stats-stat-row5-stat-value5 rpg-text-small" text="25" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="StatRow6" class="rpg-inventory-body-details-panel-stats-stat-row6">
+                        <ui:Label name="StatName6" class="rpg-inventory-body-details-panel-stats-stat-row6-stat-name6 rpg-text-small" text="Focus" />
+                        <ui:Label name="StatValue6" class="rpg-inventory-body-details-panel-stats-stat-row6-stat-value6 rpg-text-small" text="28" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="StatRow7" class="rpg-inventory-body-details-panel-stats-stat-row7">
+                        <ui:Label name="StatName7" class="rpg-inventory-body-details-panel-stats-stat-row7-stat-name7 rpg-text-small" text="Armor" />
+                        <ui:Label name="StatValue7" class="rpg-inventory-body-details-panel-stats-stat-row7-stat-value7 rpg-text-small" text="31" />
+                    </ui:VisualElement>
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="Footer" class="rpg-inventory-footer">
+            <ui:Button name="UseButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-inventory-footer-use-button" usage-hints="DynamicTransform, DynamicColor" text="Use" />
+            <ui:Button name="DropButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-inventory-footer-drop-button" usage-hints="DynamicTransform, DynamicColor" text="Drop" enabled="false" />
+            <ui:Button name="SortButton" class="rpg-button rpg-button-primary rpg-motion-press rpg-inventory-footer-sort-button" usage-hints="DynamicTransform, DynamicColor" text="Sort" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
